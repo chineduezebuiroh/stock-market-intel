@@ -1,0 +1,61 @@
+stocks:
+  stocks_a_mq_shortlist:
+    lower_tf: monthly
+    middle_tf: null
+    upper_tf: quarterly
+    universe: shortlist_stocks
+
+  stocks_a_mq_all:
+    lower_tf: monthly
+    middle_tf: quarterly
+    upper_tf: quarterly
+    universe: options_eligible
+
+  stocks_b_wq_shortlist:
+    lower_tf: weekly
+    middle_tf: null
+    upper_tf: quarterly
+    universe: shortlist_stocks
+
+  stocks_b_wmq_all:
+    lower_tf: weekly
+    middle_tf: monthly
+    upper_tf: quarterly
+    universe: options_eligible
+
+  stocks_c_dm_shortlist:
+    lower_tf: daily
+    middle_tf: null
+    upper_tf: monthly
+    universe: shortlist_stocks
+
+  stocks_c_dwm_all:
+    lower_tf: daily
+    middle_tf: weekly
+    upper_tf: monthly
+    universe: options_eligible
+
+  stocks_d_130mw_shortlist:
+    lower_tf: intraday_130m
+    middle_tf: null
+    upper_tf: weekly
+    universe: shortlist_stocks
+
+futures:
+  futures_1_1hd_shortlist:
+    lower_tf: hourly
+    middle_tf: null
+    upper_tf: daily
+    universe: shortlist_futures
+
+  futures_2_4hdw_shortlist:
+    lower_tf: four_hour
+    middle_tf: daily
+    upper_tf: weekly
+    universe: shortlist_futures
+
+  futures_3_dwm_shortlist:
+    lower_tf: daily
+    middle_tf: weekly
+    upper_tf: monthly
+    universe: shortlist_futures
