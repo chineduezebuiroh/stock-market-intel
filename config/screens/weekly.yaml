@@ -1,4 +1,5 @@
-    name: "Weekly — Trend Continuation (template)"
+name: "Weekly — Trend Continuation (template)"
+
 params:
   rsi_len: 14
   ema_fast: 13
