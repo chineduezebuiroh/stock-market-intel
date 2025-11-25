@@ -1,4 +1,5 @@
-    name: "130m — MTF Aligned (template)"
+name: "130m — MTF Aligned (template)"
+
 params:
   ema_fast: 21
   ema_slow: 55
