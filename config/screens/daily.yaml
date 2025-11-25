@@ -1,0 +1,16 @@
+    name: "Daily — Momentum Pullback (template)"
+params:
+  rsi_len: 14
+  ema_fast: 8
+  ema_slow: 21
+  wild_len: 14
+  volume_sma: 20
+rules:
+  - expr: "(ema_8 > wema_14 and sma_8 > wema_14) or (ema_8 > sma_8)"
+  - expr: "rsi_14 between 45 and 65"
+  - expr: "volume_sma_20 > 500000"
+  - expr: "market_cap > 2e9"
+sort:
+  - "-rsi_14_slope"
+  - "-ema_8_slope"
+limit: 50

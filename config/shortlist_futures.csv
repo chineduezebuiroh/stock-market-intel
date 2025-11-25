@@ -1,0 +1,16 @@
+symbol, X-Map, name
+
+ES=F, "/ES → ES=F", "S&P 500 E-mini"
+MES=F, "/MES → MES=F", "S&P 500 Micro E-mini"
+NQ=F, "/NQ → NQ=F", "Nasdaq 100 E-mini"
+MNQ=F, "/MNQ → MNQ=F", "Nasdaq 100 Micro E-mini"
+YM=F, "/YM → YM=F", "Dow E-mini"
+MYM=F, "/MYM → MYM=F", "Dow Micro E-mini"
+GC=F, "/GC → GC=F", "Gold"
+MGC=F, "/MGC → MGC=F", "Micro Gold"
+PL=F, "/PL → PL=F", "Platinum"
+SI=F, "/SI → SI=F", "Silver"
+SIL=F, "/SIL → SIL=F", "Micro Silver"
+ZS=F, "/ZS → ZS=F", "Soybeans"
+ZL=F, "/ZL → ZL=F", "Soybean Oil"
+ZM=F, "/ZM → ZM=F", "Soybean Meal"

@@ -1,0 +1,9 @@
+    name: "130m — MTF Aligned (template)"
+params:
+  ema_fast: 21
+  ema_slow: 55
+  wild_len: 14
+rules:
+  - expr: "(ema_21 > wema_14 and sma_21 > wema_14) or (ema_21 > sma_21)"
+  - expr: "ema_21 > ema_55"
+limit: 30
