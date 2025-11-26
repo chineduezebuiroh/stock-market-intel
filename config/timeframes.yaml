@@ -2,42 +2,32 @@ stocks:
   intraday_130m:
     session: regular
     window_bars: 300
-    universe: shortlist_stocks
   daily:
     session: regular
     window_bars: 300
-    universe: options_eligible
   weekly:
     session: regular
     window_bars: 300
-    universe: options_eligible
   monthly:
     session: regular
     window_bars: 250
-    universe: options_eligible
   quarterly:
     session: regular
     window_bars: 250
-    universe: options_eligible
 
 futures:
   hourly:
     session: extended
     window_bars: 250
-    universe: shortlist_futures
   four_hour:
     session: extended
     window_bars: 300
-    universe: shortlist_futures
   daily:
     session: extended
     window_bars: 300
-    universe: shortlist_futures
   weekly:
-    session: extended
+    session: extended:
     window_bars: 250
-    universe: shortlist_futures
   monthly:
     session: extended
     window_bars: 250
-    universe: shortlist_futures
