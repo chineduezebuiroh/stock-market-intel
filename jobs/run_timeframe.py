@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-# Ensure project root is on sys.path
+# Ensure project root on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -17,19 +17,19 @@ from screens.engine import run_screen
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 
-
+# Load timeframe config (structure only)
 with open(CFG / "timeframes.yaml", "r") as f:
     TF_CFG = yaml.safe_load(f)
 
+# Load multi-timeframe combos (for universes per timeframe)
+with open(CFG / "multi_timeframe_combos.yaml", "r") as f:
+    MTF_CFG = yaml.safe_load(f)
 
-def symbols_for(universe: str):
-    """
-    Map a universe name to a list of symbols, using CSV files.
-    """
-    if universe == "options_eligible":
-        p = ROOT / "ref" / "options_eligible.csv"
-        return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
 
+def symbols_for_universe(universe: str) -> list[str]:
+    """
+    Map a universe name to a list of symbols from CSVs.
+    """
     if universe == "shortlist_stocks":
         p = CFG / "shortlist_stocks.csv"
         return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
@@ -37,17 +37,51 @@ def symbols_for(universe: str):
     if universe == "shortlist_futures":
         p = CFG / "shortlist_futures.csv"
         return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
-    
-    if universe == "shortlist_sector_etfs":
-        p = CFG / "shortlist_sector_etfs.csv"
+
+    if universe == "options_eligible":
+        p = ROOT / "ref" / "options_eligible.csv"
         return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
 
-    # fallback
+    # Future: ETF universes, etc.
     return []
 
 
+def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
+    """
+    Look through all combos in multi_timeframe_combos.yaml and find which
+    universes use this namespace+timeframe in any role (lower/middle/upper).
+    """
+    ns_cfg = MTF_CFG.get(namespace, {})
+    universes = set()
+
+    for combo_name, combo_cfg in ns_cfg.items():
+        if combo_cfg.get("lower_tf") == timeframe:
+            universes.add(combo_cfg["universe"])
+        if combo_cfg.get("middle_tf") == timeframe:
+            universes.add(combo_cfg["universe"])
+        if combo_cfg.get("upper_tf") == timeframe:
+            universes.add(combo_cfg["universe"])
+
+    return sorted(universes)
+
+
+def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
+    """
+    Union of all symbols for all universes that reference this timeframe.
+    """
+    universes = universes_for_timeframe(namespace, timeframe)
+    all_syms = set()
+    for u in universes:
+        for sym in symbols_for_universe(u):
+            all_syms.add(sym)
+    return sorted(all_syms)
+
 
 def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
+    """
+    Ingest bars for a single namespace+timeframe over a list of symbols,
+    update fixed rolling window, apply indicators, and persist parquet.
+    """
     for sym in symbols:
         if namespace == "stocks" and timeframe == "intraday_130m":
             df_new = load_130m_from_5m(sym, session=session)
@@ -63,42 +97,71 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
 
 
 def run(namespace: str, timeframe: str, cascade: bool = False):
-    cfg = TF_CFG[namespace][timeframe]
-    session = cfg["session"]
-    window_bars = int(cfg["window_bars"])
-    symbols = symbols_for(cfg["universe"])
+    """
+    Primary entry point: ingest for a namespace+timeframe for all symbols
+    implied by the MTF combos, optionally cascade to higher timeframes,
+    and build a single-timeframe snapshot using a simple screen config.
+    """
+    cfg_tf = TF_CFG[namespace][timeframe]
+    session = cfg_tf["session"]
+    window_bars = int(cfg_tf["window_bars"])
 
-    # 1) Ingest the primary timeframe
+    # Determine symbols from all combos that use this timeframe
+    symbols = symbols_for_timeframe(namespace, timeframe)
+    if not symbols:
+        print(f"[WARN] No symbols found for {namespace}:{timeframe} via combos.")
+        return
+
+    # 1) Ingest this timeframe
     ingest_one(namespace, timeframe, symbols, session, window_bars)
 
-    # 2) Cascades for multi-timeframe alignment
+    # 2) Cascades (multi-timeframe ingest logic)
     if cascade:
         if namespace == "stocks":
             if timeframe == "intraday_130m":
-                # Refresh daily + weekly for same shortlist
+                # 130m → daily + weekly
                 for tf in ["daily", "weekly"]:
                     c = TF_CFG["stocks"][tf]
                     ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
+
             elif timeframe == "daily":
-                # Refresh weekly + monthly for same universe
+                # daily → weekly + monthly
                 for tf in ["weekly", "monthly"]:
                     c = TF_CFG["stocks"][tf]
                     ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
+
+            elif timeframe == "weekly":
+                # weekly → monthly + quarterly
+                for tf in ["monthly", "quarterly"]:
+                    c = TF_CFG["stocks"][tf]
+                    ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
+
+            elif timeframe == "monthly":
+                # monthly → quarterly
+                tf = "quarterly"
+                c = TF_CFG["stocks"][tf]
+                ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
+
         elif namespace == "futures":
             if timeframe == "hourly":
-                # Hourly → Daily
-                c = TF_CFG["futures"]["daily"]
-                ingest_one("futures", "daily", symbols, c["session"], int(c["window_bars"]))
-            elif timeframe == "four_hour":
-                # 4H → Weekly
-                c = TF_CFG["futures"]["weekly"]
-                ingest_one("futures", "weekly", symbols, c["session"], int(c["window_bars"]))
-            elif timeframe == "daily":
-                # Daily → Monthly
-                c = TF_CFG["futures"]["monthly"]
-                ingest_one("futures", "monthly", symbols, c["session"], int(c["window_bars"]))
+                # 1h → 4h + daily
+                for tf in ["four_hour", "daily"]:
+                    c = TF_CFG["futures"][tf]
+                    ingest_one("futures", tf, symbols, c["session"], int(c["window_bars"]))
 
-    # 3) Run screen if there is a YAML for this timeframe
+            elif timeframe == "four_hour":
+                # 4h → daily + weekly
+                for tf in ["daily", "weekly"]:
+                    c = TF_CFG["futures"][tf]
+                    ingest_one("futures", tf, symbols, c["session"], int(c["window_bars"]))
+
+            elif timeframe == "daily":
+                # daily → weekly + monthly
+                for tf in ["weekly", "monthly"]:
+                    c = TF_CFG["futures"][tf]
+                    ingest_one("futures", tf, symbols, c["session"], int(c["window_bars"]))
+
+    # 3) Run single-timeframe screen if a config exists
     screen_path = CFG / "screens" / f"{timeframe}.yaml"
     if screen_path.exists():
         with open(screen_path, "r") as f:
@@ -119,7 +182,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
         if rows:
             snap = pd.concat(rows)
             snap = run_screen(snap, screen_cfg)
-            out = ROOT / "data" / f"snapshot_{namespace}_{timeframe}.parquet"
+            out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
             snap.to_parquet(out)
 
 
