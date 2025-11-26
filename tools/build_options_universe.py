@@ -24,95 +24,107 @@ OUT_PATH = REF_DIR / "options_eligible.csv"
 
 
 # ---------- CANDIDATE UNIVERSE HELPERS ----------
-"""
-def get_candidate_symbols() -> List[str]:
-    candidates = set()
-
-    try:
-        sp500 = yf.tickers_sp500()
-        print(f"[INFO] Loaded {len(sp500)} S&P 500 tickers from yfinance.")
-        candidates.update(sp500)
-    except Exception as e:
-        print(f"[WARN] Could not load S&P 500 tickers: {e}")
-
-    try:
-        nasdaq = yf.tickers_nasdaq()
-        print(f"[INFO] Loaded {len(nasdaq)} NASDAQ tickers from yfinance.")
-        candidates.update(nasdaq)
-    except Exception as e:
-        print(f"[WARN] Could not load NASDAQ tickers: {e}")
-
-    try:
-        nyse = yf.tickers_nyse()
-        print(f"[INFO] Loaded {len(nyse)} NYSE tickers from yfinance.")
-        candidates.update(nyse)
-    except Exception as e:
-        print(f"[WARN] Could not load NYSE tickers: {e}")
-
-
-
-    # You can add more sources here later if needed
-    # e.g., yf.tickers_other() for misc indices
-
-    candidates = sorted(candidates)
-    if MAX_SYMBOLS is not None:
-        candidates = candidates[:MAX_SYMBOLS]
-
-    print(f"[INFO] Using {len(candidates)} candidate symbols in total.")
-    return candidates
-"""
-
-
-
-
-
 def get_candidate_symbols() -> List[str]:
     """
     Build an initial candidate universe of stock tickers.
 
-    This version uses the official NASDAQ Trader symbol directories:
+    This version:
+      - Tries to download NASDAQ Trader symbol directories from the official URLs.
+      - If download succeeds, uses that data AND caches it under ref/.
+      - If download fails, falls back to existing local files in ref/.
+      - If both fail, that source is skipped.
+
+    Sources:
       - NASDAQ-listed: nasdaqlisted.txt
       - Other-listed (NYSE, AMEX, etc.): otherlisted.txt
-
-    Later, we can add more sources or local CSVs if needed.
     """
     import pandas as pd
 
     candidates = set()
 
-    # NASDAQ-listed
-    try:
-        nasdaq_url = "https://ftp.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
-        nasdaq_df = pd.read_csv(
-            nasdaq_url,
-            sep="|",
-            dtype=str,
-            engine="python",
-            skipfooter=1,  # last line is "File Creation Time"
+    def load_symbol_table(
+        source_name: str,
+        url: str,
+        local_filename: str,
+        symbol_col: str,
+    ) -> List[str]:
+        """
+        Try to load a symbol table from URL, cache to ref/, then fall back to local file.
+        Returns a list of symbols (uppercase, stripped).
+        """
+        local_path = REF_DIR / local_filename
+
+        # First try URL
+        try:
+            print(f"[INFO] Loading {source_name} from URL: {url}")
+            df = pd.read_csv(
+                url,
+                sep="|",
+                dtype=str,
+                engine="python",
+                skipfooter=1,  # last line is "File Creation Time"
+            )
+
+            # Cache a copy locally (as a pipe-delimited file)
+            try:
+                df.to_csv(local_path, sep="|", index=False)
+                print(f"[INFO] Cached {source_name} to {local_path}")
+            except Exception as e_cache:
+                print(f"[WARN] Could not cache {source_name} to {local_path}: {e_cache}")
+
+        except Exception as e_url:
+            print(f"[WARN] Could not load {source_name} from URL ({e_url}).")
+            # Fallback to local file if it exists
+            if local_path.exists():
+                try:
+                    print(f"[INFO] Falling back to local {source_name}: {local_path}")
+                    df = pd.read_csv(
+                        local_path,
+                        sep="|",
+                        dtype=str,
+                        engine="python",
+                        skipfooter=1,
+                    )
+                except Exception as e_local:
+                    print(f"[WARN] Could not load local {source_name} from {local_path}: {e_local}")
+                    return []
+            else:
+                print(f"[WARN] No local {source_name} file found at {local_path}. Skipping.")
+                return []
+
+        # Extract symbol column
+        if symbol_col not in df.columns:
+            print(f"[WARN] Column '{symbol_col}' not found in {source_name} table.")
+            return []
+
+        syms = (
+            df[symbol_col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .tolist()
         )
-        nasdaq_syms = nasdaq_df["Symbol"].dropna().astype(str).str.strip().str.upper().tolist()
-        candidates.update(nasdaq_syms)
-        print(f"[INFO] Loaded {len(nasdaq_syms)} NASDAQ-listed tickers.")
-    except Exception as e:
-        print(f"[WARN] Could not load NASDAQ-listed tickers: {e}")
+        print(f"[INFO] Loaded {len(syms)} {source_name} tickers.")
+        return syms
+
+    # NASDAQ-listed
+    nasdaq_syms = load_symbol_table(
+        source_name="NASDAQ-listed",
+        url="https://ftp.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+        local_filename="nasdaqlisted.txt",
+        symbol_col="Symbol",
+    )
+    candidates.update(nasdaq_syms)
 
     # Other-listed (includes NYSE, AMEX, etc.)
-    try:
-        other_url = "https://ftp.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
-        other_df = pd.read_csv(
-            other_url,
-            sep="|",
-            dtype=str,
-            engine="python",
-            skipfooter=1,  # last line is "File Creation Time"
-        )
-        # 'ACT Symbol' is the trading symbol in this file
-        col = "ACT Symbol" if "ACT Symbol" in other_df.columns else "SYMBOL"
-        other_syms = other_df[col].dropna().astype(str).str.strip().str.upper().tolist()
-        candidates.update(other_syms)
-        print(f"[INFO] Loaded {len(other_syms)} other-listed (NYSE/AMEX/etc.) tickers.")
-    except Exception as e:
-        print(f"[WARN] Could not load other-listed tickers: {e}")
+    other_syms = load_symbol_table(
+        source_name="other-listed (NYSE/AMEX/etc.)",
+        url="https://ftp.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
+        local_filename="otherlisted.txt",
+        symbol_col="ACT Symbol",  # primary trading symbol column
+    )
+    candidates.update(other_syms)
 
     candidates = sorted(candidates)
     if MAX_SYMBOLS is not None:
@@ -120,7 +132,6 @@ def get_candidate_symbols() -> List[str]:
 
     print(f"[INFO] Using {len(candidates)} candidate symbols in total.")
     return candidates
-
 
 
 # ---------- METADATA FETCHING ----------
