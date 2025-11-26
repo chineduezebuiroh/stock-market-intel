@@ -6,6 +6,9 @@ on:
     - cron: '0 8 1 * *'
   workflow_dispatch:
 
+permissions:
+  contents: write  # needed to push commits
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,8 +33,21 @@ jobs:
         run: |
           python tools/build_options_universe.py
 
-      - name: Upload options universe CSV
-        uses: actions/upload-artifact@v4
-        with:
-          name: options_eligible
-          path: ref/options_eligible.csv
+      - name: Commit and push updated options_eligible.csv
+        run: |
+          if [ ! -f ref/options_eligible.csv ]; then
+            echo "No options_eligible.csv generated, skipping commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add ref/options_eligible.csv
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update options_eligible.csv [skip ci]"
+            git push origin HEAD:main
+          fi
