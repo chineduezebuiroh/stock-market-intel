@@ -24,21 +24,8 @@ OUT_PATH = REF_DIR / "options_eligible.csv"
 
 
 # ---------- CANDIDATE UNIVERSE HELPERS ----------
-
+"""
 def get_candidate_symbols() -> List[str]:
-    """
-    Build an initial candidate universe of stock tickers.
-
-    For this first version, we use yfinance helpers:
-      - S&P 500
-      - NASDAQ tickers
-      - NYSE
-
-    Later, we can swap this out for:
-      - Polygon.io
-      - Exchange master lists
-      - Custom CSVs, etc.
-    """
     candidates = set()
 
     try:
@@ -73,6 +60,67 @@ def get_candidate_symbols() -> List[str]:
 
     print(f"[INFO] Using {len(candidates)} candidate symbols in total.")
     return candidates
+"""
+
+
+
+
+
+def get_candidate_symbols() -> List[str]:
+    """
+    Build an initial candidate universe of stock tickers.
+
+    This version uses the official NASDAQ Trader symbol directories:
+      - NASDAQ-listed: nasdaqlisted.txt
+      - Other-listed (NYSE, AMEX, etc.): otherlisted.txt
+
+    Later, we can add more sources or local CSVs if needed.
+    """
+    import pandas as pd
+
+    candidates = set()
+
+    # NASDAQ-listed
+    try:
+        nasdaq_url = "https://ftp.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
+        nasdaq_df = pd.read_csv(
+            nasdaq_url,
+            sep="|",
+            dtype=str,
+            engine="python",
+            skipfooter=1,  # last line is "File Creation Time"
+        )
+        nasdaq_syms = nasdaq_df["Symbol"].dropna().astype(str).str.strip().str.upper().tolist()
+        candidates.update(nasdaq_syms)
+        print(f"[INFO] Loaded {len(nasdaq_syms)} NASDAQ-listed tickers.")
+    except Exception as e:
+        print(f"[WARN] Could not load NASDAQ-listed tickers: {e}")
+
+    # Other-listed (includes NYSE, AMEX, etc.)
+    try:
+        other_url = "https://ftp.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
+        other_df = pd.read_csv(
+            other_url,
+            sep="|",
+            dtype=str,
+            engine="python",
+            skipfooter=1,  # last line is "File Creation Time"
+        )
+        # 'ACT Symbol' is the trading symbol in this file
+        col = "ACT Symbol" if "ACT Symbol" in other_df.columns else "SYMBOL"
+        other_syms = other_df[col].dropna().astype(str).str.strip().str.upper().tolist()
+        candidates.update(other_syms)
+        print(f"[INFO] Loaded {len(other_syms)} other-listed (NYSE/AMEX/etc.) tickers.")
+    except Exception as e:
+        print(f"[WARN] Could not load other-listed tickers: {e}")
+
+    candidates = sorted(candidates)
+    if MAX_SYMBOLS is not None:
+        candidates = candidates[:MAX_SYMBOLS]
+
+    print(f"[INFO] Using {len(candidates)} candidate symbols in total.")
+    return candidates
+
 
 
 # ---------- METADATA FETCHING ----------
