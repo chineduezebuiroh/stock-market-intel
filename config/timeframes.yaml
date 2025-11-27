@@ -14,6 +14,9 @@ stocks:
   quarterly:
     session: regular
     window_bars: 250
+  yearly:
+    session: regular
+    window_bars: 150
 
 futures:
   hourly:
