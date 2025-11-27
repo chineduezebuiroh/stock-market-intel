@@ -137,10 +137,10 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
                     ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
 
             elif timeframe == "monthly":
-                # monthly → quarterly
-                tf = "quarterly"
-                c = TF_CFG["stocks"][tf]
-                ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
+                # monthly → quarterly + yearly
+                for tf in ["quarterly", "yearly"]:
+                    c = TF_CFG["stocks"][tf]
+                    ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))        
 
         elif namespace == "futures":
             if timeframe == "hourly":
