@@ -1,19 +1,19 @@
 stocks:
   stocks_a_mq_shortlist:
     lower_tf: monthly
-    middle_tf: null
-    upper_tf: quarterly
+    middle_tf: quarterly
+    upper_tf: yearly
     universe: shortlist_stocks
 
   stocks_a_mq_all:
     lower_tf: monthly
     middle_tf: quarterly
-    upper_tf: quarterly
+    upper_tf: yearly
     universe: options_eligible
 
   stocks_b_wq_shortlist:
     lower_tf: weekly
-    middle_tf: null
+    middle_tf: monthly
     upper_tf: quarterly
     universe: shortlist_stocks
 
@@ -25,7 +25,7 @@ stocks:
 
   stocks_c_dm_shortlist:
     lower_tf: daily
-    middle_tf: null
+    middle_tf: weekly
     upper_tf: monthly
     universe: shortlist_stocks
 
@@ -37,7 +37,7 @@ stocks:
 
   stocks_d_130mw_shortlist:
     lower_tf: intraday_130m
-    middle_tf: null
+    middle_tf: daily
     upper_tf: weekly
     universe: shortlist_stocks
 
