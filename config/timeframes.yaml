@@ -29,7 +29,7 @@ futures:
     session: extended
     window_bars: 300
   weekly:
-    session: extended:
+    session: extended
     window_bars: 250
   monthly:
     session: extended
