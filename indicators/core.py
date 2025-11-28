@@ -54,7 +54,7 @@ def apply_core(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     df[f'ema_{ema_fast}'] = ema(close, ema_fast)
     df[f'ema_{ema_slow}'] = ema(close, ema_slow)
     df[f'wema_{wild_len}'] = wema(close, wild_len)
-    df[f'rsi_{rsi_len}'] = rsi_wilder(close, rsi_len)
+    #df[f'rsi_{rsi_len}'] = rsi_wilder(close, rsi_len)
 
     df[f'ema_{ema_fast}_slope'] = slope(df[f'ema_{ema_fast}'], 3)
     df[f'ema_{ema_slow}_slope'] = slope(df[f'ema_{ema_slow}'], 3)
