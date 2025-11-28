@@ -59,36 +59,6 @@ def symbols_for_universe(universe: str) -> list[str]:
     # Future: add ETF shortlist universes here if needed.
     return []
 
-"""
-def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -> pd.DataFrame:
-
-    rows = []
-
-    for sym in symbols:
-        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        if not p.exists():
-            continue
-
-        df = pd.read_parquet(p)
-        if df.empty:
-            continue
-
-        last = df.iloc[-1]
-
-        row = {"symbol": sym}
-        for col in BASE_COLS:
-            if col in last.index:
-                row[f"{role_prefix}{col}"] = last[col]
-
-        rows.append(row)
-
-    if not rows:
-        return pd.DataFrame()
-
-    out = pd.DataFrame(rows).set_index("symbol")
-    out.columns = out.columns.astype(str)
-    return out
-"""
 
 def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -> pd.DataFrame:
     """
@@ -197,9 +167,9 @@ def basic_signal_logic(combo_df: pd.DataFrame) -> pd.DataFrame:
     df["signal"] = "watch"
     return df
 
-
+"""
 def run_combo(namespace: str, combo_name: str):
-    """Entry point: build combo dataframe, apply signal logic, persist snapshot."""
+    #Entry point: build combo dataframe, apply signal logic, persist snapshot.
     cfg = load_multi_tf_config()
     df = build_combo_df(namespace, combo_name, cfg)
     if df.empty:
@@ -214,6 +184,32 @@ def run_combo(namespace: str, combo_name: str):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(out_path)
     print(f"[OK] Wrote combo snapshot to {out_path}")
+"""
+
+
+def run_combo(namespace: str, combo_name: str):
+    with open(MTF_CFG_PATH, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    df = build_combo_df(namespace, combo_name, cfg)
+    if df.empty:
+        print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
+        return
+
+    out = basic_signal_logic(df)
+    out = out.reset_index()  # restore `symbol` column
+
+    # ---- FIX REDUNDANT FILENAME ----
+    clean_name = combo_name
+    prefix = f"{namespace}_"
+    if combo_name.startswith(prefix):
+        clean_name = combo_name[len(prefix):]
+
+    out_path = DATA / f"combo_{namespace}_{clean_name}.parquet"
+    out.to_parquet(out_path)
+    print(f"[OK] Wrote combo snapshot to {out_path}")
+
+
 
 
 if __name__ == "__main__":
