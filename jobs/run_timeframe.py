@@ -17,6 +17,8 @@ from screens.engine import run_screen
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 
+DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
+
 # Load timeframe config (structure only)
 with open(CFG / "timeframes.yaml", "r") as f:
     TF_CFG = yaml.safe_load(f)
@@ -64,17 +66,37 @@ def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
 
     return sorted(universes)
 
-
+"""
 def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
-    """
-    Union of all symbols for all universes that reference this timeframe.
-    """
+    
+    #Union of all symbols for all universes that reference this timeframe.
+    
     universes = universes_for_timeframe(namespace, timeframe)
     all_syms = set()
     for u in universes:
         for sym in symbols_for_universe(u):
             all_syms.add(sym)
     return sorted(all_syms)
+"""
+
+def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
+    """
+    Union of all symbols for all universes that reference this timeframe,
+    with a dev-only cap for stocks so local runs stay fast.
+    """
+    universes = universes_for_timeframe(namespace, timeframe)
+    all_syms: set[str] = set()
+    for u in universes:
+        for sym in symbols_for_universe(u):
+            all_syms.add(sym)
+
+    symbols = sorted(all_syms)
+
+    # Dev-only throttle for stocks; futures usually small anyway
+    if namespace == "stocks" and DEV_MAX_STOCK_SYMBOLS_PER_TF is not None:
+        symbols = symbols[:DEV_MAX_STOCK_SYMBOLS_PER_TF]
+
+    return symbols
 
 
 def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
