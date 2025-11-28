@@ -65,62 +65,6 @@ def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tup
 
 
 
-"""
-def load_eod(symbol: str, timeframe: str, window_bars: int, session: str) -> pd.DataFrame:
-
-    ticker = yf.Ticker(symbol)
-
-    # Map our logical timeframe to yfinance interval
-    if timeframe == "daily":
-        interval = "1d"
-    elif timeframe == "weekly":
-        interval = "1wk"
-    elif timeframe in ("monthly", "quarterly", "yearly"):
-        interval = "1mo"  # we'll resample/trim via update_fixed_window if needed
-    else:
-        interval = "1d"  # sensible default
-
-    start = compute_start_date_for_window(timeframe, window_bars)
-
-    try:
-        df = ticker.history(
-            start=start,
-            end=None,
-            interval=interval,
-            auto_adjust=False,
-            actions=False,
-            timeout=10,        # key: don't hang forever
-            raise_errors=False,
-        )
-    except Exception as e:
-        print(f"[WARN] load_eod: hard failure for {symbol} ({timeframe}): {e}")
-        return pd.DataFrame()
-
-    if df is None or df.empty:
-        print(f"[WARN] load_eod: empty DataFrame for {symbol} ({timeframe})")
-        return pd.DataFrame()
-
-    df = df.rename(
-        columns={
-            "Open": "open",
-            "High": "high",
-            "Low": "low",
-            "Close": "close",
-            "Adj Close": "adj_close",
-            "Volume": "volume",
-        }
-    )
-    
-    # 🔹 normalize index to EST
-    if isinstance(df.index, pd.DatetimeIndex):
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert("America/New_York").tz_localize(None)    
-    
-    return df
-"""
-
-
-
 def load_eod(
     symbol: str,
     timeframe: str = "daily",
