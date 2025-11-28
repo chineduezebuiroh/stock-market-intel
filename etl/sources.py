@@ -108,9 +108,13 @@ def load_eod(symbol: str, timeframe: str, window_bars: int, session: str) -> pd.
             "Volume": "volume",
         }
     )
-
+    
+    # 🔹 normalize index to EST
+    if isinstance(df.index, pd.DatetimeIndex):
+        if df.index.tz is not None:
+            df.index = df.index.tz_convert("America/New_York").tz_localize(None)    
+    
     return df
-
 
 
 
@@ -144,10 +148,12 @@ def load_130m_from_5m(ticker: str, session: str = 'regular') -> pd.DataFrame:
     df5 = load_intraday_yf(ticker, interval='5m', period='30d', session=session)
     if df5.empty:
         return df5
-
+    
     # Remove timezone if present
     if getattr(df5.index, 'tz', None) is not None:
-        df5 = df5.tz_localize(None)
+        #df5 = df5.tz_localize(None)
+        df5.index = df5.index.tz_convert("America/New_York").tz_localize(None)
+        
 
     out = resample_ohlcv(df5, '130T')
     return out
