@@ -58,7 +58,7 @@ def apply_core(df: pd.DataFrame, params: dict) -> pd.DataFrame:
 
     df[f'ema_{ema_fast}_slope'] = slope(df[f'ema_{ema_fast}'], 3)
     df[f'ema_{ema_slow}_slope'] = slope(df[f'ema_{ema_slow}'], 3)
-    df[f'rsi_{rsi_len}_slope'] = slope(df[f'rsi_{rsi_len}'], 3)
+    #df[f'rsi_{rsi_len}_slope'] = slope(df[f'rsi_{rsi_len}'], 3)
 
     df[f'volume_sma_{vol_sma}'] = sma(vol, vol_sma)
     df[f'atr_{wild_len}'] = atr_wilder(high, low, close, wild_len)
