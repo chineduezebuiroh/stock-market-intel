@@ -14,6 +14,8 @@ from etl.window import parquet_path
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 
+MTF_CFG_PATH = CFG / "multi_timeframe_combos.yaml"
+
 # Columns we expect to be present after apply_core()
 BASE_COLS = [
     "open",
