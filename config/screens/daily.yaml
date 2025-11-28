@@ -1,13 +1,13 @@
 name: "Daily — Momentum Pullback (template)"
 
 params:
-  rsi_len: 14
+  #rsi_len: 14
   ema_fast: 8
   ema_slow: 21
   wild_len: 14
   volume_sma: 20
 rules: []
 sort:
-  - "-rsi_14_slope"
+  #- "-rsi_14_slope"
   - "-ema_8_slope"
 limit: 50
