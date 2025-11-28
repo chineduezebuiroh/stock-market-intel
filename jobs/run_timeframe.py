@@ -12,7 +12,7 @@ import yaml
 from etl.sources import load_eod, load_130m_from_5m
 from etl.window import parquet_path, update_fixed_window
 from indicators.core import apply_core
-from screens.engine import run_screen
+#from screens.engine import run_screen
 
 DATA = ROOT / "data"
 CFG = ROOT / "config"
@@ -160,94 +160,6 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
 
 
 
-
-"""
-def run(namespace: str, timeframe: str, cascade: bool = False):
-
-    cfg_tf = TF_CFG[namespace][timeframe]
-    session = cfg_tf["session"]
-    window_bars = int(cfg_tf["window_bars"])
-
-    # Determine symbols from all combos that use this timeframe
-    symbols = symbols_for_timeframe(namespace, timeframe)
-    if not symbols:
-        print(f"[WARN] No symbols found for {namespace}:{timeframe} via combos.")
-        return
-
-    # 1) Ingest this timeframe
-    ingest_one(namespace, timeframe, symbols, session, window_bars)
-
-    # 2) Cascades (multi-timeframe ingest logic)
-    if cascade:
-        if namespace == "stocks":
-            if timeframe == "intraday_130m":
-                # 130m → daily + weekly
-                for tf in ["daily", "weekly"]:
-                    c = TF_CFG["stocks"][tf]
-                    ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
-
-            elif timeframe == "daily":
-                # daily → weekly + monthly
-                for tf in ["weekly", "monthly"]:
-                    c = TF_CFG["stocks"][tf]
-                    ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
-
-            elif timeframe == "weekly":
-                # weekly → monthly + quarterly
-                for tf in ["monthly", "quarterly"]:
-                    c = TF_CFG["stocks"][tf]
-                    ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))
-
-            elif timeframe == "monthly":
-                # monthly → quarterly + yearly
-                for tf in ["quarterly", "yearly"]:
-                    c = TF_CFG["stocks"][tf]
-                    ingest_one("stocks", tf, symbols, c["session"], int(c["window_bars"]))        
-
-        elif namespace == "futures":
-            if timeframe == "hourly":
-                # 1h → 4h + daily
-                for tf in ["four_hour", "daily"]:
-                    c = TF_CFG["futures"][tf]
-                    ingest_one("futures", tf, symbols, c["session"], int(c["window_bars"]))
-
-            elif timeframe == "four_hour":
-                # 4h → daily + weekly
-                for tf in ["daily", "weekly"]:
-                    c = TF_CFG["futures"][tf]
-                    ingest_one("futures", tf, symbols, c["session"], int(c["window_bars"]))
-
-            elif timeframe == "daily":
-                # daily → weekly + monthly
-                for tf in ["weekly", "monthly"]:
-                    c = TF_CFG["futures"][tf]
-                    ingest_one("futures", tf, symbols, c["session"], int(c["window_bars"]))
-
-    # 3) Run single-timeframe screen if a config exists
-    screen_path = CFG / "screens" / f"{timeframe}.yaml"
-    if screen_path.exists():
-        with open(screen_path, "r") as f:
-            screen_cfg = yaml.safe_load(f)
-
-        rows = []
-        for sym in symbols:
-            p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-            if not p.exists():
-                continue
-            df = pd.read_parquet(p)
-            if df.empty:
-                continue
-            last = df.iloc[-1:].copy()
-            last["symbol"] = sym
-            rows.append(last)
-
-        if rows:
-            snap = pd.concat(rows)
-            snap = run_screen(snap, screen_cfg)
-            out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-            snap.to_parquet(out)
-"""
-
 def run(namespace: str, timeframe: str, cascade: bool = False):
     """
     Primary entry point: ingest for a namespace+timeframe for all symbols
@@ -272,6 +184,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
     # --- 2) Ingest this timeframe (per-symbol parquet with indicators) ---
     ingest_one(namespace, timeframe, symbols, session, window_bars)
 
+    """
     # --- 3) Build snapshot for this timeframe ---
     # Read latest bar for each symbol from its parquet
     rows = []
@@ -304,6 +217,38 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
     out.parent.mkdir(parents=True, exist_ok=True)
     snap.to_parquet(out)
     print(f"[OK] Wrote snapshot: {out}")
+    """
+
+    # 3) Build single-timeframe snapshot (no screening/pivoting for now)
+    rows = []
+    for sym in symbols:
+        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
+        if not p.exists():
+            continue
+
+        df = pd.read_parquet(p)
+        if df.empty:
+            continue
+
+        # Take the last bar only
+        last = df.iloc[-1:].copy()
+        last["symbol"] = sym
+        rows.append(last)
+
+    if rows:
+        snap = pd.concat(rows, axis=0)
+
+        # Optional: ensure the index name is something nice
+        if snap.index.name is None:
+            snap.index.name = "date"
+
+        # Make sure all column names are plain strings
+        snap.columns = snap.columns.astype(str)
+
+        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+        out.to_parquet(out)
+        print(f"[OK] Wrote snapshot: {out}")
+
 
     # --- 4) Cascade to higher timeframes (if requested) ---
     if cascade:
