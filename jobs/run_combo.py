@@ -59,16 +59,9 @@ def symbols_for_universe(universe: str) -> list[str]:
     # Future: add ETF shortlist universes here if needed.
     return []
 
-
+"""
 def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -> pd.DataFrame:
-    """
-    For a given timeframe + list of symbols, load the *latest bar* for each symbol
-    and return a DataFrame indexed by symbol with columns like:
 
-        lower_open, lower_high, ..., lower_atr_14
-
-    One row per symbol, flat column names.
-    """
     rows = []
 
     for sym in symbols:
@@ -95,6 +88,48 @@ def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -
     out = pd.DataFrame(rows).set_index("symbol")
     out.columns = out.columns.astype(str)
     return out
+"""
+
+def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -> pd.DataFrame:
+    """
+    Load the *snapshot* for namespace+timeframe (e.g. snapshot_stocks_daily.parquet),
+    filter to the given symbols, and prefix columns with role_prefix:
+
+        lower_open, lower_high, ..., lower_atr_14
+
+    One row per symbol, flat column names.
+    """
+    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+    if not snap_path.exists():
+        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
+        return pd.DataFrame()
+
+    df = pd.read_parquet(snap_path)
+    if df.empty:
+        print(f"[WARN] Snapshot {snap_path} is empty.")
+        return pd.DataFrame()
+
+    if "symbol" not in df.columns:
+        print(f"[WARN] Snapshot {snap_path} has no 'symbol' column; cannot build combo frame.")
+        return pd.DataFrame()
+
+    # Filter to our universe + index by symbol
+    df = df[df["symbol"].isin(symbols)].copy()
+    if df.empty:
+        print(f"[WARN] No overlapping symbols for snapshot {snap_path} and universe.")
+        return pd.DataFrame()
+
+    df = df.set_index("symbol")
+
+    # Use only the BASE_COLS that actually exist in this snapshot
+    cols = [c for c in BASE_COLS if c in df.columns]
+    if not cols:
+        print(f"[WARN] No BASE_COLS found in snapshot {snap_path}.")
+        return pd.DataFrame()
+
+    sub = df[cols].rename(columns={c: f"{role_prefix}{c}" for c in cols})
+    sub.columns = sub.columns.astype(str)
+    return sub
 
 
 def build_combo_df(namespace: str, combo_name: str, cfg: dict) -> pd.DataFrame:
