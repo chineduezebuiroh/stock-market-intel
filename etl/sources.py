@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 # etl/sources.py
 
 import os
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
-
-from __future__ import annotations
 
 ALPHA_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
