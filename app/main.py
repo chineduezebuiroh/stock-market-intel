@@ -1,96 +1,126 @@
-import streamlit as st
-import pandas as pd
+import sys
 from pathlib import Path
 
+import pandas as pd
+import streamlit as st
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / 'data'
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-st.set_page_config(page_title='Market Intel', layout='wide')
-st.title('Market Intel — Signals')
+DATA = ROOT / "data"
 
-#tabs = st.tabs(['Daily','Weekly','Monthly','Quarterly','130m','Fut Hourly','Fut 4H','Fut Daily'])
-tabs = st.tabs([
-    'Daily',
-    'Weekly',
-    'Monthly',
-    'Quarterly',
-    '130m',
-    'Fut Hourly',
-    'Fut 4H',
-    'Fut Daily',
-    'Stocks C: D/M Shortlist',
-])
+# -----------------------------------------------------------------------------
+# Streamlit page config
+# -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Stock Market Intel – MTF Dashboard",
+    layout="wide",
+)
 
-"""
-mapping = {
-    'Daily': 'snapshot_stocks_daily.parquet',
-    'Weekly': 'snapshot_stocks_weekly.parquet',
-    'Monthly': 'snapshot_stocks_monthly.parquet',
-    'Quarterly': 'snapshot_stocks_quarterly.parquet',
-    '130m': 'snapshot_stocks_intraday_130m.parquet',
-    'Fut Hourly': 'snapshot_futures_hourly.parquet',
-    'Fut 4H': 'snapshot_futures_four_hour.parquet',
-    'Fut Daily': 'snapshot_futures_daily.parquet',
-}
-"""
-mapping = {
-    'Daily': 'snapshot_stocks_daily.parquet',
-    'Weekly': 'snapshot_stocks_weekly.parquet',
-    'Monthly': 'snapshot_stocks_monthly.parquet',
-    'Quarterly': 'snapshot_stocks_quarterly.parquet',
-    '130m': 'snapshot_stocks_intraday_130m.parquet',
-    'Fut Hourly': 'snapshot_futures_hourly.parquet',
-    'Fut 4H': 'snapshot_futures_four_hour.parquet',
-    'Fut Daily': 'snapshot_futures_daily.parquet',
-    'Stocks C: D/M Shortlist': 'snapshot_combo_stocks_stocks_c_dm_shortlist.parquet',
-}
 
-"""
-for tab in mapping:
-    with tabs[list(mapping.keys()).index(tab)]:
-        p = DATA / mapping[tab]
-        if p.exists():
-            df = pd.read_parquet(p)
-            st.dataframe(df.reset_index(drop=True))
-        else:
-            st.info('No snapshot yet.')
-"""
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+def load_parquet_safe(path: Path) -> pd.DataFrame | None:
+    """
+    Load a parquet file if it exists, otherwise return None.
+    """
+    if not path.exists():
+        return None
+    try:
+        return pd.read_parquet(path)
+    except Exception as e:
+        st.error(f"Failed to read {path.name}: {e}")
+        return None
 
-for name, filename in mapping.items():
-    idx = list(mapping.keys()).index(name)
-    with tabs[idx]:
-        p = DATA / filename
-        if not p.exists():
-            st.info('No snapshot yet.')
-            continue
 
-        df = pd.read_parquet(p).reset_index(drop=True)
+def render_snapshot_tab(namespace: str, timeframe: str, title: str):
+    """
+    Render a single-timeframe snapshot table.
+    Expects data/snapshot_{namespace}_{timeframe}.parquet
+    """
+    st.subheader(title)
+    p = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+    df = load_parquet_safe(p)
 
-        if name == 'Stocks C: D/M Shortlist':
-            st.subheader("Stocks C — Daily / Monthly (Shortlist)")
-            if 'signal' in df.columns:
-                long_df = df[df['signal'] == 'long']
-                short_df = df[df['signal'] == 'short']
-                watch_df = df[df['signal'] == 'watch']
+    if df is None or df.empty:
+        st.info(f"No snapshot data found for `{namespace}:{timeframe}`.")
+        st.code(str(p))
+        return
 
-                st.markdown("**Long Setups**")
-                if long_df.empty:
-                    st.write("No long setups.")
-                else:
-                    st.dataframe(long_df)
+    # Make sure symbol is visible as a column, not buried in the index
+    if "symbol" in df.columns:
+        df_display = df.copy()
+    else:
+        df_display = df.reset_index()
 
-                st.markdown("**Short Setups**")
-                if short_df.empty:
-                    st.write("No short setups.")
-                else:
-                    st.dataframe(short_df)
+    st.dataframe(df_display, use_container_width=True)
 
-                st.markdown("**Watchlist**")
-                if watch_df.empty:
-                    st.write("No watchlist names.")
-                else:
-                    st.dataframe(watch_df)
-            else:
-                st.dataframe(df)
-        else:
-            st.dataframe(df)
+
+def render_combo_tab_stocks_c_dwm_shortlist():
+    """
+    Render the combo for:
+      - namespace: stocks
+      - combo: stocks_c_dwm_shortlist
+      - file: data/combo_stocks_c_dwm_shortlist.parquet
+    """
+    st.subheader("Stocks C: Daily / Weekly / Monthly – Shortlist")
+
+    combo_path = DATA / "combo_stocks_c_dwm_shortlist.parquet"
+    df = load_parquet_safe(combo_path)
+
+    if df is None or df.empty:
+        st.info("No combo data found for `stocks_c_dwm_shortlist` yet.")
+        st.code(str(combo_path))
+        return
+
+    # Ensure we have symbol as a visible column
+    if "symbol" not in df.columns:
+        df = df.reset_index()
+
+    # Optional: basic signal filter
+    if "signal" in df.columns:
+        signal_choice = st.radio(
+            "Filter by signal:",
+            options=["all", "long", "short", "watch"],
+            horizontal=True,
+        )
+
+        if signal_choice != "all":
+            df = df[df["signal"] == signal_choice]
+
+    # For now, just show everything. Later we can:
+    #  - Hide raw indicator columns
+    #  - Add sector / industry / ETF trend columns
+    st.dataframe(df, use_container_width=True)
+
+
+# -----------------------------------------------------------------------------
+# Layout / Tabs
+# -----------------------------------------------------------------------------
+st.title("Stock Market Intel – Multi-Timeframe Dashboard")
+
+tabs = st.tabs(
+    [
+        "Daily snapshot (stocks)",
+        "Weekly snapshot (stocks)",
+        "Monthly snapshot (stocks)",
+        "Stocks C: D/W/M Shortlist",
+    ]
+)
+
+with tabs[0]:
+    render_snapshot_tab("stocks", "daily", "Stocks – Daily Snapshot")
+
+with tabs[1]:
+    render_snapshot_tab("stocks", "weekly", "Stocks – Weekly Snapshot")
+
+with tabs[2]:
+    render_snapshot_tab("stocks", "monthly", "Stocks – Monthly Snapshot")
+
+with tabs[3]:
+    render_combo_tab_stocks_c_dwm_shortlist()
