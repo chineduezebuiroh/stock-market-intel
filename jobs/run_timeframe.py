@@ -245,8 +245,15 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
         # Make sure all column names are plain strings
         snap.columns = snap.columns.astype(str)
 
+        """
         out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
         out.to_parquet(out)
+        """
+        
+        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+        snap.to_parquet(out)
+
+        
         print(f"[OK] Wrote snapshot: {out}")
 
 
