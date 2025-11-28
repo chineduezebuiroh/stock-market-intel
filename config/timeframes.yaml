@@ -4,19 +4,19 @@ stocks:
     window_bars: 300
   daily:
     session: regular
-    window_bars: 300
+    window_bars: 260
   weekly:
     session: regular
-    window_bars: 300
+    window_bars: 210
   monthly:
     session: regular
     window_bars: 250
   quarterly:
     session: regular
-    window_bars: 250
+    window_bars: 200
   yearly:
     session: regular
-    window_bars: 150
+    window_bars: 200
 
 futures:
   hourly:
@@ -24,13 +24,13 @@ futures:
     window_bars: 250
   four_hour:
     session: extended
-    window_bars: 300
+    window_bars: 250
   daily:
     session: extended
-    window_bars: 300
+    window_bars: 260
   weekly:
     session: extended
-    window_bars: 250
+    window_bars: 210
   monthly:
     session: extended
     window_bars: 250
