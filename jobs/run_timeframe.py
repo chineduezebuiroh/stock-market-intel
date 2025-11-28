@@ -103,35 +103,10 @@ def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
 
     return symbols
 
+
 """
 def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
-    
-    #Ingest bars for a single namespace+timeframe over a list of symbols,
-    #update fixed rolling window, apply indicators, and persist parquet.
-    
-    for sym in symbols:
-        if namespace == "stocks" and timeframe == "intraday_130m":
-            df_new = load_130m_from_5m(sym, session=session)
-        else:
-            df_new = load_eod(sym, start="2000-01-01", end=None, session=session)
 
-        parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        parquet.parent.mkdir(parents=True, exist_ok=True)
-        existing = pd.read_parquet(parquet) if parquet.exists() else pd.DataFrame()
-        merged = update_fixed_window(df_new, existing, window_bars)
-        merged = apply_core(merged, params={})
-        merged.to_parquet(parquet)
-"""
-
-def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
-    """
-    Ingest bars for a single namespace+timeframe over a list of symbols,
-    update fixed rolling window, apply indicators, and persist parquet.
-
-    This version:
-      - uses load_eod() with a start date derived from timeframe+window_bars,
-      - relies on update_fixed_window() to enforce the sliding window.
-    """
     for sym in symbols:
         if namespace == "stocks" and timeframe == "intraday_130m":
             # intraday builder (you can also add timeout logic inside this)
@@ -142,6 +117,62 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         if df_new is None or df_new.empty:
             # skip symbols that fail to load
             continue
+
+        parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
+        parquet.parent.mkdir(parents=True, exist_ok=True)
+
+        if parquet.exists():
+            existing = pd.read_parquet(parquet)
+        else:
+            existing = pd.DataFrame()
+
+        merged = update_fixed_window(df_new, existing, window_bars)
+        if merged is None or merged.empty:
+            continue
+
+        merged = apply_core(merged, params={})
+        merged.to_parquet(parquet)
+"""
+
+
+def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
+    """
+    Ingest bars for a single namespace+timeframe over a list of symbols,
+    update fixed rolling window, apply indicators, and persist parquet.
+
+    This version:
+      - uses load_eod() with a start date derived from timeframe+window_bars,
+      - relies on update_fixed_window() to enforce the sliding window.
+      - flattens any MultiIndex columns (e.g. ('Open','AAPL')) down to a
+        single-symbol, single-level column set before saving.
+    """
+    for sym in symbols:
+        if namespace == "stocks" and timeframe == "intraday_130m":
+            # intraday builder
+            df_new = load_130m_from_5m(sym, session=session)
+        else:
+            df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+
+        if df_new is None or df_new.empty:
+            # skip symbols that fail to load
+            continue
+
+        # --- NEW: flatten any MultiIndex columns & keep only this symbol ---
+        cols = df_new.columns
+        if isinstance(cols, pd.MultiIndex):
+            # Common yfinance pattern: level 0 = field, level 1 = symbol
+            # e.g. ('Open', 'AAPL'), ('High', 'AAPL'), ...
+            if sym in cols.get_level_values(-1):
+                # slice out only this ticker on the last level
+                df_new = df_new.xs(sym, axis=1, level=-1)
+            else:
+                # Fallback: if ticker is on the first level instead
+                if sym in cols.get_level_values(0):
+                    df_new = df_new.xs(sym, axis=1, level=0)
+
+        # At this point df_new should be single-level columns like Open/High/Low/Close
+        # Normalize to lower-case names we expect in indicators/core.py
+        df_new.columns = [str(c).lower() for c in df_new.columns]
 
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
         parquet.parent.mkdir(parents=True, exist_ok=True)
