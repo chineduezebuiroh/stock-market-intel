@@ -98,12 +98,12 @@ def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
 
     return symbols
 
-
+"""
 def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
-    """
-    Ingest bars for a single namespace+timeframe over a list of symbols,
-    update fixed rolling window, apply indicators, and persist parquet.
-    """
+    
+    #Ingest bars for a single namespace+timeframe over a list of symbols,
+    #update fixed rolling window, apply indicators, and persist parquet.
+    
     for sym in symbols:
         if namespace == "stocks" and timeframe == "intraday_130m":
             df_new = load_130m_from_5m(sym, session=session)
@@ -116,6 +116,45 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         merged = update_fixed_window(df_new, existing, window_bars)
         merged = apply_core(merged, params={})
         merged.to_parquet(parquet)
+"""
+
+def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
+    """
+    Ingest bars for a single namespace+timeframe over a list of symbols,
+    update fixed rolling window, apply indicators, and persist parquet.
+
+    This version:
+      - uses load_eod() with a start date derived from timeframe+window_bars,
+      - relies on update_fixed_window() to enforce the sliding window.
+    """
+    for sym in symbols:
+        if namespace == "stocks" and timeframe == "intraday_130m":
+            # intraday builder (you can also add timeout logic inside this)
+            df_new = load_130m_from_5m(sym, session=session)
+        else:
+            df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+
+        if df_new is None or df_new.empty:
+            # skip symbols that fail to load
+            continue
+
+        parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
+        parquet.parent.mkdir(parents=True, exist_ok=True)
+
+        if parquet.exists():
+            existing = pd.read_parquet(parquet)
+        else:
+            existing = pd.DataFrame()
+
+        merged = update_fixed_window(df_new, existing, window_bars)
+        if merged is None or merged.empty:
+            continue
+
+        merged = apply_core(merged, params={})
+        merged.to_parquet(parquet)
+
+
+
 
 
 def run(namespace: str, timeframe: str, cascade: bool = False):
