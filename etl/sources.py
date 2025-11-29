@@ -126,8 +126,14 @@ def load_eod(
     already gives you RTH-style bars, so we don't currently filter further.
     """
     interval, lookback_days = _timeframe_to_interval_and_lookback(timeframe, window_bars)
+    
+    end_utc = pd.Timestamp.utcnow()
+    if end_utc.tzinfo is None:
+        end_utc = end_utc.tz_localize("UTC")
+    else:
+        end_utc = end_utc.tz_convert("UTC")
 
-    end_utc = pd.Timestamp.utcnow().tz_localize("UTC")
+    
     start_utc = end_utc - timedelta(days=lookback_days)
 
     t = yf.Ticker(symbol)
