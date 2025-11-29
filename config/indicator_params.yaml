@@ -40,12 +40,12 @@ indicators:
         id: atr
         length: 14
 
-      trend_score:
-        id: trend_score
-        fast_len: 8
-        slow_len: 21
-        slope_len: 5
-        ma_type: ema
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 6
+        int_len: 15
+        slow_len: 30
+        vma_length_source: "fast"  
 
       vol_regime:
         id: vol_regime
@@ -99,12 +99,12 @@ indicators:
         id: atr
         length: 14
 
-      trend_score:
-        id: trend_score
-        fast_len: 8
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 5
+        int_len: 13
         slow_len: 21
-        slope_len: 5
-        ma_type: ema
+        vma_length_source: "fast" 
 
       vol_regime:
         id: vol_regime
@@ -158,12 +158,12 @@ indicators:
         id: atr
         length: 14
 
-      trend_score:
-        id: trend_score
-        fast_len: 4
-        slow_len: 12
-        slope_len: 3
-        ma_type: ema
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 6
+        int_len: 13
+        slow_len: 26
+        vma_length_source: "fast" 
 
       vol_regime:
         id: vol_regime
@@ -217,12 +217,12 @@ indicators:
         id: atr
         length: 14
 
-      trend_score:
-        id: trend_score
-        fast_len: 3
-        slow_len: 12
-        slope_len: 3
-        ma_type: ema
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 6
+        int_len: 12
+        slow_len: 24
+        vma_length_source: "fast" 
 
       vol_regime:
         id: vol_regime
@@ -276,12 +276,12 @@ indicators:
         id: atr
         length: 14
 
-      trend_score:
-        id: trend_score
-        fast_len: 3     # example numbers – adjust later
-        slow_len: 12
-        slope_len: 3
-        ma_type: ema
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 5
+        int_len: 10
+        slow_len: 20
+        vma_length_source: "fast" 
 
       vol_regime:
         id: vol_regime
@@ -335,12 +335,12 @@ indicators:
         id: atr
         length: 14
 
-      trend_score:
-        id: trend_score
-        fast_len: 2     # very rough example for yearly; adjust later
-        slow_len: 8
-        slope_len: 2
-        ma_type: ema
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 5
+        int_len: 10
+        slow_len: 20
+        vma_length_source: "fast"  
 
       vol_regime:
         id: vol_regime
