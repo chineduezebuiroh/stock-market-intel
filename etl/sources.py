@@ -228,7 +228,8 @@ def load_intraday_yf(ticker: str, interval: str = '5m', period: str = '30d', ses
         return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
 
     df = df.rename(columns=str.lower)
-    return df[['open', 'high', 'low', 'close', 'volume']]
+    df = _sanitize_eod_df(df) # <-- New line added
+    return df #[['open', 'high', 'low', 'close', 'volume']]
 
 def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     o = df['open'].resample(rule).first()
@@ -252,4 +253,5 @@ def load_130m_from_5m(ticker: str, session: str = 'regular') -> pd.DataFrame:
         
 
     out = resample_ohlcv(df5, '130T')
+    out = _sanitize_eod_df(out) # <-- New line added
     return out
