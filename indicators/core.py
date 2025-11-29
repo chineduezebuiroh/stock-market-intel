@@ -18,6 +18,7 @@ PRICE_COLS: list[str] = [
 ]
 
 # Core indicator columns produced by apply_core
+# (now includes composite strategy outputs as well)
 CORE_INDICATOR_COLS: list[str] = [
     "sma_8",
     "ema_8",
@@ -27,6 +28,9 @@ CORE_INDICATOR_COLS: list[str] = [
     "ema_21_slope",
     "volume_sma_20",
     "atr_14",
+    "trend_score",
+    "vol_regime",
+    "entry_signal",
 ]
 
 # For snapshots: base price + indicator columns
@@ -59,24 +63,8 @@ CORE_LENGTH_PRESETS: dict[str, dict[str, int]] = {
         "slope_len": 3,   # rolling window for slope
     },
     # Example future overrides:
-    # "weekly": {
-    #     "sma_len": 8,
-    #     "ema_short_len": 8,
-    #     "ema_long_len": 21,
-    #     "wema_len": 14,
-    #     "vol_sma_len": 20,
-    #     "atr_len": 14,
-    #     "slope_len": 3,
-    # },
-    # "intraday_130m": {
-    #     "sma_len": 8,
-    #     "ema_short_len": 8,
-    #     "ema_long_len": 21,
-    #     "wema_len": 14,
-    #     "vol_sma_len": 20,
-    #     "atr_len": 14,
-    #     "slope_len": 3,
-    # },
+    # "weekly": {...},
+    # "intraday_130m": {...},
 }
 
 
@@ -103,6 +91,11 @@ def _resolve_lengths(params: dict | None) -> dict[str, int]:
 # -----------------------------------------------------------------------------
 # Low-level helpers
 # -----------------------------------------------------------------------------
+def _sma(series: pd.Series, length: int) -> pd.Series:
+    """Simple moving average."""
+    return series.rolling(window=length, min_periods=length).mean()
+
+
 def _ema(series: pd.Series, length: int) -> pd.Series:
     """Standard exponential moving average."""
     return series.ewm(span=length, adjust=False, min_periods=length).mean()
@@ -291,7 +284,6 @@ def indicator_entry_signal(
     return signal
 
 
-
 # -----------------------------------------------------------------------------
 # Core indicator application
 # -----------------------------------------------------------------------------
@@ -311,6 +303,9 @@ def apply_core(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
         ema_21_slope
         volume_sma_20
         atr_14
+        trend_score
+        vol_regime
+        entry_signal
 
     'params' is reserved for per-timeframe overrides, e.g.:
         params = {"timeframe": "daily"}
@@ -369,6 +364,31 @@ def apply_core(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     # Volatility-based
     # -------------------------------------------------------------------------
     out["atr_14"] = _atr(out, atr_len)
+
+    # -------------------------------------------------------------------------
+    # Composite strategy indicators (temporary hardcoded params)
+    # -------------------------------------------------------------------------
+    out["trend_score"] = indicator_trend_score(
+        out,
+        fast_len=8,
+        slow_len=21,
+        slope_len=5,
+        ma_type="ema",
+    )
+
+    out["vol_regime"] = indicator_vol_regime(
+        out,
+        atr_len=14,
+        lookback=20,
+        low_pct=0.01,
+        high_pct=0.03,
+    )
+
+    out["entry_signal"] = indicator_entry_signal(
+        out,
+        trend_min=0.2,
+        max_vol_regime=0.0,
+    )
 
     # Ensure flat string columns
     out.columns = out.columns.astype(str)
