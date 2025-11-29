@@ -11,7 +11,13 @@ import yaml
 
 from etl.sources import load_eod, load_130m_from_5m
 from etl.window import parquet_path, update_fixed_window
-from indicators.core import apply_core
+#from indicators.core import apply_core
+from indicators.core import (
+    apply_core,
+    get_snapshot_base_cols,
+    initialize_indicator_engine,
+)
+
 #from screens.engine import run_screen
 
 DATA = ROOT / "data"
@@ -101,20 +107,6 @@ def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
         else:
             other_syms.update(syms)
 
-    """
-    all_syms: set[str] = set()
-    for u in universes:
-        for sym in symbols_for_universe(u):
-            all_syms.add(sym)
-
-    symbols = sorted(all_syms)
-    """
-    """
-    # Dev-only throttle for stocks; futures usually small anyway
-    if namespace == "stocks" and DEV_MAX_STOCK_SYMBOLS_PER_TF is not None:
-        symbols = symbols[:DEV_MAX_STOCK_SYMBOLS_PER_TF]
-    """
-
     # Base set: always include all shortlist symbols
     if namespace == "stocks" and DEV_MAX_STOCK_SYMBOLS_PER_TF is not None:
         # Remaining slots after we include all shortlist symbols
@@ -174,7 +166,9 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         if merged is None or merged.empty:
             continue
 
-        merged = apply_core(merged, params={})
+        #merged = apply_core(merged, params={})
+        merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
+        
         merged.to_parquet(parquet)
 
 
@@ -199,45 +193,16 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
     if not symbols:
         print(f"[WARN] No symbols found for {namespace}:{timeframe} via combos.")
         return
+    
+    """
+    # Initialize indicator engine (loads YAML profiles/params/combos)
+    initialize_indicator_engine("config")
+    """
 
     # --- 2) Ingest this timeframe (per-symbol parquet with indicators) ---
     ingest_one(namespace, timeframe, symbols, session, window_bars)
 
     """
-    # --- 3) Build snapshot for this timeframe ---
-    # Read latest bar for each symbol from its parquet
-    rows = []
-    for sym in symbols:
-        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        if not p.exists():
-            continue
-        df = pd.read_parquet(p)
-        if df.empty:
-            continue
-        last = df.iloc[-1:].copy()
-        last["symbol"] = sym
-        rows.append(last)
-
-    if not rows:
-        print(f"[WARN] No latest bars found for snapshot {namespace}:{timeframe}.")
-        snap = pd.DataFrame()
-    else:
-        snap = pd.concat(rows, axis=0)
-
-    # Optionally apply screen if config exists
-    screen_path = CFG / "screens" / f"{timeframe}.yaml"
-    if screen_path.exists() and not snap.empty:
-        with open(screen_path, "r") as f:
-            screen_cfg = yaml.safe_load(f)
-        snap = run_screen(snap, screen_cfg)
-
-    # Write snapshot regardless of screen presence
-    out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    snap.to_parquet(out)
-    print(f"[OK] Wrote snapshot: {out}")
-    """
-
     # 3) Build single-timeframe snapshot (no screening/pivoting for now)
     rows = []
     for sym in symbols:
@@ -263,16 +228,55 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
 
         # Make sure all column names are plain strings
         snap.columns = snap.columns.astype(str)
-
-        """
-        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-        out.to_parquet(out)
-        """
         
         out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
         snap.to_parquet(out)
-
         
+        print(f"[OK] Wrote snapshot: {out}")
+    """
+
+    # 3) Build single-timeframe snapshot (no screening/pivoting for now)
+    base_cols = get_snapshot_base_cols(namespace, timeframe)
+    rows = []
+
+    for sym in symbols:
+        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
+        if not p.exists():
+            continue
+
+        df = pd.read_parquet(p)
+        if df.empty:
+            continue
+
+        # Take the last bar as a Series
+        last = df.iloc[-1]
+
+        # Ensure all base columns are present
+        missing = [c for c in base_cols if c not in last.index]
+        if missing:
+            raise KeyError(
+                f"Snapshot missing columns {missing} for {namespace}/{timeframe}/{sym}"
+            )
+
+        row = last[base_cols].copy()
+        row["symbol"] = sym
+        rows.append(row)
+
+    if rows:
+        snap = pd.DataFrame(rows)
+
+        # Enforce column order: base cols + symbol
+        snap = snap[base_cols + ["symbol"]]
+
+        # Optional: nice index name
+        if snap.index.name is None:
+            snap.index.name = "date"
+
+        # Ensure all columns are plain strings
+        snap.columns = snap.columns.astype(str)
+
+        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+        snap.to_parquet(out)
         print(f"[OK] Wrote snapshot: {out}")
 
 
@@ -286,6 +290,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
 
 
 if __name__ == "__main__":
+    initialize_indicator_engine(CFG)
     ns = sys.argv[1]
     tf = sys.argv[2]
     cascade = "--cascade" in sys.argv
