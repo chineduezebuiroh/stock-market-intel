@@ -1,61 +1,117 @@
 stocks:
   stocks_a_mqy_shortlist:
-    lower_tf: monthly
-    middle_tf: quarterly
-    upper_tf: yearly
     universe: shortlist_stocks
-
-  stocks_a_mqy_all:
+    
     lower_tf: monthly
+    lower_profile: lower_core_v1
+    
     middle_tf: quarterly
+    middle_profile: middle_core_v1
+    
     upper_tf: yearly
+    upper_profile: upper_core_v1
+
+    
+  stocks_a_mqy_all:
     universe: options_eligible
+    
+    lower_tf: monthly
+    lower_profile: lower_core_v1
+    
+    middle_tf: quarterly
+    middle_profile: middle_core_v1
+    
+    upper_tf: yearly
+    upper_profile: upper_core_v1
+    
 
   stocks_b_wmq_shortlist:
-    lower_tf: weekly
-    middle_tf: monthly
-    upper_tf: quarterly
     universe: shortlist_stocks
+    
+    lower_tf: weekly
+    lower_profile: lower_core_v1
+    
+    middle_tf: monthly
+    middle_profile: middle_core_v1
+    
+    upper_tf: quarterly
+    upper_profile: upper_core_v1
+    
 
   stocks_b_wmq_all:
-    lower_tf: weekly
-    middle_tf: monthly
-    upper_tf: quarterly
     universe: options_eligible
+    
+    lower_tf: weekly
+    lower_profile: lower_core_v1
+    
+    middle_tf: monthly
+    middle_profile: middle_core_v1
+    
+    upper_tf: quarterly
+    upper_profile: upper_core_v1
+    
 
   stocks_c_dwm_shortlist:
-    lower_tf: daily
-    middle_tf: weekly
-    upper_tf: monthly
     universe: shortlist_stocks
+    
+    lower_tf: daily
+    lower_profile: lower_core_v1
+    
+    middle_tf: weekly
+    middle_profile: middle_core_v1
+    
+    upper_tf: monthly
+    upper_profile: upper_core_v1
+    
 
   stocks_c_dwm_all:
-    lower_tf: daily
-    middle_tf: weekly
-    upper_tf: monthly
     universe: options_eligible
+    
+    lower_tf: daily
+    lower_profile: lower_core_v1
+    
+    middle_tf: weekly
+    middle_profile: middle_core_v1
+    
+    upper_tf: monthly
+    upper_profile: upper_core_v1
+    
 
   stocks_d_130mdw_shortlist:
-    lower_tf: intraday_130m
-    middle_tf: daily
-    upper_tf: weekly
     universe: shortlist_stocks
+    
+    lower_tf: intraday_130m
+    lower_profile: lower_core_v1
+    
+    middle_tf: daily
+    middle_profile: middle_core_v1
+    
+    upper_tf: weekly
+    upper_profile: upper_core_v1
+    
+
 
 futures:
   futures_1_1hd_shortlist:
+    universe: shortlist_futures
+    
     lower_tf: hourly
     middle_tf: null
     upper_tf: daily
-    universe: shortlist_futures
+    
 
   futures_2_4hdw_shortlist:
+    universe: shortlist_futures
+    
     lower_tf: four_hour
     middle_tf: daily
     upper_tf: weekly
-    universe: shortlist_futures
+    
 
   futures_3_dwm_shortlist:
+    universe: shortlist_futures
+    
     lower_tf: daily
     middle_tf: weekly
     upper_tf: monthly
-    universe: shortlist_futures
+    
