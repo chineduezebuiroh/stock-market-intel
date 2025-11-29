@@ -60,45 +60,6 @@ def render_snapshot_tab(namespace: str, timeframe: str, title: str):
 
     st.dataframe(df_display, use_container_width=True)
 
-"""
-def render_combo_tab_stocks_c_dwm_shortlist():
-    
-    #Render the combo for:
-    #  - namespace: stocks
-    #  - combo: stocks_c_dwm_shortlist
-    #  - file: data/combo_stocks_c_dwm_shortlist.parquet
-    
-    st.subheader("Stocks C: Daily / Weekly / Monthly – Shortlist")
-
-    combo_path = DATA / "combo_stocks_c_dwm_shortlist.parquet"
-    df = load_parquet_safe(combo_path)
-
-    if df is None or df.empty:
-        st.info("No combo data found for `stocks_c_dwm_shortlist` yet.")
-        st.code(str(combo_path))
-        return
-
-    # Ensure we have symbol as a visible column
-    if "symbol" not in df.columns:
-        df = df.reset_index()
-
-    # Optional: basic signal filter
-    if "signal" in df.columns:
-        signal_choice = st.radio(
-            "Filter by signal:",
-            options=["all", "long", "short", "watch"],
-            horizontal=True,
-        )
-
-        if signal_choice != "all":
-            df = df[df["signal"] == signal_choice]
-
-    # For now, just show everything. Later we can:
-    #  - Hide raw indicator columns
-    #  - Add sector / industry / ETF trend columns
-    st.dataframe(df, use_container_width=True)
-"""
-
 
 def render_combo_tab_stocks_c_dwm_shortlist():
     """
