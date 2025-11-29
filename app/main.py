@@ -60,14 +60,14 @@ def render_snapshot_tab(namespace: str, timeframe: str, title: str):
 
     st.dataframe(df_display, use_container_width=True)
 
-
+"""
 def render_combo_tab_stocks_c_dwm_shortlist():
-    """
-    Render the combo for:
-      - namespace: stocks
-      - combo: stocks_c_dwm_shortlist
-      - file: data/combo_stocks_c_dwm_shortlist.parquet
-    """
+    
+    #Render the combo for:
+    #  - namespace: stocks
+    #  - combo: stocks_c_dwm_shortlist
+    #  - file: data/combo_stocks_c_dwm_shortlist.parquet
+    
     st.subheader("Stocks C: Daily / Weekly / Monthly – Shortlist")
 
     combo_path = DATA / "combo_stocks_c_dwm_shortlist.parquet"
@@ -97,6 +97,71 @@ def render_combo_tab_stocks_c_dwm_shortlist():
     #  - Hide raw indicator columns
     #  - Add sector / industry / ETF trend columns
     st.dataframe(df, use_container_width=True)
+"""
+
+
+def render_combo_tab_stocks_c_dwm_shortlist():
+    """
+    Render the combo for:
+      - namespace: stocks
+      - combo: stocks_c_dwm_shortlist
+      - file: data/combo_stocks_c_dwm_shortlist.parquet
+    """
+    st.subheader("Stocks C: Daily / Weekly / Monthly – Shortlist")
+
+    combo_path = DATA / "combo_stocks_c_dwm_shortlist.parquet"
+    df = load_parquet_safe(combo_path)
+
+    if df is None or df.empty:
+        st.info("No combo data found for `stocks_c_dwm_shortlist` yet.")
+        st.code(str(combo_path))
+        return
+
+    # Ensure symbol column
+    if "symbol" not in df.columns:
+        df = df.reset_index()
+
+    # Optional: basic signal filter
+    if "signal" in df.columns:
+        signal_choice = st.radio(
+            "Filter by signal:",
+            options=["all", "long", "short", "watch"],
+            horizontal=True,
+        )
+        if signal_choice != "all":
+            df = df[df["signal"] == signal_choice]
+
+    if df.empty:
+        st.info("No rows match the selected signal filter.")
+        return
+
+    # Curated view: price/volume + EMAs for each timeframe
+    preferred_cols = [
+        "symbol",
+        "signal",
+
+        # Lower (daily)
+        "lower_close", "lower_volume",
+        "lower_ema_8", "lower_ema_21",
+        "lower_atr_14",
+
+        # Middle (weekly)
+        "middle_close", "middle_volume",
+        "middle_ema_8", "middle_ema_21",
+
+        # Upper (monthly)
+        "upper_close", "upper_volume",
+        "upper_ema_8", "upper_ema_21",
+    ]
+
+    existing_cols = [c for c in preferred_cols if c in df.columns]
+    df_view = df[existing_cols].copy()
+
+    # Sort by symbol for now (later we might sort by signal strength, etc.)
+    df_view = df_view.sort_values(by="symbol")
+
+    st.dataframe(df_view, use_container_width=True)
+
 
 
 # -----------------------------------------------------------------------------
