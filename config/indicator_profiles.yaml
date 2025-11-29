@@ -1,12 +1,39 @@
 profiles:
   lower_core_v1:
+    - sma_8
+    - ema_8
+    - ema_21
+    - wema_14
+    - ema_8_slope
+    - ema_21_slope
+    - volume_sma_20
+    - atr_14
     - trend_score
     - vol_regime
     - entry_signal
 
   middle_core_v1:
+    - sma_8
+    - ema_8
+    - ema_21
+    - wema_14
+    - ema_8_slope
+    - ema_21_slope
+    - volume_sma_20
+    - atr_14
     - trend_score
     - vol_regime
+    - entry_signal
 
   upper_core_v1:
+    - sma_8
+    - ema_8
+    - ema_21
+    - wema_14
+    - ema_8_slope
+    - ema_21_slope
+    - volume_sma_20
+    - atr_14
     - trend_score
+    - vol_regime
+    - entry_signal
