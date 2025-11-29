@@ -1,0 +1,61 @@
+indicators:
+  stocks:
+    daily:
+      trend_score:
+        id: trend_score   # maps to indicator_trend_score in Python
+        fast_len: 8
+        slow_len: 21
+        slope_len: 5
+        ma_type: ema      # in case you want to test sma vs ema later
+
+      vol_regime:
+        id: vol_regime
+        atr_len: 14
+        lookback: 20
+        low_pct: 0.01     # 1% ATR/price
+        high_pct: 0.03    # 3% ATR/price
+
+      entry_signal:
+        id: entry_signal
+        trend_min: 0.2    # require trend_score >= 0.2
+        max_vol_regime: 0 # require vol_regime <= 0 (low/normal)
+
+    weekly:
+      trend_score:
+        id: trend_score
+        fast_len: 4       # fewer bars but each bar is a week
+        slow_len: 12
+        slope_len: 3
+        ma_type: ema
+
+      vol_regime:
+        id: vol_regime
+        atr_len: 14
+        lookback: 20
+        low_pct: 0.01
+        high_pct: 0.03
+
+      entry_signal:
+        id: entry_signal
+        trend_min: 0.2
+        max_vol_regime: 0
+
+    monthly:
+      trend_score:
+        id: trend_score
+        fast_len: 3
+        slow_len: 12
+        slope_len: 3
+        ma_type: ema
+
+      vol_regime:
+        id: vol_regime
+        atr_len: 12
+        lookback: 12
+        low_pct: 0.008
+        high_pct: 0.025
+
+      entry_signal:
+        id: entry_signal
+        trend_min: 0.15
+        max_vol_regime: 0
