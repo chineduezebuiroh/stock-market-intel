@@ -10,6 +10,48 @@ from datetime import datetime, timedelta
 ALPHA_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
 
+def _sanitize_eod_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Final safety pass for load_eod:
+    - Flatten any MultiIndex columns.
+    - Normalize column names to our canonical set.
+    - Ensure we only keep the OHLCV fields we care about.
+    """
+    if df is None or df.empty:
+        return df
+
+    # 1) If yfinance returns MultiIndex columns (e.g. ('Open','AAPL')),
+    #    collapse to the *first* level.
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    # 2) Normalize column names
+    rename_map = {
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Adj Close": "adj_close",
+        "Adj_Close": "adj_close",
+        "Adj close": "adj_close",
+        "Volume": "volume",
+    }
+    df = df.rename(columns=rename_map)
+
+    # 3) Keep only canonical columns (drop anything weird)
+    keep = ["open", "high", "low", "close", "adj_close", "volume"]
+    cols = [c for c in keep if c in df.columns]
+
+    # If adj_close isn't present, that's fine; we just skip it.
+    df = df[cols].copy()
+
+    # 4) Make absolutely sure columns are plain strings
+    df.columns = df.columns.astype(str)
+
+    return df
+
+
+
 def compute_start_date_for_window(timeframe: str, window_bars: int) -> str:
     """
     Compute a reasonable start date so we only fetch enough history to
@@ -167,6 +209,7 @@ def load_eod(
     if window_bars is not None and len(df) > window_bars:
         df = df.iloc[-window_bars:]
 
+    df = _sanitize_eod_df(df)
     return df
 
 
