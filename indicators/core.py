@@ -168,6 +168,130 @@ def _atr(df: pd.DataFrame, length: int) -> pd.Series:
     return _wema(tr, length)
 
 
+# ---------------------------------------------------------------------
+# Composite indicators (store-only outputs; internal EMAs/ATR/etc.)
+# ---------------------------------------------------------------------
+
+def indicator_trend_score(
+    df: pd.DataFrame,
+    fast_len: int,
+    slow_len: int,
+    slope_len: int,
+    ma_type: str = "ema",
+    **_,
+) -> pd.Series:
+    """
+    Composite trend strength/direction score.
+
+    Rough prototype:
+      - compute fast & slow MA of close
+      - compute their difference normalized by price
+      - compute slope of slow MA
+      - combine into a score ~[-1, 1]
+
+    You can replace all of this with your actual logic later.
+    """
+    if len(df) < max(fast_len, slow_len, slope_len):
+        # Not enough history; return all-NaN
+        return pd.Series(index=df.index, dtype="float64")
+
+    close = df["close"].astype(float)
+
+    if ma_type == "sma":
+        fast_ma = _sma(close, fast_len)
+        slow_ma = _sma(close, slow_len)
+    else:
+        fast_ma = _ema(close, fast_len)
+        slow_ma = _ema(close, slow_len)
+
+    # Price-relative MA spread
+    spread = (fast_ma - slow_ma) / close.replace(0, np.nan)
+
+    # Slope of slow MA
+    slope = _rolling_slope(slow_ma, slope_len)
+
+    # Simple normalization & combination
+    # (clip to [-3,3], then squish with tanh to [-1,1])
+    spread_norm = np.tanh(spread.clip(-3, 3))
+    slope_norm = np.tanh(slope.clip(-3, 3))
+
+    score = 0.6 * spread_norm + 0.4 * slope_norm
+    return score.astype(float)
+
+
+def indicator_vol_regime(
+    df: pd.DataFrame,
+    atr_len: int,
+    lookback: int,
+    low_pct: float,
+    high_pct: float,
+    **_,
+) -> pd.Series:
+    """
+    Volatility regime classification using ATR as % of price.
+
+    Rough prototype:
+      - compute ATR(atr_len)
+      - atr_pct = ATR / close
+      - smooth atr_pct with SMA(lookback)
+      - classify:
+          atr_smoothed < low_pct  -> -1 (low vol)
+          low_pct <= ... <= high_pct -> 0 (normal)
+          atr_smoothed > high_pct -> +1 (high vol)
+    """
+    min_len = max(atr_len, lookback)
+    if len(df) < min_len:
+        return pd.Series(index=df.index, dtype="float64")
+
+    close = df["close"].astype(float)
+    atr = _atr(df, atr_len)
+    atr_pct = atr / close.replace(0, np.nan)
+
+    atr_smoothed = _sma(atr_pct, lookback)
+
+    regime = pd.Series(index=df.index, dtype="float64")
+
+    regime[atr_smoothed < low_pct] = -1.0
+    regime[(atr_smoothed >= low_pct) & (atr_smoothed <= high_pct)] = 0.0
+    regime[atr_smoothed > high_pct] = 1.0
+
+    return regime
+
+
+def indicator_entry_signal(
+    df: pd.DataFrame,
+    trend_min: float,
+    max_vol_regime: float = 0.0,
+    **_,
+) -> pd.Series:
+    """
+    Entry signal (long bias) based on:
+      - trend_score column already computed
+      - vol_regime column already computed
+
+    Rough prototype:
+      - signal = 1 if:
+          trend_score >= trend_min
+          vol_regime <= max_vol_regime (e.g. <= 0, so low/normal vol)
+        else 0
+
+    Requires that df already has 'trend_score' and 'vol_regime' columns
+    for this (namespace, timeframe).
+    """
+    if "trend_score" not in df.columns or "vol_regime" not in df.columns:
+        # If deps aren't ready, just return NaN; the engine won't crash.
+        return pd.Series(index=df.index, dtype="float64")
+
+    trend = df["trend_score"].astype(float)
+    vol = df["vol_regime"].astype(float)
+
+    cond = (trend >= trend_min) & (vol <= max_vol_regime)
+    signal = cond.astype(float)  # 1.0 or 0.0
+
+    return signal
+
+
+
 # -----------------------------------------------------------------------------
 # Core indicator application
 # -----------------------------------------------------------------------------
