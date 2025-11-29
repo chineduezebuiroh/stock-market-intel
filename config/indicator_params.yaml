@@ -1,29 +1,107 @@
 indicators:
   stocks:
     daily:
+      sma_8:
+        id: sma
+        length: 8
+        src: close
+
+      ema_8:
+        id: ema
+        length: 8
+        src: close
+
+      ema_21:
+        id: ema
+        length: 21
+        src: close
+
+      wema_14:
+        id: wema
+        length: 14
+        src: close
+
+      ema_8_slope:
+        id: slope
+        length: 3
+        src: ema_8
+
+      ema_21_slope:
+        id: slope
+        length: 3
+        src: ema_21
+
+      volume_sma_20:
+        id: vol_sma
+        length: 20
+        src: volume
+
+      atr_14:
+        id: atr
+        length: 14
+
       trend_score:
-        id: trend_score   # maps to indicator_trend_score in Python
+        id: trend_score
         fast_len: 8
         slow_len: 21
         slope_len: 5
-        ma_type: ema      # in case you want to test sma vs ema later
+        ma_type: ema
 
       vol_regime:
         id: vol_regime
         atr_len: 14
         lookback: 20
-        low_pct: 0.01     # 1% ATR/price
-        high_pct: 0.03    # 3% ATR/price
+        low_pct: 0.01
+        high_pct: 0.03
 
       entry_signal:
         id: entry_signal
-        trend_min: 0.2    # require trend_score >= 0.2
-        max_vol_regime: 0 # require vol_regime <= 0 (low/normal)
+        trend_min: 0.2
+        max_vol_regime: 0.0
 
     weekly:
+      sma_8:
+        id: sma
+        length: 8
+        src: close
+
+      ema_8:
+        id: ema
+        length: 8
+        src: close
+
+      ema_21:
+        id: ema
+        length: 21
+        src: close
+
+      wema_14:
+        id: wema
+        length: 14
+        src: close
+
+      ema_8_slope:
+        id: slope
+        length: 3
+        src: ema_8
+
+      ema_21_slope:
+        id: slope
+        length: 3
+        src: ema_21
+
+      volume_sma_20:
+        id: vol_sma
+        length: 20
+        src: volume
+
+      atr_14:
+        id: atr
+        length: 14
+
       trend_score:
         id: trend_score
-        fast_len: 4       # fewer bars but each bar is a week
+        fast_len: 4
         slow_len: 12
         slope_len: 3
         ma_type: ema
@@ -38,9 +116,48 @@ indicators:
       entry_signal:
         id: entry_signal
         trend_min: 0.2
-        max_vol_regime: 0
+        max_vol_regime: 0.0
 
     monthly:
+      sma_8:
+        id: sma
+        length: 8
+        src: close
+
+      ema_8:
+        id: ema
+        length: 8
+        src: close
+
+      ema_21:
+        id: ema
+        length: 21
+        src: close
+
+      wema_14:
+        id: wema
+        length: 14
+        src: close
+
+      ema_8_slope:
+        id: slope
+        length: 3
+        src: ema_8
+
+      ema_21_slope:
+        id: slope
+        length: 3
+        src: ema_21
+
+      volume_sma_20:
+        id: vol_sma
+        length: 20
+        src: volume
+
+      atr_14:
+        id: atr
+        length: 14
+
       trend_score:
         id: trend_score
         fast_len: 3
@@ -58,4 +175,4 @@ indicators:
       entry_signal:
         id: entry_signal
         trend_min: 0.15
-        max_vol_regime: 0
+        max_vol_regime: 0.0
