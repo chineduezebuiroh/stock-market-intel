@@ -1,0 +1,12 @@
+profiles:
+  lower_core_v1:
+    - trend_score
+    - vol_regime
+    - entry_signal
+
+  middle_core_v1:
+    - trend_score
+    - vol_regime
+
+  upper_core_v1:
+    - trend_score
