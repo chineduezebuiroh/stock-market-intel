@@ -90,16 +90,45 @@ def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
     with a dev-only cap for stocks so local runs stay fast.
     """
     universes = universes_for_timeframe(namespace, timeframe)
+
+    shortlist_syms: set[str] = set()
+    other_syms: set[str] = set()
+
+    for u in universes:
+        syms = set(symbols_for_universe(u))
+        if u.startswith("shortlist_"):
+            shortlist_syms.update(syms)
+        else:
+            other_syms.update(syms)
+
+    """
     all_syms: set[str] = set()
     for u in universes:
         for sym in symbols_for_universe(u):
             all_syms.add(sym)
 
     symbols = sorted(all_syms)
-
+    """
+    """
     # Dev-only throttle for stocks; futures usually small anyway
     if namespace == "stocks" and DEV_MAX_STOCK_SYMBOLS_PER_TF is not None:
         symbols = symbols[:DEV_MAX_STOCK_SYMBOLS_PER_TF]
+    """
+
+    # Base set: always include all shortlist symbols
+    if namespace == "stocks" and DEV_MAX_STOCK_SYMBOLS_PER_TF is not None:
+        # Remaining slots after we include all shortlist symbols
+        remaining = DEV_MAX_STOCK_SYMBOLS_PER_TF - len(shortlist_syms)
+        if remaining <= 0:
+            # Dev cap fully consumed by shortlist; just return them.
+            symbols = sorted(shortlist_syms)
+        else:
+            extra = sorted(other_syms)[:remaining]
+            symbols = sorted(shortlist_syms.union(extra))
+    else:
+        # futures or no dev cap: everything
+        symbols = sorted(shortlist_syms.union(other_syms))
+    
 
     return symbols
 
