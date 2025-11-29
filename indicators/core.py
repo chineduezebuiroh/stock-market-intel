@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Dict, List, Mapping, Tuple
+
 import numpy as np
 import pandas as pd
+import yaml
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Column sets / public constants
-# -----------------------------------------------------------------------------
-# Base OHLCV columns expected on every per-symbol parquet
-PRICE_COLS: list[str] = [
+# ---------------------------------------------------------------------
+
+PRICE_COLS: List[str] = [
     "open",
     "high",
     "low",
@@ -17,80 +22,29 @@ PRICE_COLS: list[str] = [
     "volume",
 ]
 
-# Core indicator columns produced by apply_core
-# (now includes composite strategy outputs as well)
-CORE_INDICATOR_COLS: list[str] = [
-    "sma_8",
-    "ema_8",
-    "ema_21",
-    "wema_14",
-    "ema_8_slope",
-    "ema_21_slope",
-    "volume_sma_20",
-    "atr_14",
-    "trend_score",
-    "vol_regime",
-    "entry_signal",
-]
 
-# For snapshots: base price + indicator columns
-SNAPSHOT_BASE_COLS: list[str] = PRICE_COLS + CORE_INDICATOR_COLS
+# Namespace+timeframe key
+NT = Tuple[str, str]
 
 
-def get_snapshot_base_cols() -> list[str]:
+@dataclass(frozen=True)
+class IndicatorInstance:
     """
-    Public helper so snapshot builders don't hardcode base column names.
+    A single configured indicator for a specific (namespace, timeframe).
 
-    Returns all columns that must be present in a snapshot row
-    (excluding the 'symbol' column, which is added by the caller).
+    key:       instance key & column name (e.g. "ema_8", "atr_14", "trend_score")
+    base_id:   generic indicator id (e.g. "ema", "atr", "trend_score")
+    params:    dict of parameters passed to the indicator function
     """
-    return list(SNAPSHOT_BASE_COLS)
+    key: str
+    base_id: str
+    params: Mapping[str, object]
 
 
-# -----------------------------------------------------------------------------
-# Length presets per timeframe (can be expanded later)
-# -----------------------------------------------------------------------------
-# You can customize these per timeframe later. For now:
-# - "default" matches your existing settings exactly.
-CORE_LENGTH_PRESETS: dict[str, dict[str, int]] = {
-    "default": {
-        "sma_len": 8,
-        "ema_short_len": 8,
-        "ema_long_len": 21,
-        "wema_len": 14,
-        "vol_sma_len": 20,
-        "atr_len": 14,
-        "slope_len": 3,   # rolling window for slope
-    },
-    # Example future overrides:
-    # "weekly": {...},
-    # "intraday_130m": {...},
-}
+# ---------------------------------------------------------------------
+# Low-level helpers (same as before, plus _sma)
+# ---------------------------------------------------------------------
 
-
-def _resolve_lengths(params: dict | None) -> dict[str, int]:
-    """
-    Resolve indicator lengths based on params.
-
-    Right now this just switches on params.get("timeframe").
-    You can later key this on namespace, instrument type, etc.
-    """
-    if params is None:
-        params = {}
-
-    tf = params.get("timeframe", "default")
-    cfg = CORE_LENGTH_PRESETS.get(tf)
-
-    if cfg is None:
-        # Fallback to default if unknown timeframe
-        cfg = CORE_LENGTH_PRESETS["default"]
-
-    return cfg
-
-
-# -----------------------------------------------------------------------------
-# Low-level helpers
-# -----------------------------------------------------------------------------
 def _sma(series: pd.Series, length: int) -> pd.Series:
     """Simple moving average."""
     return series.rolling(window=length, min_periods=length).mean()
@@ -162,7 +116,41 @@ def _atr(df: pd.DataFrame, length: int) -> pd.Series:
 
 
 # ---------------------------------------------------------------------
-# Composite indicators (store-only outputs; internal EMAs/ATR/etc.)
+# Primitive indicators (used in instance params)
+# ---------------------------------------------------------------------
+
+def indicator_sma(df: pd.DataFrame, length: int, src: str = "close", **_) -> pd.Series:
+    return _sma(df[src].astype(float), length)
+
+
+def indicator_ema(df: pd.DataFrame, length: int, src: str = "close", **_) -> pd.Series:
+    return _ema(df[src].astype(float), length)
+
+
+def indicator_wema(df: pd.DataFrame, length: int, src: str = "close", **_) -> pd.Series:
+    return _wema(df[src].astype(float), length)
+
+
+def indicator_vol_sma(df: pd.DataFrame, length: int, src: str = "volume", **_) -> pd.Series:
+    return _sma(df[src].astype(float), length)
+
+
+def indicator_atr(df: pd.DataFrame, length: int, **_) -> pd.Series:
+    return _atr(df, length)
+
+
+def indicator_slope(df: pd.DataFrame, length: int, src: str, **_) -> pd.Series:
+    """
+    Slope of an existing column (e.g. "ema_8") over a rolling window.
+    """
+    if src not in df.columns:
+        # Not enough structure; return NaN, don't crash.
+        return pd.Series(index=df.index, dtype="float64")
+    return _rolling_slope(df[src].astype(float), length)
+
+
+# ---------------------------------------------------------------------
+# Composite indicators (same prototypes you just tested)
 # ---------------------------------------------------------------------
 
 def indicator_trend_score(
@@ -175,17 +163,8 @@ def indicator_trend_score(
 ) -> pd.Series:
     """
     Composite trend strength/direction score.
-
-    Rough prototype:
-      - compute fast & slow MA of close
-      - compute their difference normalized by price
-      - compute slope of slow MA
-      - combine into a score ~[-1, 1]
-
-    You can replace all of this with your actual logic later.
     """
     if len(df) < max(fast_len, slow_len, slope_len):
-        # Not enough history; return all-NaN
         return pd.Series(index=df.index, dtype="float64")
 
     close = df["close"].astype(float)
@@ -197,14 +176,9 @@ def indicator_trend_score(
         fast_ma = _ema(close, fast_len)
         slow_ma = _ema(close, slow_len)
 
-    # Price-relative MA spread
     spread = (fast_ma - slow_ma) / close.replace(0, np.nan)
-
-    # Slope of slow MA
     slope = _rolling_slope(slow_ma, slope_len)
 
-    # Simple normalization & combination
-    # (clip to [-3,3], then squish with tanh to [-1,1])
     spread_norm = np.tanh(spread.clip(-3, 3))
     slope_norm = np.tanh(slope.clip(-3, 3))
 
@@ -222,15 +196,6 @@ def indicator_vol_regime(
 ) -> pd.Series:
     """
     Volatility regime classification using ATR as % of price.
-
-    Rough prototype:
-      - compute ATR(atr_len)
-      - atr_pct = ATR / close
-      - smooth atr_pct with SMA(lookback)
-      - classify:
-          atr_smoothed < low_pct  -> -1 (low vol)
-          low_pct <= ... <= high_pct -> 0 (normal)
-          atr_smoothed > high_pct -> +1 (high vol)
     """
     min_len = max(atr_len, lookback)
     if len(df) < min_len:
@@ -243,7 +208,6 @@ def indicator_vol_regime(
     atr_smoothed = _sma(atr_pct, lookback)
 
     regime = pd.Series(index=df.index, dtype="float64")
-
     regime[atr_smoothed < low_pct] = -1.0
     regime[(atr_smoothed >= low_pct) & (atr_smoothed <= high_pct)] = 0.0
     regime[atr_smoothed > high_pct] = 1.0
@@ -261,136 +225,236 @@ def indicator_entry_signal(
     Entry signal (long bias) based on:
       - trend_score column already computed
       - vol_regime column already computed
-
-    Rough prototype:
-      - signal = 1 if:
-          trend_score >= trend_min
-          vol_regime <= max_vol_regime (e.g. <= 0, so low/normal vol)
-        else 0
-
-    Requires that df already has 'trend_score' and 'vol_regime' columns
-    for this (namespace, timeframe).
     """
     if "trend_score" not in df.columns or "vol_regime" not in df.columns:
-        # If deps aren't ready, just return NaN; the engine won't crash.
         return pd.Series(index=df.index, dtype="float64")
 
     trend = df["trend_score"].astype(float)
     vol = df["vol_regime"].astype(float)
 
     cond = (trend >= trend_min) & (vol <= max_vol_regime)
-    signal = cond.astype(float)  # 1.0 or 0.0
+    signal = cond.astype(float)
 
     return signal
 
 
-# -----------------------------------------------------------------------------
-# Core indicator application
-# -----------------------------------------------------------------------------
-def apply_core(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+# ---------------------------------------------------------------------
+# Indicator function registry
+#   base_id -> function(df, **params) -> Series
+# ---------------------------------------------------------------------
+
+INDICATOR_FUNCS: Dict[str, Callable[..., pd.Series]] = {
+    "sma": indicator_sma,
+    "ema": indicator_ema,
+    "wema": indicator_wema,
+    "vol_sma": indicator_vol_sma,
+    "atr": indicator_atr,
+    "slope": indicator_slope,
+
+    "trend_score": indicator_trend_score,
+    "vol_regime": indicator_vol_regime,
+    "entry_signal": indicator_entry_signal,
+}
+
+
+# ---------------------------------------------------------------------
+# Config-backed storage (built by initialize_indicator_engine)
+# ---------------------------------------------------------------------
+
+_STORAGE_PROFILES: Dict[NT, List[IndicatorInstance]] = {}
+_PROFILE_DEFS: Dict[str, List[str]] = {}  # profile_name -> list of instance keys
+_PARAMS: Dict[NT, Dict[str, Dict[str, object]]] = {}  # (ns, tf) -> instance_key -> param dict
+_INITIALIZED: bool = False
+_CONFIG_DIR: Path | None = None
+
+
+def _load_yaml(path: Path) -> dict:
+    with path.open("r") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _load_indicator_profiles(config_dir: Path) -> Dict[str, List[str]]:
+    data = _load_yaml(config_dir / "indicator_profiles.yaml")
+    profiles = data.get("profiles", {})
+    return {name: list(keys) for name, keys in profiles.items()}
+
+
+def _load_indicator_params(config_dir: Path) -> Dict[NT, Dict[str, Dict[str, object]]]:
+    data = _load_yaml(config_dir / "indicator_params.yaml")
+    indicators = data.get("indicators", {})
+
+    result: Dict[NT, Dict[str, Dict[str, object]]] = {}
+    for namespace, by_tf in indicators.items():
+        for timeframe, inst_map in by_tf.items():
+            key = (namespace, timeframe)
+            result[key] = {}
+            for instance_key, cfg in inst_map.items():
+                base_id = cfg.get("id")
+                if base_id is None:
+                    raise ValueError(
+                        f"indicator_params: {namespace}/{timeframe}/{instance_key} missing 'id'"
+                    )
+                result[key][instance_key] = dict(cfg)
+    return result
+
+
+def _load_combos(config_dir: Path) -> Dict[str, dict]:
+    return _load_yaml(config_dir / "multi_timeframe_combos.yaml")
+
+
+def _build_storage_profiles(
+    profiles: Dict[str, List[str]],
+    params: Dict[NT, Dict[str, Dict[str, object]]],
+    combos_data: Dict[str, dict],
+) -> Dict[NT, List[IndicatorInstance]]:
+    storage: Dict[NT, List[IndicatorInstance]] = {}
+
+    ROLE_FIELDS = [
+        ("lower_tf", "lower_profile"),
+        ("middle_tf", "middle_profile"),
+        ("upper_tf", "upper_profile"),
+    ]
+
+    for namespace, combos in combos_data.items():
+        for combo_name, cfg in combos.items():
+            if not isinstance(cfg, dict):
+                continue
+
+            for tf_field, profile_field in ROLE_FIELDS:
+                timeframe = cfg.get(tf_field)
+                profile_name = cfg.get(profile_field)
+
+                if not timeframe or not profile_name:
+                    continue
+
+                nt = (namespace, timeframe)
+                profile_keys = profiles.get(profile_name)
+                if profile_keys is None:
+                    raise KeyError(
+                        f"Combo '{namespace}/{combo_name}' references unknown profile '{profile_name}'"
+                    )
+
+                tf_params = params.get(nt, {})
+                if not tf_params:
+                    raise KeyError(
+                        f"No indicator_params defined for namespace={namespace}, timeframe={timeframe}"
+                    )
+
+                existing_keys = {inst.key for inst in storage.get(nt, [])}
+                instances_for_nt: List[IndicatorInstance] = storage.get(nt, []).copy()
+
+                for instance_key in profile_keys:
+                    if instance_key in existing_keys:
+                        continue
+
+                    cfg_for_key = tf_params.get(instance_key)
+                    if cfg_for_key is None:
+                        raise KeyError(
+                            f"indicator_params missing for {namespace}/{timeframe}/{instance_key}"
+                        )
+
+                    base_id = cfg_for_key.get("id")
+                    if base_id not in INDICATOR_FUNCS:
+                        raise KeyError(
+                            f"Unknown base indicator id '{base_id}' "
+                            f"for {namespace}/{timeframe}/{instance_key}"
+                        )
+
+                    params_without_id = {
+                        k: v for k, v in cfg_for_key.items() if k != "id"
+                    }
+
+                    instances_for_nt.append(
+                        IndicatorInstance(
+                            key=instance_key,
+                            base_id=base_id,
+                            params=params_without_id,
+                        )
+                    )
+                    existing_keys.add(instance_key)
+
+                storage[nt] = instances_for_nt
+
+    return storage
+
+
+def initialize_indicator_engine(config_dir: str | Path = "config") -> None:
     """
-    Attach core indicators to a per-symbol OHLCV dataframe.
+    Load indicator_profiles.yaml, indicator_params.yaml, multi_timeframe_combos.yaml
+    and build storage profiles for each (namespace, timeframe).
+    """
+    global _INITIALIZED, _CONFIG_DIR, _STORAGE_PROFILES, _PROFILE_DEFS, _PARAMS
 
-    Expected input columns (per-symbol parquet):
-        open, high, low, close, adj_close, volume
+    _CONFIG_DIR = Path(config_dir)
+    _PROFILE_DEFS = _load_indicator_profiles(_CONFIG_DIR)
+    _PARAMS = _load_indicator_params(_CONFIG_DIR)
+    combos = _load_combos(_CONFIG_DIR)
 
-    Output (additional) columns:
-        sma_8
-        ema_8
-        ema_21
-        wema_14
-        ema_8_slope
-        ema_21_slope
-        volume_sma_20
-        atr_14
-        trend_score
-        vol_regime
-        entry_signal
+    _STORAGE_PROFILES = _build_storage_profiles(
+        profiles=_PROFILE_DEFS,
+        params=_PARAMS,
+        combos_data=combos,
+    )
 
-    'params' is reserved for per-timeframe overrides, e.g.:
-        params = {"timeframe": "daily"}
+    _INITIALIZED = True
+
+
+def _ensure_initialized() -> None:
+    if not _INITIALIZED:
+        initialize_indicator_engine(_CONFIG_DIR or "config")
+
+
+# ---------------------------------------------------------------------
+# Core application API
+# ---------------------------------------------------------------------
+
+def apply_core(df: pd.DataFrame, namespace: str, timeframe: str) -> pd.DataFrame:
+    """
+    Attach all indicators needed for this (namespace, timeframe),
+    based on profiles+params+combos config.
 
     ❗ Invariants:
-        - No MultiIndex columns are ever created.
-        - Index is preserved and assumed already normalized (naive, time-ascending).
-        - Columns remain flat strings.
+      - No MultiIndex columns are created.
+      - Index is preserved; assumed naive and ascending.
+      - Columns remain flat strings.
+      - Failures degrade to NaN instead of raising.
     """
-    # Work on a copy to avoid side effects
-    out = df.copy()
+    _ensure_initialized()
 
-    # Ensure sorted index (time ascending) for rolling operations
-    out = out.sort_index()
+    nt = (namespace, timeframe)
+    instances = _STORAGE_PROFILES.get(nt, [])
 
-    # Basic sanity: require key columns
+    out = df.copy().sort_index()
+
     required = ["open", "high", "low", "close", "volume"]
     missing = [c for c in required if c not in out.columns]
     if missing:
-        # If the structure is wrong, just return as-is (no indicators)
-        # You can make this stricter later if you want.
-        print(f"[WARN] apply_core: missing columns {missing}, skipping indicator calc.")
+        print(f"[WARN] apply_core: missing columns {missing}, skipping indicators.")
         return out
 
-    # Resolve lengths (this preserves your old defaults when params is None)
-    lengths = _resolve_lengths(params)
-    sma_len = lengths["sma_len"]
-    ema_short_len = lengths["ema_short_len"]
-    ema_long_len = lengths["ema_long_len"]
-    wema_len = lengths["wema_len"]
-    vol_sma_len = lengths["vol_sma_len"]
-    atr_len = lengths["atr_len"]
-    slope_len = lengths["slope_len"]
+    for inst in instances:
+        func = INDICATOR_FUNCS[inst.base_id]
+        try:
+            series = func(out, **inst.params)
+        except Exception as e:
+            print(
+                f"[WARN] indicator {inst.base_id} ({inst.key}) failed for "
+                f"{namespace}/{timeframe}: {e}"
+            )
+            series = pd.Series(index=out.index, dtype="float64")
+        out[inst.key] = series
 
-    close = out["close"].astype(float)
-    volume = out["volume"].astype(float)
-
-    # -------------------------------------------------------------------------
-    # Price-based moving averages
-    # -------------------------------------------------------------------------
-    out["sma_8"] = close.rolling(window=sma_len, min_periods=sma_len).mean()
-    out["ema_8"] = _ema(close, ema_short_len)
-    out["ema_21"] = _ema(close, ema_long_len)
-    out["wema_14"] = _wema(close, wema_len)
-
-    # Slopes (trend strength / direction)
-    out["ema_8_slope"] = _rolling_slope(out["ema_8"], slope_len)
-    out["ema_21_slope"] = _rolling_slope(out["ema_21"], slope_len)
-
-    # -------------------------------------------------------------------------
-    # Volume-based
-    # -------------------------------------------------------------------------
-    out["volume_sma_20"] = volume.rolling(window=vol_sma_len, min_periods=vol_sma_len).mean()
-
-    # -------------------------------------------------------------------------
-    # Volatility-based
-    # -------------------------------------------------------------------------
-    out["atr_14"] = _atr(out, atr_len)
-
-    # -------------------------------------------------------------------------
-    # Composite strategy indicators (temporary hardcoded params)
-    # -------------------------------------------------------------------------
-    out["trend_score"] = indicator_trend_score(
-        out,
-        fast_len=8,
-        slow_len=21,
-        slope_len=5,
-        ma_type="ema",
-    )
-
-    out["vol_regime"] = indicator_vol_regime(
-        out,
-        atr_len=14,
-        lookback=20,
-        low_pct=0.01,
-        high_pct=0.03,
-    )
-
-    out["entry_signal"] = indicator_entry_signal(
-        out,
-        trend_min=0.2,
-        max_vol_regime=0.0,
-    )
-
-    # Ensure flat string columns
     out.columns = out.columns.astype(str)
-
     return out
+
+
+def get_snapshot_base_cols(namespace: str, timeframe: str) -> List[str]:
+    """
+    For a given (namespace, timeframe), return:
+        [open, high, low, close, adj_close, volume, ...all indicator cols...]
+    """
+    _ensure_initialized()
+    nt = (namespace, timeframe)
+    instances = _STORAGE_PROFILES.get(nt, [])
+    indicator_cols = [inst.key for inst in instances]
+    return PRICE_COLS + indicator_cols
