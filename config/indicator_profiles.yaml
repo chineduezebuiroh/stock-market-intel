@@ -8,7 +8,7 @@ profiles:
     - ema_21_slope
     - volume_sma_20
     - atr_14
-    - trend_score
+    - wyckoff_stage
     - vol_regime
     - entry_signal
 
@@ -21,7 +21,7 @@ profiles:
     - ema_21_slope
     - volume_sma_20
     - atr_14
-    - trend_score
+    - wyckoff_stage
     - vol_regime
     - entry_signal
 
@@ -34,6 +34,6 @@ profiles:
     - ema_21_slope
     - volume_sma_20
     - atr_14
-    - trend_score
+    - wyckoff_stage
     - vol_regime
     - entry_signal
