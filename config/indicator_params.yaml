@@ -176,3 +176,122 @@ indicators:
         id: entry_signal
         trend_min: 0.15
         max_vol_regime: 0.0
+
+    quarterly:
+      sma_8:
+        id: sma
+        length: 8
+        src: close
+
+      ema_8:
+        id: ema
+        length: 8
+        src: close
+
+      ema_21:
+        id: ema
+        length: 21
+        src: close
+
+      wema_14:
+        id: wema
+        length: 14
+        src: close
+
+      ema_8_slope:
+        id: slope
+        length: 3
+        src: ema_8
+
+      ema_21_slope:
+        id: slope
+        length: 3
+        src: ema_21
+
+      volume_sma_20:
+        id: vol_sma
+        length: 20
+        src: volume
+
+      atr_14:
+        id: atr
+        length: 14
+
+      trend_score:
+        id: trend_score
+        fast_len: 3     # example numbers – adjust later
+        slow_len: 12
+        slope_len: 3
+        ma_type: ema
+
+      vol_regime:
+        id: vol_regime
+        atr_len: 12
+        lookback: 12
+        low_pct: 0.008
+        high_pct: 0.025
+
+      entry_signal:
+        id: entry_signal
+        trend_min: 0.15
+        max_vol_regime: 0.0
+
+    yearly:
+      sma_8:
+        id: sma
+        length: 8
+        src: close
+
+      ema_8:
+        id: ema
+        length: 8
+        src: close
+
+      ema_21:
+        id: ema
+        length: 21
+        src: close
+
+      wema_14:
+        id: wema
+        length: 14
+        src: close
+
+      ema_8_slope:
+        id: slope
+        length: 3
+        src: ema_8
+
+      ema_21_slope:
+        id: slope
+        length: 3
+        src: ema_21
+
+      volume_sma_20:
+        id: vol_sma
+        length: 20
+        src: volume
+
+      atr_14:
+        id: atr
+        length: 14
+
+      trend_score:
+        id: trend_score
+        fast_len: 2     # very rough example for yearly; adjust later
+        slow_len: 8
+        slope_len: 2
+        ma_type: ema
+
+      vol_regime:
+        id: vol_regime
+        atr_len: 8
+        lookback: 8
+        low_pct: 0.005
+        high_pct: 0.02
+
+      entry_signal:
+        id: entry_signal
+        trend_min: 0.1
+        max_vol_regime: 0.0
+
