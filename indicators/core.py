@@ -597,6 +597,7 @@ INDICATOR_FUNCS: Dict[str, Callable[..., pd.Series]] = {
     "slope": indicator_slope,
 
     "wyckoff_stage": indicator_wyckoff_stage,
+    "exh_abs_price_action": indicator_exh_abs_price_action,
     "vol_regime": indicator_vol_regime,
     "entry_signal": indicator_entry_signal,
 }
