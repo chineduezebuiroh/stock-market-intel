@@ -526,7 +526,6 @@ def indicator_significant_volume(
     # ------------------------------------------------------------------
     # Set Constants
     # ------------------------------------------------------------------
-    pf = float(percentile_floor)
     pc = float(percentile_ceiling)
     
     """
@@ -539,29 +538,23 @@ def indicator_significant_volume(
     Returns a float Series with values in {0, 1}.
     """
 
-    required = {"open", "high", "low", "close", "volume"}
+    required = {"volume"}
     if not required.issubset(df.columns):
         return pd.Series(index=df.index, dtype="float64")
 
     # Ensure chronological order (oldest -> newest)
     df_sorted = df.sort_index()
-
     volume = df_sorted["volume"].astype(float)
 
     # ------------------------------------------------------------------
-    # Percentiles over lookback_period for candlebody_adj and volume
-    # TOS fold: count of prior bars where current > prior, normalized by L.
+    # Percentiles over lookback_period for volume
     # ------------------------------------------------------------------
     L = int(lookback_period)
-
-    cb_count = pd.Series(0.0, index=df_sorted.index)
-    vol_count = pd.Series(0.0, index=df_sorted.index)
 
     # Apply the rolling percentile calculation
     window_size = L  # Example window size
     
     volume_percentile = volume.rolling(window=window_size).apply(_pctrank, raw=False)
-    
     # RoundUp to integer percent
     vol_pct_ceil = np.ceil(volume_percentile)
 
@@ -570,7 +563,8 @@ def indicator_significant_volume(
     # ------------------------------------------------------------------
     scan = pd.Series(0.0, index=df_sorted.index)
 
-    scan[vol_pct_ceil >= pc | vol_pct_ceil.shift(1) >= pc] = 1.0
+    cond = (vol_pct_ceil >= pc) | (vol_pct_ceil.shift(1) >= pc)
+    scan[cond] = 1.0
 
     # Reindex back to original df index (preserves caller's index order)
     return scan.reindex(df.index)
