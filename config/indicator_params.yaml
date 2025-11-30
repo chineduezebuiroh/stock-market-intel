@@ -66,6 +66,10 @@ indicators:
         length: 30
         timeframe_name: "intraday_130m"
 
+      movingavg_trend_cloud:
+        id: movingavg_trend_cloud
+        fast_length: 15
+
       vol_regime:
         id: vol_regime
         atr_len: 14
@@ -143,6 +147,10 @@ indicators:
         id: spy_qqq_volume_ma_ratio
         length: 21
         timeframe_name: "daily"
+
+      movingavg_trend_cloud:
+        id: movingavg_trend_cloud
+        fast_length: 10
 
       vol_regime:
         id: vol_regime
@@ -222,6 +230,10 @@ indicators:
         length: 26
         timeframe_name: "weekly"
 
+      movingavg_trend_cloud:
+        id: movingavg_trend_cloud
+        fast_length: 13
+
       vol_regime:
         id: vol_regime
         atr_len: 14
@@ -299,6 +311,10 @@ indicators:
         id: spy_qqq_volume_ma_ratio
         length: 24
         timeframe_name: "monthly"
+
+      movingavg_trend_cloud:
+        id: movingavg_trend_cloud
+        fast_length: 12
 
       vol_regime:
         id: vol_regime
@@ -378,6 +394,10 @@ indicators:
         length: 20
         timeframe_name: "quarterly"
 
+      movingavg_trend_cloud:
+        id: movingavg_trend_cloud
+        fast_length: 10
+
       vol_regime:
         id: vol_regime
         atr_len: 12
@@ -455,6 +475,10 @@ indicators:
         id: spy_qqq_volume_ma_ratio
         length: 20
         timeframe_name: "yearly"
+
+      movingavg_trend_cloud:
+        id: movingavg_trend_cloud
+        fast_length: 10
 
       vol_regime:
         id: vol_regime
