@@ -1027,7 +1027,7 @@ def indicator_ttm_squeeze_pro(
 
     scan[rising_f] = 1.0
     scan[~rising_f & falling_f] = -1.0
-    scan["""~rising_f & ~falling_f & """squeeze_f] = 0.0
+    scan[squeeze_f] = 0.0
 
     return scan.reindex(df.index)
 
