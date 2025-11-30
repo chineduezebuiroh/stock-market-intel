@@ -28,6 +28,13 @@ percentile_ceiling         = float(67.0)
 # Namespace+timeframe key
 NT = Tuple[str, str]
 
+# Root/data paths for reading benchmark parquets (SPY/QQQ)
+_ROOT = Path(__file__).resolve().parents[1]
+_DATA_DIR = _ROOT / "data"
+
+# Cache: (timeframe_name, symbol, length) -> full vol_MA Series (indexed by date)
+_BENCHMARK_VOL_MA_CACHE: dict[tuple[str, str, int], pd.Series] = {}
+
 
 @dataclass(frozen=True)
 class IndicatorInstance:
@@ -46,6 +53,44 @@ class IndicatorInstance:
 # ---------------------------------------------------------------------
 # Low-level helpers (same as before, plus _sma)
 # ---------------------------------------------------------------------
+def _load_benchmark_vol_ma(
+    timeframe_name: str,
+    symbol: str,
+    length: int,
+) -> pd.Series:
+    """
+    Load volume SMA(length) for a benchmark symbol (e.g. SPY, QQQ)
+    for a given timeframe, using the existing per-symbol parquet.
+
+    Returns a Series indexed by date. Caller is responsible for
+    reindexing it to match their own df.index if needed.
+    """
+    key = (timeframe_name, symbol, int(length))
+    if key in _BENCHMARK_VOL_MA_CACHE:
+        return _BENCHMARK_VOL_MA_CACHE[key]
+
+    # For stocks namespace: data/timeframe=stocks_<tf>/ticker=<SYM>/data.parquet
+    tf_dir = f"timeframe=stocks_{timeframe_name}"
+    path = _DATA_DIR / tf_dir / f"ticker={symbol}" / "data.parquet"
+
+    if not path.exists():
+        # If benchmark parquet doesn't exist, return empty series
+        s = pd.Series(dtype="float64")
+        _BENCHMARK_VOL_MA_CACHE[key] = s
+        return s
+
+    df_bench = pd.read_parquet(path)
+    if "volume" not in df_bench.columns or df_bench.empty:
+        s = pd.Series(dtype="float64")
+        _BENCHMARK_VOL_MA_CACHE[key] = s
+        return s
+
+    vol = df_bench["volume"].astype(float)
+    vol_ma = vol.rolling(window=length, min_periods=length).mean()
+
+    _BENCHMARK_VOL_MA_CACHE[key] = vol_ma
+    return vol_ma
+
 
 def _sma(series: pd.Series, length: int) -> pd.Series:
     """Simple moving average."""
@@ -162,7 +207,6 @@ def indicator_slope(df: pd.DataFrame, length: int, src: str, **_) -> pd.Series:
 # ---------------------------------------------------------------------
 # Composite indicators (same prototypes you just tested)
 # ---------------------------------------------------------------------
-
 def indicator_wyckoff_stage(
     df: pd.DataFrame,
     fast_len: int,
@@ -516,7 +560,6 @@ def indicator_exh_abs_price_action(
     return scan.reindex(df.index)
 
 
-
 def indicator_significant_volume(
     df: pd.DataFrame,
     lookback_period: int = 126,
@@ -569,6 +612,62 @@ def indicator_significant_volume(
     # Reindex back to original df index (preserves caller's index order)
     return scan.reindex(df.index)
 
+
+def indicator_spy_qqq_volume_ma_ratio(
+    df: pd.DataFrame,
+    length: int = 26,
+    timeframe_name: str = "daily",
+    **_,
+) -> pd.Series:
+    """
+    SPY/QQQ Volume MA Ratio (Thinkorswim port).
+
+    For each bar:
+        ratio = SMA(volume(symbol), length) / min(SMA(volume(SPY), length),
+                                                  SMA(volume(QQQ), length))
+
+    Returns a float Series. Values > 1 indicate the symbol's volume MA
+    exceeds the lower of SPY and QQQ volume MAs; < 1 means it's lighter.
+    """
+    # ------------------------------------------------------------------
+    # Set Constants
+    # ------------------------------------------------------------------
+    symbol_spy: str = "SPY"
+    symbol_qqq: str = "QQQ"
+    
+    if "volume" not in df.columns:
+        return pd.Series(index=df.index, dtype="float64")
+
+    # Ensure chronological order
+    df_sorted = df.sort_index()
+    volume = df_sorted["volume"].astype(float)
+
+    L = int(length)
+    if len(volume) < L:
+        return pd.Series(index=df.index, dtype="float64")
+
+    # SMA of the symbol's own volume
+    vol_ma_symbol = volume.rolling(window=L, min_periods=L).mean()
+
+    # Load benchmark volume MAs (SPY & QQQ) for this timeframe
+    spy_ma_full = _load_benchmark_vol_ma(timeframe_name, symbol_spy, L)
+    qqq_ma_full = _load_benchmark_vol_ma(timeframe_name, symbol_qqq, L)
+
+    # Align benchmarks to this symbol's index
+    spy_ma = spy_ma_full.reindex(df_sorted.index)
+    qqq_ma = qqq_ma_full.reindex(df_sorted.index)
+
+    # Take the elementwise minimum of SPY/QQQ volume MA
+    bench_min = pd.concat([spy_ma, qqq_ma], axis=1).min(axis=1)
+
+    # Avoid divide-by-zero / negative nonsense
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = vol_ma_symbol / bench_min.replace(0, np.nan)
+
+    ratio = ratio.astype(float)
+
+    # Reindex back to original df index (usually already sorted)
+    return ratio.reindex(df.index)
 
 
 def indicator_vol_regime(
@@ -639,6 +738,7 @@ INDICATOR_FUNCS: Dict[str, Callable[..., pd.Series]] = {
     "wyckoff_stage": indicator_wyckoff_stage,
     "exh_abs_price_action": indicator_exh_abs_price_action,
     "significant_volume": indicator_significant_volume,
+    "spy_qqq_volume_ma_ratio": indicator_spy_qqq_volume_ma_ratio,
     "vol_regime": indicator_vol_regime,
     "entry_signal": indicator_entry_signal,
 }
