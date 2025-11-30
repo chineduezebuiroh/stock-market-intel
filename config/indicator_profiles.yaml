@@ -11,6 +11,7 @@ profiles:
     - wyckoff_stage
     - exh_abs_pa_current_bar
     - exh_abs_pa_prior_bar
+    - significant_volume
     - vol_regime
     - entry_signal
 
@@ -25,6 +26,7 @@ profiles:
     - atr_14
     - wyckoff_stage
     - exh_abs_pa_prior_bar
+    - significant_volume
     - vol_regime
     - entry_signal
 
