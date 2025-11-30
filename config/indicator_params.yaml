@@ -1,45 +1,6 @@
 indicators:
   stocks:
     intraday_130m:
-      sma_8:
-        id: sma
-        length: 8
-        src: close
-
-      ema_8:
-        id: ema
-        length: 8
-        src: close
-
-      ema_21:
-        id: ema
-        length: 21
-        src: close
-
-      wema_14:
-        id: wema
-        length: 14
-        src: close
-
-      ema_8_slope:
-        id: slope
-        length: 3
-        src: ema_8
-
-      ema_21_slope:
-        id: slope
-        length: 3
-        src: ema_21
-
-      volume_sma_20:
-        id: vol_sma
-        length: 20
-        src: volume
-
-      atr_14:
-        id: atr
-        length: 14
-
       wyckoff_stage:
         id: wyckoff_stage
         fast_len: 6
@@ -84,45 +45,6 @@ indicators:
         max_vol_regime: 0.0
 
     daily:
-      sma_8:
-        id: sma
-        length: 8
-        src: close
-
-      ema_8:
-        id: ema
-        length: 8
-        src: close
-
-      ema_21:
-        id: ema
-        length: 21
-        src: close
-
-      wema_14:
-        id: wema
-        length: 14
-        src: close
-
-      ema_8_slope:
-        id: slope
-        length: 3
-        src: ema_8
-
-      ema_21_slope:
-        id: slope
-        length: 3
-        src: ema_21
-
-      volume_sma_20:
-        id: vol_sma
-        length: 20
-        src: volume
-
-      atr_14:
-        id: atr
-        length: 14
-
       wyckoff_stage:
         id: wyckoff_stage
         fast_len: 5
@@ -167,45 +89,6 @@ indicators:
         max_vol_regime: 0.0
 
     weekly:
-      sma_8:
-        id: sma
-        length: 8
-        src: close
-
-      ema_8:
-        id: ema
-        length: 8
-        src: close
-
-      ema_21:
-        id: ema
-        length: 21
-        src: close
-
-      wema_14:
-        id: wema
-        length: 14
-        src: close
-
-      ema_8_slope:
-        id: slope
-        length: 3
-        src: ema_8
-
-      ema_21_slope:
-        id: slope
-        length: 3
-        src: ema_21
-
-      volume_sma_20:
-        id: vol_sma
-        length: 20
-        src: volume
-
-      atr_14:
-        id: atr
-        length: 14
-
       wyckoff_stage:
         id: wyckoff_stage
         fast_len: 6
@@ -250,45 +133,6 @@ indicators:
         max_vol_regime: 0.0
 
     monthly:
-      sma_8:
-        id: sma
-        length: 8
-        src: close
-
-      ema_8:
-        id: ema
-        length: 8
-        src: close
-
-      ema_21:
-        id: ema
-        length: 21
-        src: close
-
-      wema_14:
-        id: wema
-        length: 14
-        src: close
-
-      ema_8_slope:
-        id: slope
-        length: 3
-        src: ema_8
-
-      ema_21_slope:
-        id: slope
-        length: 3
-        src: ema_21
-
-      volume_sma_20:
-        id: vol_sma
-        length: 20
-        src: volume
-
-      atr_14:
-        id: atr
-        length: 14
-
       wyckoff_stage:
         id: wyckoff_stage
         fast_len: 6
@@ -333,45 +177,6 @@ indicators:
         max_vol_regime: 0.0
 
     quarterly:
-      sma_8:
-        id: sma
-        length: 8
-        src: close
-
-      ema_8:
-        id: ema
-        length: 8
-        src: close
-
-      ema_21:
-        id: ema
-        length: 21
-        src: close
-
-      wema_14:
-        id: wema
-        length: 14
-        src: close
-
-      ema_8_slope:
-        id: slope
-        length: 3
-        src: ema_8
-
-      ema_21_slope:
-        id: slope
-        length: 3
-        src: ema_21
-
-      volume_sma_20:
-        id: vol_sma
-        length: 20
-        src: volume
-
-      atr_14:
-        id: atr
-        length: 14
-
       wyckoff_stage:
         id: wyckoff_stage
         fast_len: 5
@@ -416,45 +221,6 @@ indicators:
         max_vol_regime: 0.0
 
     yearly:
-      sma_8:
-        id: sma
-        length: 8
-        src: close
-
-      ema_8:
-        id: ema
-        length: 8
-        src: close
-
-      ema_21:
-        id: ema
-        length: 21
-        src: close
-
-      wema_14:
-        id: wema
-        length: 14
-        src: close
-
-      ema_8_slope:
-        id: slope
-        length: 3
-        src: ema_8
-
-      ema_21_slope:
-        id: slope
-        length: 3
-        src: ema_21
-
-      volume_sma_20:
-        id: vol_sma
-        length: 20
-        src: volume
-
-      atr_14:
-        id: atr
-        length: 14
-
       wyckoff_stage:
         id: wyckoff_stage
         fast_len: 5
@@ -497,4 +263,3 @@ indicators:
         id: entry_signal
         trend_min: 0.1
         max_vol_regime: 0.0
-
