@@ -15,6 +15,7 @@ profiles:
     - spy_qqq_vol_ma_ratio
     - ma_trend_cloud
     - macdv_core
+    - ttm_squeeze_pro
     - entry_signal
 
   middle_core_v1:
