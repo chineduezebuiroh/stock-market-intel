@@ -61,6 +61,11 @@ indicators:
         id: significant_volume
         lookback_period: 126
 
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 30
+        timeframe_name: "intraday_130m"
+
       vol_regime:
         id: vol_regime
         atr_len: 14
@@ -133,6 +138,11 @@ indicators:
       significant_volume:
         id: significant_volume
         lookback_period: 126
+
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 21
+        timeframe_name: "daily"
 
       vol_regime:
         id: vol_regime
@@ -207,6 +217,11 @@ indicators:
         id: significant_volume
         lookback_period: 104
 
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 26
+        timeframe_name: "weekly"
+
       vol_regime:
         id: vol_regime
         atr_len: 14
@@ -279,6 +294,11 @@ indicators:
       significant_volume:
         id: significant_volume
         lookback_period: 60
+
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 24
+        timeframe_name: "monthly"
 
       vol_regime:
         id: vol_regime
@@ -353,6 +373,11 @@ indicators:
         id: significant_volume
         lookback_period: 50
 
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 20
+        timeframe_name: "quarterly"
+
       vol_regime:
         id: vol_regime
         atr_len: 12
@@ -425,6 +450,11 @@ indicators:
       significant_volume:
         id: significant_volume
         lookback_period: 50
+
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 20
+        timeframe_name: "yearly"
 
       vol_regime:
         id: vol_regime
