@@ -57,6 +57,10 @@ indicators:
         lookback_period: 126
         z: 1
 
+      significant_volume:
+        id: significant_volume
+        lookback_period: 126
+
       vol_regime:
         id: vol_regime
         atr_len: 14
@@ -125,6 +129,10 @@ indicators:
         id: exh_abs_price_action
         lookback_period: 126
         z: 1
+
+      significant_volume:
+        id: significant_volume
+        lookback_period: 126
 
       vol_regime:
         id: vol_regime
@@ -195,6 +203,10 @@ indicators:
         lookback_period: 104
         z: 1
 
+      significant_volume:
+        id: significant_volume
+        lookback_period: 104
+
       vol_regime:
         id: vol_regime
         atr_len: 14
@@ -263,6 +275,10 @@ indicators:
         id: exh_abs_price_action
         lookback_period: 60
         z: 1
+
+      significant_volume:
+        id: significant_volume
+        lookback_period: 60
 
       vol_regime:
         id: vol_regime
@@ -333,6 +349,10 @@ indicators:
         lookback_period: 50
         z: 1
 
+      significant_volume:
+        id: significant_volume
+        lookback_period: 50
+
       vol_regime:
         id: vol_regime
         atr_len: 12
@@ -401,6 +421,10 @@ indicators:
         id: exh_abs_price_action
         lookback_period: 50
         z: 1
+
+      significant_volume:
+        id: significant_volume
+        lookback_period: 50
 
       vol_regime:
         id: vol_regime
