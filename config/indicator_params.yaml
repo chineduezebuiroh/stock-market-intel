@@ -74,6 +74,10 @@ indicators:
         id: macdv
         z: 1
 
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
+        z: 1
+
       entry_signal:
         id: entry_signal
         trend_min: 0.2
@@ -151,6 +155,10 @@ indicators:
 
       macdv_core:
         id: macdv
+        z: 0
+
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
         z: 0
 
       entry_signal:
@@ -232,6 +240,10 @@ indicators:
         id: macdv
         z: 0
 
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
+        z: 0
+
       entry_signal:
         id: entry_signal
         trend_min: 0.2
@@ -309,6 +321,10 @@ indicators:
 
       macdv_core:
         id: macdv
+        z: 1
+
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
         z: 1
 
       entry_signal:
@@ -390,6 +406,10 @@ indicators:
         id: macdv
         z: 1
 
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
+        z: 1
+
       entry_signal:
         id: entry_signal
         trend_min: 0.15
@@ -467,6 +487,10 @@ indicators:
 
       macdv_core:
         id: macdv
+        z: 1
+
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
         z: 1
 
       entry_signal:
