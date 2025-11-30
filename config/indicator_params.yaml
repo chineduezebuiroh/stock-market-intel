@@ -45,7 +45,17 @@ indicators:
         fast_len: 6
         int_len: 15
         slow_len: 30
-        vma_length_source: "fast"  
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 126
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 126
+        z: 1
 
       vol_regime:
         id: vol_regime
@@ -104,7 +114,17 @@ indicators:
         fast_len: 5
         int_len: 13
         slow_len: 21
-        vma_length_source: "fast" 
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 126
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 126
+        z: 1
 
       vol_regime:
         id: vol_regime
@@ -163,7 +183,17 @@ indicators:
         fast_len: 6
         int_len: 13
         slow_len: 26
-        vma_length_source: "fast" 
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 104
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 104
+        z: 1
 
       vol_regime:
         id: vol_regime
@@ -222,7 +252,17 @@ indicators:
         fast_len: 6
         int_len: 12
         slow_len: 24
-        vma_length_source: "fast" 
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 60
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 60
+        z: 1
 
       vol_regime:
         id: vol_regime
@@ -281,7 +321,17 @@ indicators:
         fast_len: 5
         int_len: 10
         slow_len: 20
-        vma_length_source: "fast" 
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 50
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 50
+        z: 1
 
       vol_regime:
         id: vol_regime
@@ -340,7 +390,17 @@ indicators:
         fast_len: 5
         int_len: 10
         slow_len: 20
-        vma_length_source: "fast"  
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 50
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 50
+        z: 1
 
       vol_regime:
         id: vol_regime
