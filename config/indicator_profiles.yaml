@@ -14,7 +14,7 @@ profiles:
     - significant_volume
     - spy_qqq_vol_ma_ratio
     - ma_trend_cloud
-    - vol_regime
+    - macdv_core
     - entry_signal
 
   middle_core_v1:
@@ -30,7 +30,6 @@ profiles:
     - exh_abs_pa_prior_bar
     - significant_volume
     - spy_qqq_vol_ma_ratio
-    - vol_regime
     - entry_signal
 
   upper_core_v1:
@@ -44,5 +43,4 @@ profiles:
     - atr_14
     - wyckoff_stage
     - exh_abs_pa_prior_bar
-    - vol_regime
     - entry_signal
