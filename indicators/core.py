@@ -597,7 +597,7 @@ def indicator_exh_abs_price_action(
 
 def indicator_significant_volume(
     df: pd.DataFrame,
-    percentile_ceiling: float = 67.0;
+    percentile_ceiling: float = 67.0,
     lookback_period: int = 126,
     **_,
 ) -> pd.Series:
