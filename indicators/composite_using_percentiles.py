@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# indicators/composite_wyckoff_stage.py
+# indicators/composite_using_percentiles.py
 import numpy as np
 import pandas as pd
 
