@@ -9,6 +9,8 @@ profiles:
     - volume_sma_20
     - atr_14
     - wyckoff_stage
+    - exh_abs_pa_current_bar
+    - exh_abs_pa_prior_bar
     - vol_regime
     - entry_signal
 
@@ -22,6 +24,7 @@ profiles:
     - volume_sma_20
     - atr_14
     - wyckoff_stage
+    - exh_abs_pa_prior_bar
     - vol_regime
     - entry_signal
 
@@ -35,5 +38,6 @@ profiles:
     - volume_sma_20
     - atr_14
     - wyckoff_stage
+    - exh_abs_pa_prior_bar
     - vol_regime
     - entry_signal
