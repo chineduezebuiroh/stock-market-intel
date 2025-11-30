@@ -13,6 +13,7 @@ profiles:
     - exh_abs_pa_prior_bar
     - significant_volume
     - spy_qqq_vol_ma_ratio
+    - movingavg_trend_cloud
     - vol_regime
     - entry_signal
 
