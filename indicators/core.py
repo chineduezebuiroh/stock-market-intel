@@ -22,6 +22,8 @@ PRICE_COLS: List[str] = [
     "volume",
 ]
 
+percentile_floor           = float(33.0)
+percentile_ceiling         = float(67.0)
 
 # Namespace+timeframe key
 NT = Tuple[str, str]
@@ -115,6 +117,14 @@ def _atr(df: pd.DataFrame, length: int) -> pd.Series:
     return _wema(tr, length)
 
 
+# Define a function to calculate percentile rank of the last element
+def _pctrank(x):
+    # x is a Series representing the current window
+    # x.iloc[-1] is the current value
+    # len(x[x <= x.iloc[-1]]) counts elements less than or equal to the current value
+    # len(x) is the total number of elements in the window
+    return len(x[x <= x.iloc[-1]]) / len(x) * 100
+    
 # ---------------------------------------------------------------------
 # Primitive indicators (used in instance params)
 # ---------------------------------------------------------------------
@@ -288,8 +298,8 @@ def indicator_exh_abs_price_action(
     # ------------------------------------------------------------------
     # Set Constants
     # ------------------------------------------------------------------
-    percentile_floor           = float(33.0)
-    percentile_ceiling         = float(67.0)
+    pf = float(percentile_floor)
+    pc = float(percentile_ceiling)
     pinbar_scan_period         = int(2)
     pinbar_bar_check_count     = int(1)
     wick_adj_factor            = float(0.25)
@@ -362,34 +372,12 @@ def indicator_exh_abs_price_action(
     cb_count = pd.Series(0.0, index=df_sorted.index)
     vol_count = pd.Series(0.0, index=df_sorted.index)
 
-    """
-    for k in range(1, L + 1):
-        cb_shift = candlebody_adj.shift(k)
-        vol_shift = volume.shift(k)
-
-        cb_count += (candlebody_adj > cb_shift).astype(float)
-        vol_count += (volume > vol_shift).astype(float)
-
-    candlebody_percentile = cb_count / float(L) * 100.0
-    volume_percentile = vol_count / float(L) * 100.0
-    """
-
-    # Define a function to calculate percentile rank of the last element
-    def pctrank(x):
-        # x is a Series representing the current window
-        # x.iloc[-1] is the current value
-        # len(x[x <= x.iloc[-1]]) counts elements less than or equal to the current value
-        # len(x) is the total number of elements in the window
-        return len(x[x <= x.iloc[-1]]) / len(x) * 100
-
     # Apply the rolling percentile calculation
     window_size = L  # Example window size
     
-    #df['rolling_percentile'] = df['value'].rolling(window=window_size).apply(pctrank, raw=False)
-    candlebody_percentile = candlebody_adj.rolling(window=window_size).apply(pctrank, raw=False)
-    volume_percentile = volume.rolling(window=window_size).apply(pctrank, raw=False)
+    candlebody_percentile = candlebody_adj.rolling(window=window_size).apply(_pctrank, raw=False)
+    volume_percentile = volume.rolling(window=window_size).apply(_pctrank, raw=False)
     
-
     # RoundDown / RoundUp to integer percent
     cb_pct_floor = np.floor(candlebody_percentile)
     vol_pct_floor = np.floor(volume_percentile)
@@ -428,9 +416,6 @@ def indicator_exh_abs_price_action(
     # ------------------------------------------------------------------
     # Exhaustion / Absolute Pinbar patterns
     # ------------------------------------------------------------------
-    pf = float(percentile_floor)
-    pc = float(percentile_ceiling)
-
     cond_exh_common = (
         (pf - vol_pct_floor) + (pf - cb_pct_floor) >= 0
     )
@@ -529,6 +514,67 @@ def indicator_exh_abs_price_action(
 
     # Reindex back to original df index (preserves caller's index order)
     return scan.reindex(df.index)
+
+
+
+def significant_volume(
+    df: pd.DataFrame,
+    lookback_period: int = 126,
+    **_,
+) -> pd.Series:
+
+    # ------------------------------------------------------------------
+    # Set Constants
+    # ------------------------------------------------------------------
+    pf = float(percentile_floor)
+    pc = float(percentile_ceiling)
+    
+    """
+    Significant_Volume (Thinkorswim port).
+
+    Numeric encoding (matches the TOS 'scan' output):
+        1 = current or prior volume percentile >= percentile_ceiling
+        0 = both current and prior volume percentile < percentile_ceiling
+
+    Returns a float Series with values in {0, 1}.
+    """
+
+    required = {"open", "high", "low", "close", "volume"}
+    if not required.issubset(df.columns):
+        return pd.Series(index=df.index, dtype="float64")
+
+    # Ensure chronological order (oldest -> newest)
+    df_sorted = df.sort_index()
+
+    volume = df_sorted["volume"].astype(float)
+
+    # ------------------------------------------------------------------
+    # Percentiles over lookback_period for candlebody_adj and volume
+    # TOS fold: count of prior bars where current > prior, normalized by L.
+    # ------------------------------------------------------------------
+    L = int(lookback_period)
+
+    cb_count = pd.Series(0.0, index=df_sorted.index)
+    vol_count = pd.Series(0.0, index=df_sorted.index)
+
+    # Apply the rolling percentile calculation
+    window_size = L  # Example window size
+    
+    volume_percentile = volume.rolling(window=window_size).apply(_pctrank, raw=False)
+    
+    # RoundUp to integer percent
+    vol_pct_ceil = np.ceil(volume_percentile)
+
+    # ------------------------------------------------------------------
+    # Final scan values
+    # ------------------------------------------------------------------
+    scan = pd.Series(0.0, index=df_sorted.index)
+
+    scan[vol_pct_ceil >= pc | vol_pct_ceil.shift(1) >= pc] = 1.0
+
+    # Reindex back to original df index (preserves caller's index order)
+    return scan.reindex(df.index)
+
 
 
 def indicator_vol_regime(
