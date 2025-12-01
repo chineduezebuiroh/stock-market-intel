@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 import pandas as pd
 import yaml
 
-from etl.sources import load_eod, load_130m_from_5m
+from etl.sources import load_eod, load_130m_from_5m, load_yearly_from_monthly
 from etl.window import parquet_path, update_fixed_window
 
 from etl.universe import symbols_for_universe
@@ -124,6 +124,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
     for sym in symbols:
         if namespace == "stocks" and timeframe == "intraday_130m":
             df_new = load_130m_from_5m(sym, session=session)
+        elif namespace == "stocks" and timeframe == "yearly":
+            df_new = load_yearly_from_monthly(sym, window_bars=window_bars, session=session)
         else:
             df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
 
