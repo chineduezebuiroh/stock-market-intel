@@ -99,15 +99,15 @@ def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
             # Dev cap fully consumed by shortlist; just return them.
             symbols = sorted(shortlist_syms)
         else:
-            extra = sorted(other_syms)[:remaining]
+            # Only consider non-shortlist symbols as extras
+            extra_candidates = sorted(other_syms - shortlist_syms)
+            extra = extra_candidates[:remaining]
             symbols = sorted(shortlist_syms.union(extra))
     else:
         # futures or no dev cap: everything
         symbols = sorted(shortlist_syms.union(other_syms))
-    
 
     return symbols
-
 
 
 def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
