@@ -96,15 +96,6 @@ def _resolve_signal_routing(
     # Fallback: no evaluator
     return "none", ""
 
-"""
-def load_multi_tf_config() -> dict:
-    
-    #Load the multi-timeframe combos config.
-    
-    path = CFG / "multi_timeframe_combos.yaml"
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
-"""
 
 def symbols_for_universe(universe: str) -> list[str]:
     """
@@ -124,104 +115,6 @@ def symbols_for_universe(universe: str) -> list[str]:
 
     # Future: add ETF shortlist universes here if needed.
     return []
-
-"""
-def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -> pd.DataFrame:
-    
-    #Load the *snapshot* for namespace+timeframe (e.g. snapshot_stocks_daily.parquet),
-    #filter to the given symbols, and prefix columns with role_prefix:
-
-        #lower_open, lower_high, ..., lower_atr_14
-
-    #One row per symbol, flat column names.
-    
-    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-    if not snap_path.exists():
-        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
-        return pd.DataFrame()
-
-    df = pd.read_parquet(snap_path)
-    if df.empty:
-        print(f"[WARN] Snapshot {snap_path} is empty.")
-        return pd.DataFrame()
-
-    if "symbol" not in df.columns:
-        print(f"[WARN] Snapshot {snap_path} has no 'symbol' column; cannot build combo frame.")
-        return pd.DataFrame()
-
-    # Filter to our universe + index by symbol
-    df = df[df["symbol"].isin(symbols)].copy()
-    if df.empty:
-        print(f"[WARN] No overlapping symbols for snapshot {snap_path} and universe.")
-        return pd.DataFrame()
-
-    df = df.set_index("symbol")
-
-    # Use only the BASE_COLS that actually exist in this snapshot
-    cols = [c for c in BASE_COLS if c in df.columns]
-    if not cols:
-        print(f"[WARN] No BASE_COLS found in snapshot {snap_path}.")
-        return pd.DataFrame()
-
-    sub = df[cols].rename(columns={c: f"{role_prefix}{c}" for c in cols})
-    sub.columns = sub.columns.astype(str)
-    return sub
-"""
-"""
-def build_combo_df(namespace: str, combo_name: str, cfg: dict) -> pd.DataFrame:
-    
-    #For a given combo, load lower/middle/upper latest bars and join them by symbol.
-
-    #Result:
-      #- index: symbol
-      #- columns: lower_*, middle_*, upper_* (flat strings)
-    
-    ns_cfg = cfg.get(namespace, {})
-    combo_cfg = ns_cfg.get(combo_name)
-    if combo_cfg is None:
-        raise ValueError(f"Combo '{combo_name}' not found under namespace '{namespace}'")
-
-    lower_tf = combo_cfg["lower_tf"]
-    middle_tf = combo_cfg.get("middle_tf")
-    upper_tf = combo_cfg["upper_tf"]
-    universe = combo_cfg["universe"]
-
-    symbols = symbols_for_universe(universe)
-    if not symbols:
-        print(f"[WARN] No symbols for universe '{universe}'.")
-        return pd.DataFrame()
-
-    lower_df = load_role_frame(namespace, lower_tf, symbols, "lower_")
-    if lower_df.empty:
-        print(f"[WARN] No lower timeframe data for combo '{combo_name}'.")
-        return pd.DataFrame()
-
-    frames = [lower_df]
-
-    if middle_tf and str(middle_tf).lower() != "null":
-        middle_df = load_role_frame(namespace, middle_tf, symbols, "middle_")
-        if middle_df.empty:
-            print(f"[WARN] No middle timeframe data for combo '{combo_name}'.")
-        else:
-            frames.append(middle_df)
-
-    upper_df = load_role_frame(namespace, upper_tf, symbols, "upper_")
-    if upper_df.empty:
-        print(f"[WARN] No upper timeframe data for combo '{combo_name}'.")
-        return pd.DataFrame()
-    frames.append(upper_df)
-
-    combo_df = frames[0]
-    for f in frames[1:]:
-        combo_df = combo_df.join(f, how="inner")
-
-    if combo_df.empty:
-        print(f"[WARN] Joined combo dataframe for '{combo_name}' is empty.")
-        return combo_df
-
-    combo_df.columns = combo_df.columns.astype(str)
-    return combo_df
-"""
 
 
 def _load_role_frame(
@@ -306,8 +199,6 @@ def build_combo_df(
     return combo
 
 
-
-
 def evaluate_stocks_shortlist_signal(
     row: pd.Series,
     exh_abs_col: str,
@@ -383,16 +274,6 @@ def evaluate_stocks_shortlist_signal(
         short_score += 1.0
 
     # ======================================================
-    # Block 3: Volume / Participation (lower + benchmark)
-    # ======================================================
-    """
-    # Significant volume + beating SPY/QQQ volume baseline -> strong participation
-    if lw_sigvol == 1.0 and lw_vol_ratio >= 1.0:
-        long_score += 1.0
-    # For now, keep shorts less volume-driven; you can add a bearish pattern later.
-    """
-
-    # ======================================================
     # Decision mapping (v1 thresholds, easy to tune)
     # ======================================================
     if long_score <= 0 and short_score <= 0:
@@ -406,17 +287,64 @@ def evaluate_stocks_shortlist_signal(
 
     return "watch", long_score, short_score
 
-"""
-def basic_signal_logic(combo_df: pd.DataFrame) -> pd.DataFrame:
-    
-    #First-pass placeholder MTF logic.
-    #Right now, just tags everything as 'watch'.
-    #We'll replace this with your real EMA/SMA/Wilder logic later.
-    
-    df = combo_df.copy()
-    df["signal"] = "watch"
-    return df
-"""
+
+def evaluate_stocks_options_signal(
+    row: pd.Series,
+    exh_abs_col: str,
+) -> tuple[str, float, float]:
+    """
+    Options-eligible version of the equity signal.
+
+    Strategy:
+      - Reuse the shortlist scoring.
+      - Then require significant volume on BOTH middle and lower timeframes
+        for any 'long' or 'short' signal to stand.
+      - Otherwise, downgrade to 'watch'.
+
+    This keeps trend/PA logic identical, but enforces stronger participation
+    for options trades.
+    """
+    base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col)
+
+    vol_ratio_th1 = 0.1
+    vol_ratio_th2 = 0.25
+
+    # If there is no directional signal, nothing to add.
+    if base_signal not in ("long", "short"):
+        return base_signal, long_score, short_score
+
+    up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
+    md_sigvol = row.get("middle_significant_volume", np.nan)
+    md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
+    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
+
+    # ======================================================
+    # Block 3: Volume / Participation (lower + middle)
+    # ======================================================
+    # Significant volume + beating SPY/QQQ volume baseline -> strong participation
+    if up_wyckoff != np.nan and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th1) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th1)):
+        long_score, short_score += 1.0
+    if up_wyckoff == np.nan and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th2) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th2)):
+        long_score, short_score += 1.0
+
+    # ======================================================
+    # Decision mapping (v1 thresholds, easy to tune)
+    # ======================================================
+    if long_score <= 0 and short_score <= 0:
+        return "none", long_score, short_score
+
+    if long_score >= 5.0:
+        return "long", long_score, short_score
+
+    if short_score >= 5.0:
+        return "short", long_score, short_score
+
+    return "watch", long_score, short_score
+
+    # Otherwise keep the base directional signal
+    return base_signal, long_score, short_score
+
 
 def basic_signal_logic(
     namespace: str,
@@ -445,8 +373,10 @@ def basic_signal_logic(
         # No configured evaluator for this combo; leave neutral
         return combo_df
 
-    if evaluator_name in ("stocks_shortlist", "stocks_options"):
+    if evaluator_name == "stocks_shortlist":
         eval_fn = evaluate_stocks_shortlist_signal
+    elif evaluator_name == "stocks_options":
+        eval_fn = evaluate_stocks_options_signal
     elif evaluator_name == "futures_shortlist":
         # TODO: implement evaluate_futures_shortlist_signal later
         return combo_df
@@ -468,25 +398,6 @@ def basic_signal_logic(
     combo_df["mtf_short_score"] = short_scores
 
     return combo_df
-
-
-"""
-def run(namespace: str, combo_name: str):
-    ns_cfg = MTF_CFG[namespace][combo_name]
-
-    combo_df = build_combo_df(namespace, combo_name, ns_cfg)
-
-    if combo_df is None or combo_df.empty:
-        print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
-        return
-
-    # --- NEW: apply multi-timeframe signal engine ---
-    combo_df = basic_signal_logic(namespace, combo_name, ns_cfg, combo_df)
-
-    out = DATA / f"combo_{namespace}_{combo_name}.parquet"
-    combo_df.to_parquet(out)
-    print(f"[OK] Wrote combo snapshot to {out}")
-"""
 
 
 def run(namespace: str, combo_name: str):
