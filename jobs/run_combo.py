@@ -324,9 +324,11 @@ def evaluate_stocks_options_signal(
     # ======================================================
     # Significant volume + beating SPY/QQQ volume baseline -> strong participation
     if up_wyckoff != np.nan and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th1) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th1)):
-        long_score, short_score += 1.0
+        long_score += 1.0
+        short_score += 1.0
     if up_wyckoff == np.nan and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th2) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th2)):
-        long_score, short_score += 1.0
+        long_score += 1.0
+        short_score += 1.0
 
     # ======================================================
     # Decision mapping (v1 thresholds, easy to tune)
