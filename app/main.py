@@ -206,10 +206,18 @@ with tab_dwm:
             "mtf_short_score",
             "lower_wyckoff_stage",
             "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
             "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
             "lower_ma_trend_cloud",
             "lower_macdv_core",
             "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
         ]
         existing_cols_short = [c for c in cols_short if c in df_short.columns]
 
@@ -242,10 +250,18 @@ with tab_dwm:
             "mtf_short_score",
             "lower_wyckoff_stage",
             "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
             "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
             "lower_ma_trend_cloud",
             "lower_macdv_core",
             "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
         ]
         existing_cols_opts = [c for c in cols_opts if c in df_opts.columns]
 
