@@ -99,7 +99,7 @@ def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tup
         return "3mo", window_bars * 2 * 90
     if tf == "yearly":
         # 1y bars; ~365 days each
-        return "1y", window_bars * 2 * 365
+        return "3mo", window_bars * 8 * 365
 
     # Fallback: treat unknown as daily
     return "1d", window_bars * 2
@@ -261,3 +261,78 @@ def load_130m_from_5m(ticker: str, session: str = 'regular') -> pd.DataFrame:
     out = resample_ohlcv(df5, '130T')
     out = _sanitize_eod_df(out) # <-- New line added
     return out
+
+
+def _resample_monthly_to_yearly(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate monthly OHLCV into true yearly bars.
+
+    Assumes df has:
+        open, high, low, close, adj_close, volume
+    and a DatetimeIndex already normalized to NYC/naive as in load_eod.
+    """
+    if df is None or df.empty:
+        return df
+
+    # Make sure we have a DatetimeIndex
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
+
+    # Only work with the expected OHLCV columns
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    cols = [c for c in cols if c in df.columns]
+    if not cols:
+        return df
+
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "adj_close": "last",
+        "volume": "sum",
+    }
+
+    out = df[cols].resample("A").agg(agg)  # year-end frequency
+    # Drop all-NaN rows (just in case)
+    out = out.dropna(how="all")
+
+    # Normalize index to date-only (no time component)
+    out.index = out.index.normalize()
+
+    # Ensure flat string columns
+    out.columns = out.columns.astype(str)
+
+    return out
+
+
+def load_yearly_from_monthly(
+    symbol: str,
+    window_bars: int,
+    session: str = "regular",
+):
+    """
+    Build true yearly bars by:
+      1) Loading monthly OHLCV via load_eod(..., timeframe="monthly"),
+      2) Resampling to yearly OHLCV with _resample_monthly_to_yearly.
+
+    We ask for more monthly bars than the target yearly window so we
+    have enough history to aggregate.
+    """
+    # Ask for more monthly bars than years we want.
+    # Very conservative: 12 months per year of history.
+    monthly_window = window_bars * 12
+
+    df_monthly = load_eod(
+        symbol,
+        timeframe="monthly",
+        window_bars=monthly_window,
+        session=session,
+    )
+
+    if df_monthly is None or df_monthly.empty:
+        return df_monthly
+
+    df_yearly = _resample_monthly_to_yearly(df_monthly)
+    return df_yearly
