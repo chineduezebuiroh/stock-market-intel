@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import sys
 from pathlib import Path
-import pandas as pd
-import yaml
-import numpy as np
 
 # Ensure project root is on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+import pandas as pd
+import yaml
+import numpy as np
 
 from etl.window import parquet_path
 
