@@ -286,7 +286,7 @@ with tab_wmq:
 
     # ---------- WMQ Shortlist ----------
     st.markdown("### Shortlist universe (W/M/Q combo)")
-    p_wmq_short = DATA / "combo_stocks_c_wmq_shortlist.parquet"
+    p_wmq_short = DATA / "combo_stocks_b_wmq_shortlist.parquet"
     if p_wmq_short.exists():
         df_wmq_short = pd.read_parquet(p_wmq_short)
 
@@ -330,7 +330,7 @@ with tab_wmq:
 
     # ---------- WMQ Options-eligible ----------
     st.markdown("### Options-eligible universe (W/M/Q combo)")
-    p_wmq_all = DATA / "combo_stocks_c_wmq_all.parquet"
+    p_wmq_all = DATA / "combo_stocks_b_wmq_all.parquet"
     if p_wmq_all.exists():
         df_wmq_all = pd.read_parquet(p_wmq_all)
 
