@@ -4,15 +4,15 @@ import pandas as pd
 import yaml
 import numpy as np
 
-
 # Ensure project root is on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-
-
 from etl.window import parquet_path
+
+from etl.universe import symbols_for_universe
+
 
 DATA = ROOT / "data"
 CFG = ROOT / "config"
@@ -195,6 +195,13 @@ def build_combo_df(
 
     # Bring symbol back as a column
     combo = combo.reset_index().rename(columns={"index": "symbol"})
+
+    # 🔹 NEW: filter to the combo's universe symbols
+    universe = cfg.get("universe")
+    if universe:
+        allowed = set(symbols_for_universe(universe))
+        if allowed:
+            combo = combo[combo["symbol"].isin(allowed)]
 
     return combo
 
