@@ -266,11 +266,8 @@ def evaluate_stocks_shortlist_signal(
     # Upper regime bias: aligned bullish vs bearish
     if (up_wyckoff != np.nan and (up_wyckoff > 0 or up_exh_abs > 0)) or (up_wyckoff == np.nan and (md_wyckoff > 0 or md_exh_abs > 0)):
         long_score += 1.0
-    if (up_wyckoff != np.nan and (up_wyckoff < 0 or up_exh_abs < 0)
-            ) or 
-        (up_wyckoff == np.nan and (md_wyckoff < 0 or md_exh_abs < 0)
-            ):
-            short_score += 1.0
+    if (up_wyckoff != np.nan and (up_wyckoff < 0 or up_exh_abs < 0)) or (up_wyckoff == np.nan and (md_wyckoff < 0 or md_exh_abs < 0)):
+        short_score += 1.0
 
     # ======================================================
     # Block 2: Price Action / Momentum (lower)
@@ -288,12 +285,10 @@ def evaluate_stocks_shortlist_signal(
         short_score += 1.0
 
     # MACDV Momentum with potential TTM Squeeze Pro Confirmation
-    if lw_macdv == 2 or 
-            (lw_macdv == 1 and lw_sqz != np.nan and lw_sqz >= 0):
-                long_score += 1.0
-    if lw_macdv == -2 or 
-            (lw_macdv == -1 and lw_sqz != np.nan and lw_sqz <= 0):
-                short_score += 1.0
+    if lw_macdv == 2 or (lw_macdv == 1 and lw_sqz != np.nan and lw_sqz >= 0):
+        long_score += 1.0
+    if lw_macdv == -2 or (lw_macdv == -1 and lw_sqz != np.nan and lw_sqz <= 0):
+        short_score += 1.0
 
     # ======================================================
     # Block 3: Volume / Participation (lower + benchmark)
