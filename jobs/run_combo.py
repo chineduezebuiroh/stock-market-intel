@@ -19,6 +19,11 @@ CFG = ROOT / "config"
 
 MTF_CFG_PATH = CFG / "multi_timeframe_combos.yaml"
 
+# Load multi-timeframe combos config
+with open(MTF_CFG_PATH, "r") as f:
+    MTF_CFG = yaml.safe_load(f)
+
+
 # Columns we expect to be present after apply_core()
 BASE_COLS = [
     "open",
@@ -91,13 +96,15 @@ def _resolve_signal_routing(
     # Fallback: no evaluator
     return "none", ""
 
-
+"""
 def load_multi_tf_config() -> dict:
-    """Load the multi-timeframe combos config."""
+    
+    #Load the multi-timeframe combos config.
+    
     path = CFG / "multi_timeframe_combos.yaml"
     with open(path, "r") as f:
         return yaml.safe_load(f)
-
+"""
 
 def symbols_for_universe(universe: str) -> list[str]:
     """
