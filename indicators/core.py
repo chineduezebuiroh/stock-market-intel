@@ -115,7 +115,6 @@ INDICATOR_FUNCS: Dict[str, Callable[..., pd.Series]] = {
     "movingavg_trend_cloud": indicator_movingavg_trend_cloud,
     "macdv": indicator_macdv,
     "ttm_squeeze_pro": indicator_ttm_squeeze_pro,
-    "entry_signal": indicator_entry_signal,
 }
 
 
