@@ -1,13 +1,16 @@
 import sys
 from pathlib import Path
+import pandas as pd
+import yaml
+import numpy as np
+
 
 # Ensure project root is on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pandas as pd
-import yaml
+
 
 from etl.window import parquet_path
 
@@ -33,6 +36,60 @@ BASE_COLS = [
     "volume_sma_20",
     "atr_14",
 ]
+
+
+def _tf_pattern(combo_cfg: dict) -> str:
+    """
+    Convenience helper: turn lower/middle/upper into a simple pattern string
+    like 'daily-weekly-monthly', 'weekly-monthly-quarterly', etc.
+    """
+    lower_tf = combo_cfg.get("lower_tf", "")
+    middle_tf = combo_cfg.get("middle_tf", "")
+    upper_tf = combo_cfg.get("upper_tf", "")
+    return f"{lower_tf}-{middle_tf}-{upper_tf}"
+
+
+def _resolve_signal_routing(
+    namespace: str,
+    combo_name: str,
+    combo_cfg: dict,
+) -> tuple[str, str]:
+    """
+    Decide which evaluator to use and which lower_* Exh/Abs column to read.
+
+    Returns:
+        evaluator_name: str (e.g. 'stocks_shortlist', 'stocks_options', 'futures_shortlist', 'none')
+        exh_abs_col:    str (e.g. 'lower_exh_abs_pa_current_bar' or 'lower_exh_abs_pa_prior_bar')
+    """
+    universe = combo_cfg.get("universe", "")
+    pattern = _tf_pattern(combo_cfg)
+
+    # Stocks: shortlist universe
+    if namespace == "stocks" and universe == "shortlist_stocks":
+        # Family A: DWM & WMQ -> use current-bar Exh/Abs on *lower* timeframe
+        if pattern in ("daily-weekly-monthly", "weekly-monthly-quarterly"):
+            return "stocks_shortlist", "lower_exh_abs_pa_current_bar"
+        # Family B: all other combos -> use prior-bar Exh/Abs on lower
+        return "stocks_shortlist", "lower_exh_abs_pa_prior_bar"
+
+    # Stocks: options-eligible universe
+    if namespace == "stocks" and universe == "options_eligible":
+        # For now we'll route options through the same evaluator,
+        # but we might tune thresholds later.
+        if pattern in ("daily-weekly-monthly", "weekly-monthly-quarterly"):
+            return "stocks_options", "lower_exh_abs_pa_current_bar"
+        if pattern == "monthly-quarterly-yearly":
+            return "stocks_options", "lower_exh_abs_pa_prior_bar"
+        # Default for any other pattern
+        return "stocks_options", "lower_exh_abs_pa_prior_bar"
+
+    # Futures: shortlist universe (stubs for later)
+    if namespace == "futures" and universe == "shortlist_futures":
+        # You can branch on pattern or combo_name later.
+        return "futures_shortlist", "lower_exh_abs_pa_current_bar"
+
+    # Fallback: no evaluator
+    return "none", ""
 
 
 def load_multi_tf_config() -> dict:
@@ -159,36 +216,177 @@ def build_combo_df(namespace: str, combo_name: str, cfg: dict) -> pd.DataFrame:
     return combo_df
 
 
+def evaluate_stocks_shortlist_signal(
+    row: pd.Series,
+    exh_abs_col: str,
+) -> tuple[str, float, float]:
+    """
+    Multi-timeframe evaluation for STOCKS in the shortlist universe
+    (and optionally reused for options as a starting point).
+
+    Functional grouping:
+      - Block 1: Trend / Regime (upper + middle)
+      - Block 2: Volume / Participation (lower + benchmarks)
+      - Block 3: Price Action / Momentum (mostly lower)
+
+    Returns:
+        signal: "long" | "short" | "watch" | "none"
+        long_score: float
+        short_score: float
+    """
+
+    # -----------------------------
+    # Unpack fields
+    # -----------------------------
+    # Lower (timing / PA): usually daily
+    lw_wyckoff = row.get("lower_wyckoff_stage", np.nan)
+    lw_exh_abs = row.get(exh_abs_col, np.nan)  # current or prior bar, based on routing
+    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
+    lw_trend_cloud = row.get("lower_ma_trend_cloud", np.nan)
+    lw_macdv = row.get("lower_macdv_core", np.nan)
+    lw_sqz = row.get("lower_ttm_squeeze_pro", np.nan)
+
+    # Middle: context / confirmation (e.g., weekly)
+    md_wyckoff = row.get("middle_wyckoff_stage", np.nan)  # if you wire it later
+    md_exh_abs = row.get("middle_exh_abs_pa_prior_bar", np.nan) 
+    md_sigvol = row.get("middle_significant_volume", np.nan)
+    md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
+
+    # Upper: regime (e.g., monthly)
+    up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
+    up_exh_abs = row.get("upper_exh_abs_pa_prior_bar", np.nan) 
+
+    long_score = 0.0
+    short_score = 0.0
+
+    # ======================================================
+    # Block 1: Trend / Regime (upper + middle)
+    # ======================================================
+    # Upper regime bias: aligned bullish vs bearish
+    if (up_wyckoff != np.nan and (up_wyckoff > 0 or up_exh_abs > 0)
+            ) or 
+        (up_wyckoff == np.nan and (md_wyckoff > 0 or md_exh_abs > 0)
+            ):
+            long_score += 1.0
+    if (up_wyckoff != np.nan and (up_wyckoff < 0 or up_exh_abs < 0)
+            ) or 
+        (up_wyckoff == np.nan and (md_wyckoff < 0 or md_exh_abs < 0)
+            ):
+            short_score += 1.0
+
+    # ======================================================
+    # Block 2: Price Action / Momentum (lower)
+    # ======================================================
+    # Lower regime moving average trend cloud
+    if lw_trend_cloud > 0:
+        long_score += 1.0
+    if lw_trend_cloud < 0:
+        short_score += 1.0
+
+    # Exh/Abs (current or prior bar, depending on combo family)
+    if lw_exh_abs in (1.0, 2.0):
+        long_score += 1.0
+    if lw_exh_abs in (-1.0, -2.0):
+        short_score += 1.0
+
+    # MACDV Momentum with potential TTM Squeeze Pro Confirmation
+    if lw_macdv == 2 or 
+            (lw_macdv == 1 and lw_sqz != np.nan and lw_sqz >= 0):
+                long_score += 1.0
+    if lw_macdv == -2 or 
+            (lw_macdv == -1 and lw_sqz != np.nan and lw_sqz <= 0):
+                short_score += 1.0
+
+    # ======================================================
+    # Block 3: Volume / Participation (lower + benchmark)
+    # ======================================================
+    """
+    # Significant volume + beating SPY/QQQ volume baseline -> strong participation
+    if lw_sigvol == 1.0 and lw_vol_ratio >= 1.0:
+        long_score += 1.0
+    # For now, keep shorts less volume-driven; you can add a bearish pattern later.
+    """
+
+    # ======================================================
+    # Decision mapping (v1 thresholds, easy to tune)
+    # ======================================================
+    if long_score <= 0 and short_score <= 0:
+        return "none", long_score, short_score
+
+    if long_score >= 4.0:
+        return "long", long_score, short_score
+
+    if short_score >= 4.0:
+        return "short", long_score, short_score
+
+    return "watch", long_score, short_score
+
+"""
 def basic_signal_logic(combo_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    First-pass placeholder MTF logic.
-    Right now, just tags everything as 'watch'.
-    We'll replace this with your real EMA/SMA/Wilder logic later.
-    """
+    
+    #First-pass placeholder MTF logic.
+    #Right now, just tags everything as 'watch'.
+    #We'll replace this with your real EMA/SMA/Wilder logic later.
+    
     df = combo_df.copy()
     df["signal"] = "watch"
     return df
-
-"""
-def run_combo(namespace: str, combo_name: str):
-    #Entry point: build combo dataframe, apply signal logic, persist snapshot.
-    cfg = load_multi_tf_config()
-    df = build_combo_df(namespace, combo_name, cfg)
-    if df.empty:
-        print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
-        return
-
-    out = basic_signal_logic(df)
-    out = out.reset_index()  # bring 'symbol' out of index
-    out["combo"] = combo_name
-
-    out_path = DATA / f"combo_{namespace}_{combo_name}.parquet"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out.to_parquet(out_path)
-    print(f"[OK] Wrote combo snapshot to {out_path}")
 """
 
+def basic_signal_logic(
+    namespace: str,
+    combo_name: str,
+    combo_cfg: dict,
+    combo_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Attach multi-timeframe signal columns to combo_df based on:
+      - namespace (stocks / futures)
+      - universe (shortlist / options / futures shortlist)
+      - timeframe pattern (dwm / wmq / mqy, etc.)
 
+    Uses a small routing helper to pick:
+      - evaluator_name: which evaluation family to use
+      - exh_abs_col: which lower_* Exh/Abs PA column to reference
+    """
+    evaluator_name, exh_abs_col = _resolve_signal_routing(namespace, combo_name, combo_cfg)
+
+    combo_df = combo_df.copy()
+    combo_df["signal"] = "none"
+    combo_df["mtf_long_score"] = 0.0
+    combo_df["mtf_short_score"] = 0.0
+
+    if evaluator_name == "none" or not exh_abs_col:
+        # No configured evaluator for this combo; leave neutral
+        return combo_df
+
+    if evaluator_name in ("stocks_shortlist", "stocks_options"):
+        eval_fn = evaluate_stocks_shortlist_signal
+    elif evaluator_name == "futures_shortlist":
+        # TODO: implement evaluate_futures_shortlist_signal later
+        return combo_df
+    else:
+        return combo_df
+
+    signals: list[str] = []
+    long_scores: list[float] = []
+    short_scores: list[float] = []
+
+    for _, row in combo_df.iterrows():
+        sig, ls, ss = eval_fn(row, exh_abs_col)
+        signals.append(sig)
+        long_scores.append(ls)
+        short_scores.append(ss)
+
+    combo_df["signal"] = signals
+    combo_df["mtf_long_score"] = long_scores
+    combo_df["mtf_short_score"] = short_scores
+
+    return combo_df
+
+
+"""
 def run_combo(namespace: str, combo_name: str):
     with open(MTF_CFG_PATH, "r") as f:
         cfg = yaml.safe_load(f)
@@ -210,8 +408,24 @@ def run_combo(namespace: str, combo_name: str):
     out_path = DATA / f"combo_{namespace}_{clean_name}.parquet"
     out.to_parquet(out_path)
     print(f"[OK] Wrote combo snapshot to {out_path}")
+"""
 
 
+def run(namespace: str, combo_name: str):
+    ns_cfg = MTF_CFG[namespace][combo_name]
+
+    combo_df = build_combo_df(namespace, combo_name, ns_cfg)
+
+    if combo_df is None or combo_df.empty:
+        print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
+        return
+
+    # --- NEW: apply multi-timeframe signal engine ---
+    combo_df = basic_signal_logic(namespace, combo_name, ns_cfg, combo_df)
+
+    out = DATA / f"combo_{namespace}_{combo_name}.parquet"
+    combo_df.to_parquet(out)
+    print(f"[OK] Wrote combo snapshot to {out}")
 
 
 if __name__ == "__main__":
@@ -222,4 +436,4 @@ if __name__ == "__main__":
 
     ns = sys.argv[1]
     combo = sys.argv[2]
-    run_combo(ns, combo)
+    run(ns, combo)
