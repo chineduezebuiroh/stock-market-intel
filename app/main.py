@@ -189,11 +189,24 @@ with tabs[3]:
 with tab_dwm:
     st.subheader("Stocks – D/W/M Multi-Timeframe Combos")
 
+    # Shared signal filter for both tables
+    signal_filter = st.radio(
+        "Filter by signal:",
+        options=["all", "long", "short", "watch"],
+        index=0,
+        horizontal=True,
+        key="dwm_signal_filter",
+    )
+
     # ---------- Shortlist D/W/M ----------
     st.markdown("### Shortlist universe (D/W/M combo)")
     p_shortlist = DATA / "combo_stocks_c_dwm_shortlist.parquet"
     if p_shortlist.exists():
         df_short = pd.read_parquet(p_shortlist)
+
+        # Apply signal filter if the column exists
+        if "signal" in df_short.columns and signal_filter != "all":
+            df_short = df_short[df_short["signal"] == signal_filter]
 
         # Example: sort by long score desc, then short score desc
         if {"mtf_long_score", "mtf_short_score"}.issubset(df_short.columns):
@@ -201,7 +214,6 @@ with tab_dwm:
                 ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
             )
 
-        # Show only the most relevant columns up front
         cols_short = [
             "symbol",
             "signal",
@@ -215,17 +227,23 @@ with tab_dwm:
             "lower_ttm_squeeze_pro",
         ]
         existing_cols_short = [c for c in cols_short if c in df_short.columns]
+
         st.dataframe(df_short[existing_cols_short])
     else:
         st.info("Shortlist D/W/M combo not found. Run jobs/run_combo.py stocks stocks_c_dwm_shortlist")
 
     st.markdown("---")
 
+
     # ---------- Options-eligible D/W/M ----------
     st.markdown("### Options-eligible universe (D/W/M combo)")
     p_opts = DATA / "combo_stocks_c_dwm_all.parquet"
     if p_opts.exists():
         df_opts = pd.read_parquet(p_opts)
+
+        # Apply same signal filter
+        if "signal" in df_opts.columns and signal_filter != "all":
+            df_opts = df_opts[df_opts["signal"] == signal_filter]
 
         if {"mtf_long_score", "mtf_short_score"}.issubset(df_opts.columns):
             df_opts = df_opts.sort_values(
@@ -245,6 +263,7 @@ with tab_dwm:
             "lower_ttm_squeeze_pro",
         ]
         existing_cols_opts = [c for c in cols_opts if c in df_opts.columns]
+
         st.dataframe(df_opts[existing_cols_opts])
     else:
         st.info("Options D/W/M combo not found. Run jobs/run_combo.py stocks stocks_c_dwm_all")
