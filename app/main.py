@@ -139,16 +139,6 @@ tab_daily, tab_weekly, tab_monthly, tab_dwm = st.tabs(
     ]
 )
 
-"""
-with tabs[0]:
-    render_snapshot_tab("stocks", "daily", "Stocks – Daily Snapshot")
-
-with tabs[1]:
-    render_snapshot_tab("stocks", "weekly", "Stocks – Weekly Snapshot")
-
-with tabs[2]:
-    render_snapshot_tab("stocks", "monthly", "Stocks – Monthly Snapshot")
-"""
 
 with tab_daily:
     st.subheader("Stocks – Daily Snapshot")
@@ -180,11 +170,6 @@ with tab_monthly:
         st.dataframe(df)
     else:
         st.info("Monthly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
-
-"""
-with tabs[3]:
-    render_combo_tab_stocks_c_dwm_shortlist()
-"""
 
 with tab_dwm:
     st.subheader("Stocks – D/W/M Multi-Timeframe Combos")
