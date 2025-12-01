@@ -130,13 +130,14 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 # -----------------------------------------------------------------------------
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
 
-tab_daily, tab_weekly, tab_monthly, tab_dwm, tab_wmq = st.tabs(
+tab_daily, tab_weekly, tab_monthly, tab_dwm, tab_wmq, tab_mqy = st.tabs(
     [
         "Stocks – Daily",
         "Stocks – Weekly",
         "Stocks – Monthly",
         "Stocks – D/W/M (Combos)",
         "Stocks – W/M/Q (Combos)",
+        "Stocks – M/Q/Y (Combos)",
     ]
 )
 
@@ -368,4 +369,102 @@ with tab_wmq:
         st.dataframe(df_wmq_all[wmq_existing_all])
     else:
         st.info("WMQ options combo not found. Run jobs/run_combo.py stocks stocks_c_wmq_all")
+
+
+with tab_mqy:
+    st.subheader("Stocks – M/Q/Y Multi-Timeframe Combos")
+
+    # Shared signal filter for both WMQ tables
+    mqy_signal_filter = st.radio(
+        "Filter by signal:",
+        options=["all", "long", "short", "watch"],
+        index=0,
+        horizontal=True,
+        key="mqy_signal_filter",
+    )
+
+    # ---------- MQY Shortlist ----------
+    st.markdown("### Shortlist universe (M/Q/Y combo)")
+    p_mqy_short = DATA / "combo_stocks_a_mqy_shortlist.parquet"
+    if p_mqy_short.exists():
+        df_mqy_short = pd.read_parquet(p_mqy_short)
+
+        # Apply signal filter
+        if "signal" in df_mqy_short.columns and mqy_signal_filter != "all":
+            df_mqy_short = df_mqy_short[df_mqy_short["signal"] == mqy_signal_filter]
+
+        # Sort by scores
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_mqy_short.columns):
+            df_mqy_short = df_mqy_short.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        # Choose key columns to display
+        mqy_cols_short = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
+        ]
+        mqy_existing_short = [c for c in mqy_cols_short if c in df_mqy_short.columns]
+        st.dataframe(df_mqy_short[mqy_existing_short])
+    else:
+        st.info("MQY shortlist combo not found. Run jobs/run_combo.py stocks stocks_a_mqy_shortlist")
+
+    st.markdown("---")
+
+    # ---------- MQY Options-eligible ----------
+    st.markdown("### Options-eligible universe (W/M/Q combo)")
+    p_mqy_all = DATA / "combo_stocks_a_mqy_all.parquet"
+    if p_mqy_all.exists():
+        df_mqy_all = pd.read_parquet(p_mqy_all)
+
+        # Apply signal filter
+        if "signal" in df_mqy_all.columns and mqy_signal_filter != "all":
+            df_mqy_all = df_mqy_all[df_mqy_all["signal"] == mqy_signal_filter]
+
+        # Sort by scores
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_mqy_all.columns):
+            df_mqy_all = df_mqy_all.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        mqy_cols_all = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
+        ]
+        mqy_existing_all = [c for c in mqy_cols_all if c in df_mqy_all.columns]
+        st.dataframe(df_mqy_all[mqy_existing_all])
+    else:
+        st.info("MQY options combo not found. Run jobs/run_combo.py stocks stocks_a_mqy_all")
 
