@@ -125,16 +125,16 @@ def symbols_for_universe(universe: str) -> list[str]:
     # Future: add ETF shortlist universes here if needed.
     return []
 
-
+"""
 def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -> pd.DataFrame:
-    """
-    Load the *snapshot* for namespace+timeframe (e.g. snapshot_stocks_daily.parquet),
-    filter to the given symbols, and prefix columns with role_prefix:
+    
+    #Load the *snapshot* for namespace+timeframe (e.g. snapshot_stocks_daily.parquet),
+    #filter to the given symbols, and prefix columns with role_prefix:
 
-        lower_open, lower_high, ..., lower_atr_14
+        #lower_open, lower_high, ..., lower_atr_14
 
-    One row per symbol, flat column names.
-    """
+    #One row per symbol, flat column names.
+    
     snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
     if not snap_path.exists():
         print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
@@ -166,16 +166,16 @@ def load_role_frame(namespace: str, timeframe: str, symbols, role_prefix: str) -
     sub = df[cols].rename(columns={c: f"{role_prefix}{c}" for c in cols})
     sub.columns = sub.columns.astype(str)
     return sub
-
-
+"""
+"""
 def build_combo_df(namespace: str, combo_name: str, cfg: dict) -> pd.DataFrame:
-    """
-    For a given combo, load lower/middle/upper latest bars and join them by symbol.
+    
+    #For a given combo, load lower/middle/upper latest bars and join them by symbol.
 
-    Result:
-      - index: symbol
-      - columns: lower_*, middle_*, upper_* (flat strings)
-    """
+    #Result:
+      #- index: symbol
+      #- columns: lower_*, middle_*, upper_* (flat strings)
+    
     ns_cfg = cfg.get(namespace, {})
     combo_cfg = ns_cfg.get(combo_name)
     if combo_cfg is None:
@@ -221,6 +221,91 @@ def build_combo_df(namespace: str, combo_name: str, cfg: dict) -> pd.DataFrame:
 
     combo_df.columns = combo_df.columns.astype(str)
     return combo_df
+"""
+
+
+def _load_role_frame(
+    namespace: str,
+    timeframe: str,
+    role: str,
+) -> pd.DataFrame:
+    """
+    Load the snapshot for a given namespace+timeframe and reshape it into a
+    role-prefixed frame keyed by symbol.
+
+    Result:
+        index: symbol
+        columns: f"{role}_<original_col>" for all non-symbol columns
+    """
+    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+    if not snap_path.exists():
+        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
+        return pd.DataFrame()
+
+    snap = pd.read_parquet(snap_path)
+    if snap.empty:
+        return pd.DataFrame()
+
+    if "symbol" not in snap.columns:
+        print(f"[WARN] Snapshot {snap_path} has no 'symbol' column; skipping.")
+        return pd.DataFrame()
+
+    # Use symbol as key; keep ALL other columns (prices + indicators)
+    snap = snap.set_index("symbol")
+
+    # Prefix everything with the role (lower_, middle_, upper_)
+    snap = snap.add_prefix(f"{role}_")
+
+    # Index is symbol, columns are role-prefixed
+    return snap
+
+
+def build_combo_df(
+    namespace: str,
+    combo_name: str,
+    mtf_cfg: dict,
+) -> pd.DataFrame:
+    """
+    Build a multi-timeframe combo dataframe:
+
+        symbol,
+        lower_* columns,
+        middle_* columns,
+        upper_* columns
+
+    For each snapshot, we keep ALL columns (OHLCV + indicators) and simply
+    prefix them with the role name. Joins are done on symbol.
+    """
+    ns_cfg = mtf_cfg.get(namespace, {})
+    if combo_name not in ns_cfg:
+        raise ValueError(f"Combo '{combo_name}' not found under namespace '{namespace}'")
+
+    cfg = ns_cfg[combo_name]
+    lower_tf = cfg["lower_tf"]
+    middle_tf = cfg["middle_tf"]
+    upper_tf = cfg["upper_tf"]
+
+    lower = _load_role_frame(namespace, lower_tf, "lower")
+    middle = _load_role_frame(namespace, middle_tf, "middle")
+    upper = _load_role_frame(namespace, upper_tf, "upper")
+
+    # Require at least lower + middle; upper can also be required if you prefer
+    if lower.empty or middle.empty or upper.empty:
+        print(f"[WARN] One or more role frames empty for combo '{combo_name}'.")
+        return pd.DataFrame()
+
+    # Inner join on symbol (index)
+    combo = lower.join(middle, how="inner").join(upper, how="inner")
+
+    if combo.empty:
+        return combo
+
+    # Bring symbol back as a column
+    combo = combo.reset_index().rename(columns={"index": "symbol"})
+
+    return combo
+
+
 
 
 def evaluate_stocks_shortlist_signal(
