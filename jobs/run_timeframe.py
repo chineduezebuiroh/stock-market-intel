@@ -1,16 +1,14 @@
 import sys
 from pathlib import Path
 
-# Ensure project root on sys.path
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 import pandas as pd
 import yaml
 
 from etl.sources import load_eod, load_130m_from_5m
 from etl.window import parquet_path, update_fixed_window
+
+from etl.universe import symbols_for_universe
+
 #from indicators.core import apply_core
 from indicators.core import (
     apply_core,
@@ -18,10 +16,15 @@ from indicators.core import (
     initialize_indicator_engine,
 )
 
-#from screens.engine import run_screen
-
+# Ensure project root on sys.path
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+    
 DATA = ROOT / "data"
 CFG = ROOT / "config"
+
+
 
 DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
 
@@ -47,27 +50,6 @@ CASCADE = {
         "daily": ["weekly", "monthly"],
     },
 }
-
-
-
-def symbols_for_universe(universe: str) -> list[str]:
-    """
-    Map a universe name to a list of symbols from CSVs.
-    """
-    if universe == "shortlist_stocks":
-        p = CFG / "shortlist_stocks.csv"
-        return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
-
-    if universe == "shortlist_futures":
-        p = CFG / "shortlist_futures.csv"
-        return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
-
-    if universe == "options_eligible":
-        p = ROOT / "ref" / "options_eligible.csv"
-        return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
-
-    # Future: ETF universes, etc.
-    return []
 
 
 def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
