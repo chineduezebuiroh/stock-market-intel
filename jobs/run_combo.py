@@ -264,11 +264,9 @@ def evaluate_stocks_shortlist_signal(
     # Block 1: Trend / Regime (upper + middle)
     # ======================================================
     # Upper regime bias: aligned bullish vs bearish
-    if (up_wyckoff != np.nan and (up_wyckoff > 0 or up_exh_abs > 0)
-            ) or 
-        (up_wyckoff == np.nan and (md_wyckoff > 0 or md_exh_abs > 0)
-            ):
-            long_score += 1.0
+    if (up_wyckoff != np.nan and (up_wyckoff > 0 or up_exh_abs > 0)) or
+        (up_wyckoff == np.nan and (md_wyckoff > 0 or md_exh_abs > 0)):
+        long_score += 1.0
     if (up_wyckoff != np.nan and (up_wyckoff < 0 or up_exh_abs < 0)
             ) or 
         (up_wyckoff == np.nan and (md_wyckoff < 0 or md_exh_abs < 0)
