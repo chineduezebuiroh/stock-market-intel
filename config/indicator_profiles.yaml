@@ -8,16 +8,13 @@ profiles:
     - ma_trend_cloud
     - macdv_core
     - ttm_squeeze_pro
-    - entry_signal
 
   middle_core_v1:
     - wyckoff_stage
     - exh_abs_pa_prior_bar
     - significant_volume
     - spy_qqq_vol_ma_ratio
-    - entry_signal
 
   upper_core_v1:
     - wyckoff_stage
     - exh_abs_pa_prior_bar
-    - entry_signal
