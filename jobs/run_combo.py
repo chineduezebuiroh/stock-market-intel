@@ -422,7 +422,9 @@ def run(namespace: str, combo_name: str):
     combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
 
     # 3) Save as before
-    out = DATA / f"combo_{namespace}_{combo_name}.parquet"
+    # Old convention: "combo_" + combo_name
+    out = DATA / f"combo_{combo_name}.parquet"
+
     combo_df.to_parquet(out)
     print(f"[OK] Wrote combo snapshot to {out}")
 
