@@ -294,7 +294,7 @@ def _resample_monthly_to_yearly(df: pd.DataFrame) -> pd.DataFrame:
         "volume": "sum",
     }
 
-    out = df[cols].resample("A").agg(agg)  # year-end frequency
+    out = df[cols].resample("YE").agg(agg)  # year-end frequency
     # Drop all-NaN rows (just in case)
     out = out.dropna(how="all")
 
