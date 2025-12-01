@@ -448,7 +448,7 @@ def run(namespace: str, combo_name: str):
     hist_dir = DATA / "combo_history" / namespace / combo_name
     hist_dir.mkdir(parents=True, exist_ok=True)
 
-    hist_path = hist_dir / f"combo_{namespace}_{combo_name}_asof={ts}.parquet"
+    hist_path = hist_dir / f"combo_{combo_name}_asof={ts}.parquet"
     combo_df.to_parquet(hist_path)
     print(f"[OK] Wrote combo history snapshot to {hist_path}")
 
