@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 import pandas as pd
 import yaml
 import numpy as np
+from datetime import datetime
 
 from etl.window import parquet_path
 
@@ -436,7 +437,20 @@ def run(namespace: str, combo_name: str):
     combo_df.to_parquet(out)
     print(f"[OK] Wrote combo snapshot to {out}")
 
+    # ------------------------------------------------------------------
+    # Also write a dated history snapshot for this combo run.
+    # This gives us point-in-time scores (DWM, WMQ, intraday, futures, etc.)
+    # without changing how the "current" file is used by the dashboard.
+    # ------------------------------------------------------------------
+    # Use UTC timestamp in a file-name-safe format (no ":" characters)
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
 
+    hist_dir = DATA / "combo_history" / namespace / combo_name
+    hist_dir.mkdir(parents=True, exist_ok=True)
+
+    hist_path = hist_dir / f"combo_{namespace}_{combo_name}_asof={ts}.parquet"
+    combo_df.to_parquet(hist_path)
+    print(f"[OK] Wrote combo history snapshot to {hist_path}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
