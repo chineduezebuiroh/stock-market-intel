@@ -136,6 +136,7 @@ tab_daily, tab_weekly, tab_monthly, tab_dwm = st.tabs(
         "Stocks – Weekly",
         "Stocks – Monthly",
         "Stocks – D/W/M (Combos)",
+        "Stocks – W/M/Q (Combos)",
     ]
 )
 
@@ -170,6 +171,7 @@ with tab_monthly:
         st.dataframe(df)
     else:
         st.info("Monthly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
+
 
 with tab_dwm:
     st.subheader("Stocks – D/W/M Multi-Timeframe Combos")
@@ -268,3 +270,102 @@ with tab_dwm:
         st.dataframe(df_opts[existing_cols_opts])
     else:
         st.info("Options D/W/M combo not found. Run jobs/run_combo.py stocks stocks_c_dwm_all")
+
+
+with tab_wmq:
+    st.subheader("Stocks – W/M/Q Multi-Timeframe Combos")
+
+    # Shared signal filter for both WMQ tables
+    wmq_signal_filter = st.radio(
+        "Filter by signal:",
+        options=["all", "long", "short", "watch"],
+        index=0,
+        horizontal=True,
+        key="wmq_signal_filter",
+    )
+
+    # ---------- WMQ Shortlist ----------
+    st.markdown("### Shortlist universe (W/M/Q combo)")
+    p_wmq_short = DATA / "combo_stocks_c_wmq_shortlist.parquet"
+    if p_wmq_short.exists():
+        df_wmq_short = pd.read_parquet(p_wmq_short)
+
+        # Apply signal filter
+        if "signal" in df_wmq_short.columns and wmq_signal_filter != "all":
+            df_wmq_short = df_wmq_short[df_wmq_short["signal"] == wmq_signal_filter]
+
+        # Sort by scores
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_wmq_short.columns):
+            df_wmq_short = df_wmq_short.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        # Choose key columns to display
+        wmq_cols_short = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
+        ]
+        wmq_existing_short = [c for c in wmq_cols_short if c in df_wmq_short.columns]
+        st.dataframe(df_wmq_short[wmq_existing_short])
+    else:
+        st.info("WMQ shortlist combo not found. Run jobs/run_combo.py stocks stocks_c_wmq_shortlist")
+
+    st.markdown("---")
+
+    # ---------- WMQ Options-eligible ----------
+    st.markdown("### Options-eligible universe (W/M/Q combo)")
+    p_wmq_all = DATA / "combo_stocks_c_wmq_all.parquet"
+    if p_wmq_all.exists():
+        df_wmq_all = pd.read_parquet(p_wmq_all)
+
+        # Apply signal filter
+        if "signal" in df_wmq_all.columns and wmq_signal_filter != "all":
+            df_wmq_all = df_wmq_all[df_wmq_all["signal"] == wmq_signal_filter]
+
+        # Sort by scores
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_wmq_all.columns):
+            df_wmq_all = df_wmq_all.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        wmq_cols_all = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
+        ]
+        wmq_existing_all = [c for c in wmq_cols_all if c in df_wmq_all.columns]
+        st.dataframe(df_wmq_all[wmq_existing_all])
+    else:
+        st.info("WMQ options combo not found. Run jobs/run_combo.py stocks stocks_c_wmq_all")
+
