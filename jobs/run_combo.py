@@ -386,30 +386,6 @@ def basic_signal_logic(
 
 
 """
-def run_combo(namespace: str, combo_name: str):
-    with open(MTF_CFG_PATH, "r") as f:
-        cfg = yaml.safe_load(f)
-
-    df = build_combo_df(namespace, combo_name, cfg)
-    if df.empty:
-        print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
-        return
-
-    out = basic_signal_logic(df)
-    out = out.reset_index()  # restore `symbol` column
-
-    # ---- FIX REDUNDANT FILENAME ----
-    clean_name = combo_name
-    prefix = f"{namespace}_"
-    if combo_name.startswith(prefix):
-        clean_name = combo_name[len(prefix):]
-
-    out_path = DATA / f"combo_{namespace}_{clean_name}.parquet"
-    out.to_parquet(out_path)
-    print(f"[OK] Wrote combo snapshot to {out_path}")
-"""
-
-
 def run(namespace: str, combo_name: str):
     ns_cfg = MTF_CFG[namespace][combo_name]
 
@@ -425,6 +401,31 @@ def run(namespace: str, combo_name: str):
     out = DATA / f"combo_{namespace}_{combo_name}.parquet"
     combo_df.to_parquet(out)
     print(f"[OK] Wrote combo snapshot to {out}")
+"""
+
+
+def run(namespace: str, combo_name: str):
+    # Full multi-timeframe config (all combos for all namespaces)
+    global MTF_CFG
+
+    # Per-combo config (universe, lower_tf, middle_tf, upper_tf, etc.)
+    combo_cfg = MTF_CFG[namespace][combo_name]
+
+    # 1) Build combo rows (lower/middle/upper merged) using the FULL cfg
+    combo_df = build_combo_df(namespace, combo_name, MTF_CFG)
+
+    if combo_df is None or combo_df.empty:
+        print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
+        return
+
+    # 2) Apply multi-timeframe signal engine using the PER-COMBO cfg
+    combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
+
+    # 3) Save as before
+    out = DATA / f"combo_{namespace}_{combo_name}.parquet"
+    combo_df.to_parquet(out)
+    print(f"[OK] Wrote combo snapshot to {out}")
+
 
 
 if __name__ == "__main__":
