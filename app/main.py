@@ -130,15 +130,16 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 # -----------------------------------------------------------------------------
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
 
-tabs = st.tabs(
+tab_daily, tab_weekly, tab_monthly, tab_dwm = st.tabs(
     [
-        "Daily snapshot (stocks)",
-        "Weekly snapshot (stocks)",
-        "Monthly snapshot (stocks)",
-        "Stocks C: D/W/M Shortlist",
+        "Stocks – Daily",
+        "Stocks – Weekly",
+        "Stocks – Monthly",
+        "Stocks – D/W/M (Combos)",
     ]
 )
 
+"""
 with tabs[0]:
     render_snapshot_tab("stocks", "daily", "Stocks – Daily Snapshot")
 
@@ -147,6 +148,103 @@ with tabs[1]:
 
 with tabs[2]:
     render_snapshot_tab("stocks", "monthly", "Stocks – Monthly Snapshot")
+"""
 
+with tab_daily:
+    st.subheader("Stocks – Daily Snapshot")
+    p = DATA / "snapshot_stocks_daily.parquet"
+    if p.exists():
+        df = pd.read_parquet(p)
+        # optional: sort by symbol
+        df = df.sort_values("symbol")
+        st.dataframe(df)
+    else:
+        st.info("Daily snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
+
+with tab_weekly:
+    st.subheader("Stocks – Weekly Snapshot")
+    p = DATA / "snapshot_stocks_weekly.parquet"
+    if p.exists():
+        df = pd.read_parquet(p)
+        df = df.sort_values("symbol")
+        st.dataframe(df)
+    else:
+        st.info("Weekly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
+
+with tab_monthly:
+    st.subheader("Stocks – Monthly Snapshot")
+    p = DATA / "snapshot_stocks_monthly.parquet"
+    if p.exists():
+        df = pd.read_parquet(p)
+        df = df.sort_values("symbol")
+        st.dataframe(df)
+    else:
+        st.info("Monthly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
+
+"""
 with tabs[3]:
     render_combo_tab_stocks_c_dwm_shortlist()
+"""
+
+with tab_dwm:
+    st.subheader("Stocks – D/W/M Multi-Timeframe Combos")
+
+    # ---------- Shortlist D/W/M ----------
+    st.markdown("### Shortlist universe (D/W/M combo)")
+    p_shortlist = DATA / "combo_stocks_c_dwm_shortlist.parquet"
+    if p_shortlist.exists():
+        df_short = pd.read_parquet(p_shortlist)
+
+        # Example: sort by long score desc, then short score desc
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_short.columns):
+            df_short = df_short.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        # Show only the most relevant columns up front
+        cols_short = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_significant_volume",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+        ]
+        existing_cols_short = [c for c in cols_short if c in df_short.columns]
+        st.dataframe(df_short[existing_cols_short])
+    else:
+        st.info("Shortlist D/W/M combo not found. Run jobs/run_combo.py stocks stocks_c_dwm_shortlist")
+
+    st.markdown("---")
+
+    # ---------- Options-eligible D/W/M ----------
+    st.markdown("### Options-eligible universe (D/W/M combo)")
+    p_opts = DATA / "combo_stocks_c_dwm_all.parquet"
+    if p_opts.exists():
+        df_opts = pd.read_parquet(p_opts)
+
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_opts.columns):
+            df_opts = df_opts.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        cols_opts = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_significant_volume",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+        ]
+        existing_cols_opts = [c for c in cols_opts if c in df_opts.columns]
+        st.dataframe(df_opts[existing_cols_opts])
+    else:
+        st.info("Options D/W/M combo not found. Run jobs/run_combo.py stocks stocks_c_dwm_all")
