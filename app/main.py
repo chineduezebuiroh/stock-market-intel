@@ -130,7 +130,7 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 # -----------------------------------------------------------------------------
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
 
-tab_daily, tab_weekly, tab_monthly, tab_dwm = st.tabs(
+tab_daily, tab_weekly, tab_monthly, tab_dwm, tab_wmq = st.tabs(
     [
         "Stocks – Daily",
         "Stocks – Weekly",
