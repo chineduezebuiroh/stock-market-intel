@@ -257,8 +257,7 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
       - columns: open, high, low, close, adj_close, volume
       - NO MultiIndex columns
       - 130m buckets per trading day:
-          [09:30, 11:40), [11:40, 13:50), [13:50, 16:00]
-        (fewer if not enough data that day)
+          09:30, 11:40, 13:50, ... (as far as there is data)
     """
     import yfinance as yf
     import pandas as pd
@@ -272,7 +271,7 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
         interval="5m",
         period="60d",
         progress=False,
-        auto_adjust=False,  # keep close + adj close separate
+        auto_adjust=False,   # keep close + adj_close separate
         group_by="column",
     )
 
@@ -288,53 +287,49 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
 
     df.columns = [str(c).lower().replace(" ", "_") for c in cols]
 
-    # We only care about the price/volume columns for now
     keep = [c for c in ["open", "high", "low", "close", "adj_close", "volume"] if c in df.columns]
     df = df[keep]
 
-    # If no adj_close, mirror close (intraday sometimes behaves oddly)
     if "adj_close" not in df.columns:
         df["adj_close"] = df["close"]
 
     # ------------------------------------------------------------------
-    # 3) Timezone handling + regular session filter
+    # 3) Timezone + regular session filter
     # ------------------------------------------------------------------
     df = df.tz_convert("America/New_York")
 
     if session == "regular":
+        # Only keep 09:30–16:00 local time
         df = df.between_time("09:30", "16:00")
 
     if df.empty:
         return pd.DataFrame()
 
     # ------------------------------------------------------------------
-    # 4) Build 130m bars per-day explicitly
+    # 4) Build 130m bars explicitly, per day
     # ------------------------------------------------------------------
     frames = []
     tz = df.index.tz
 
-    # group by calendar date in NY time
     for day, day_df in df.groupby(df.index.date):
         day_df = day_df.sort_index()
 
-        # Anchor at 09:30 local for that day
+        # Anchor at 09:30 local
         anchor = pd.Timestamp(day).tz_localize(tz) + pd.Timedelta(hours=9, minutes=30)
 
-        # Minutes since 09:30; any small drift still maps into the right bucket
         minutes_since_open = (day_df.index - anchor).total_seconds() / 60.0
 
-        # We only want bars at/after 09:30
-        valid_mask = minutes_since_open >= 0
-        if not valid_mask.any():
+        # Only bars at/after 09:30
+        mask = minutes_since_open >= 0
+        if not mask.any():
             continue
 
-        day_df = day_df[valid_mask]
-        minutes_since_open = minutes_since_open[valid_mask]
+        day_df = day_df[mask]
+        minutes_since_open = minutes_since_open[mask]
 
-        # Bucket index: 0,1,2,... for each 130-minute chunk
+        # 0,1,2,... bucket ids for each 130m chunk
         bucket = (minutes_since_open // 130).astype(int)
 
-        # Aggregate by bucket
         agg = day_df.groupby(bucket).agg(
             {
                 "open": "first",
@@ -346,11 +341,11 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
             }
         )
 
-        # Set index timestamps to anchor + 130min * bucket_id
+        # Map bucket id -> timestamp = 09:30 + 130m * bucket
         new_index = [anchor + pd.Timedelta(minutes=130 * int(k)) for k in agg.index]
         agg.index = pd.DatetimeIndex(new_index, tz=tz)
 
-        # Drop buckets with no real trading activity (volume 0 or NaN close)
+        # Drop empty bars (no trades)
         agg = agg.replace({"volume": {0: np.nan}})
         agg = agg.dropna(subset=["close", "volume"], how="any")
 
@@ -363,12 +358,17 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
     out = pd.concat(frames).sort_index()
 
     # ------------------------------------------------------------------
-    # 5) Normalize index & columns
+    # 5) Final normalization + safety filter
     # ------------------------------------------------------------------
     out.index = out.index.tz_localize(None)
     out.index.name = "date"
     out = out[["open", "high", "low", "close", "adj_close", "volume"]]
     out.columns = out.columns.astype(str)
+
+    # HARD GUARANTEE: no zero-volume or all-NaN rows
+    bad_mask = (out["volume"] <= 0) | out["close"].isna()
+    if bad_mask.any():
+        out = out[~bad_mask]
 
     return out
 
