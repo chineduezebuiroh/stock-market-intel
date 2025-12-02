@@ -247,32 +247,17 @@ def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     out.columns = ['open', 'high', 'low', 'close', 'volume']
     return out.dropna()
 
-"""
-def load_130m_from_5m(ticker: str, session: str = 'regular') -> pd.DataFrame:
-    df5 = load_intraday_yf(ticker, interval='5m', period='30d', session=session)
-    if df5.empty:
-        return df5
-    
-    # Remove timezone if present
-    if getattr(df5.index, 'tz', None) is not None:
-        #df5 = df5.tz_localize(None)
-        df5.index = df5.index.tz_convert("America/New_York").tz_localize(None)
-        
 
-    out = resample_ohlcv(df5, '130T')
-    out = _sanitize_eod_df(out) # <-- New line added
-    return out
 """
-
 def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
-    """
-    Build 130-minute bars from 5-minute Yahoo data.
+    
+    #Build 130-minute bars from 5-minute Yahoo data.
 
-    Invariants:
-      - index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
-      - columns: open, high, low, close, adj_close, volume
-      - NO MultiIndex columns
-    """
+    #Invariants:
+      #- index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
+      #- columns: open, high, low, close, adj_close, volume
+      #- NO MultiIndex columns
+    
     import yfinance as yf
 
     df = yf.download(
@@ -342,7 +327,82 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
     out.columns = out.columns.astype(str)
 
     return out
+"""
 
+def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
+    """
+    Build 130-minute bars from 5-minute Yahoo data.
+
+    Invariants:
+      - index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
+      - columns: open, high, low, close, adj_close, volume
+      - NO MultiIndex columns
+    """
+    import yfinance as yf
+
+    df = yf.download(
+        symbol,
+        interval="5m",
+        period="60d",       # or whatever window you prefer
+        progress=False,
+        auto_adjust=False,  # avoid future default-change warning
+        group_by="column",  # helps keep columns flat for single ticker
+    )
+
+    # If nothing came back, bail early
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Flatten any MultiIndex columns (yfinance can return ('Open',) etc.)
+    # ------------------------------------------------------------------
+    cols = df.columns
+    if isinstance(cols, pd.MultiIndex):
+        # For a single symbol, level 0 is usually 'Open','High',...
+        cols = cols.get_level_values(0)
+
+    df.columns = [str(c).lower().replace(" ", "_") for c in cols]
+
+    # ------------------------------------------------------------------
+    # Timezone handling + session filter
+    # ------------------------------------------------------------------
+    df = df.tz_convert("America/New_York")
+
+    if session == "regular":
+        # Regular trading hours
+        df = df.between_time("09:30", "16:00")
+
+    # ------------------------------------------------------------------
+    # Resample 5m -> 130m
+    # ------------------------------------------------------------------
+    rule = "130min"
+
+    o = df["open"].resample(rule).first()
+    h = df["high"].resample(rule).max()
+    l = df["low"].resample(rule).min()
+    c = df["close"].resample(rule).last()
+    v = df["volume"].resample(rule).sum()
+
+    # Adj close: if present, resample; otherwise mirror close
+    if "adj_close" in df.columns:
+        ac = df["adj_close"].resample(rule).last()
+    else:
+        ac = c
+
+    out = pd.concat([o, h, l, c, ac, v], axis=1)
+    out.columns = ["open", "high", "low", "close", "adj_close", "volume"]
+
+    # Drop rows that are completely empty (e.g., incomplete first bucket)
+    out = out.dropna(how="all")
+
+    # Normalize index to tz-naive NY time
+    out.index = out.index.tz_localize(None)
+    out.index.name = "date"
+
+    # Ensure plain string columns
+    out.columns = out.columns.astype(str)
+
+    return out
 
 
 
