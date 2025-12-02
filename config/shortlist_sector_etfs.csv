@@ -1,44 +1,44 @@
-symbol
+symbol,name
 
-IGV
-QQQ
-SMH
-CIBR
-XLK
+IGV,iShares Expanded Tech-Software Sector ETF
+QQQ,Invesco QQQ Trust
+SMH,VanEck Semiconductor ETF
+CIBR,First Trust NASDAQ Cybersecurity ETF
+XLK,Technology Select Sector SPDR Fund
 
-RSPD
-ITB
-XRT
-IBUY
-PEJ
-XLY
+RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF
+ITB,iShares U.S. Home Construction ETF
+XRT,SPDR S&P Retail ETF
+IBUY,Amplify Online Retail ETF
+PEJ,Invesco Dynamic Leisure & Entertainment ETF
+XLY,Consumer Discretionary Select Sector SPDR Fund
 
-USO
-UNG
-XOP
-XLE
+USO,United States Oil Fund
+UNG,United States Natural Gas Fund
+XOP,SPDR S&P Oil & Gas Exploration & Production ETF
+XLE,Energy Select Sector SPDR Fund
 
-IYT
-ITA
-XLI
+IYT,iShares U.S. Transportation ETF
+ITA,iShares U.S. Aerospace & Defense ETF
+XLI,Industrial Select Sector SPDR Fund
 
-KBWB
-KCE
-KIE
-XLF
+KBWB,Invesco KBW Bank ETF
+KCE,SPDR S&P Capital Markets ETF
+KIE,SPDR S&P Insurance ETF
+XLF,Financial Select Sector SPDR Fund
 
-IHE
-IBB
-XLV
+IHE,iShares U.S. Pharmaceuticals ETF
+IBB,iShares Biotechnology ETF
+XLV,Health Care Select Sector SPDR Fund
 
-XLP
-XLC
-XLRE
+XLP,Consumer Staples Select Sector SPDR Fund
+XLC,Communication Services Select Sector SPDR Fund
+XLRE,Real Estate Select Sector SPDR Fund
 
-XLB
-GLD
+XLB,Materials Select Sector SPDR Fund
+GLD,SPDR Gold Shares
 
-XLU
+XLU,Utilities Select Sector SPDR Fund
 
-SPY
-IWM
+SPY,SPDR S&P 500 ETF Trust
+IWM,iShares Russell 2000 ETF
