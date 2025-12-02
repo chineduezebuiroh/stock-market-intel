@@ -175,9 +175,13 @@ def build_symbol_to_etf_map(
         rows.append(
             {
                 "symbol": sym,
+                "sector": sector,
+                "industry": industry,
                 "etf_symbol": chosen_etf,
                 "industry_score": best_industry_score,
+                "industry_etf": best_industry_etf,
                 "sector_score": best_sector_score,
+                "sector_etf": best_sector_etf,
                 "chosen_by": chosen_by,
             }
         )
