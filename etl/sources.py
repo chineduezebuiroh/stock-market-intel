@@ -263,86 +263,6 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
     df = yf.download(
         symbol,
         interval="5m",
-        period="60d",       # or whatever you chose
-        progress=False,
-        auto_adjust=False,  # avoid future default-change warning
-    )
-
-    if df is None or df.empty:
-        return pd.DataFrame()
-
-    # Standardize column names
-    df.columns = [c.lower().replace(" ", "_") for c in df.columns]
-
-    # Convert to NYC and filter regular session if you do that elsewhere
-    df = df.tz_convert("America/New_York")
-
-    if session == "regular":
-        df = df.between_time("09:30", "16:00")
-
-    # Resample 5m -> 130m. Use "min" instead of deprecated "T".
-    rule = "130min"
-
-    o = df["open"].resample(rule).first()
-    h = df["high"].resample(rule).max()
-    l = df["low"].resample(rule).min()
-    c = df["close"].resample(rule).last()
-    v = df["volume"].resample(rule).sum()
-
-    # Adj close: if Yahoo gave us an adj_close/adj_close column, resample it;
-    # otherwise just mirror close (for intraday, that's usually fine).
-    if "adj_close" in df.columns:
-        ac = df["adj_close"].resample(rule).last()
-    elif "adj_close" in df.columns:
-        ac = df["adj_close"].resample(rule).last()
-    elif "adj_close" in df.columns:
-        # (defensive; depending on exact name from yfinance version)
-        ac = df["adj_close"].resample(rule).last()
-    elif "adj_close" in df.columns:
-        ac = df["adj_close"].resample(rule).last()
-    elif "adj_close" in df.columns:
-        ac = df["adj_close"].resample(rule).last()
-    else:
-        ac = c
-
-    out = pd.DataFrame(
-        {
-            "open": o,
-            "high": h,
-            "low": l,
-            "close": c,
-            "adj_close": ac,
-            "volume": v,
-        }
-    )
-
-    # Drop rows that are completely empty (e.g., incomplete first bucket)
-    out = out.dropna(how="all")
-
-    # Normalize index to tz-naive NY time
-    out.index = out.index.tz_localize(None)
-    out.index.name = "date"
-
-    # Ensure plain string columns
-    out.columns = out.columns.astype(str)
-
-    return out
-"""
-
-def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
-    """
-    Build 130-minute bars from 5-minute Yahoo data.
-
-    Invariants:
-      - index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
-      - columns: open, high, low, close, adj_close, volume
-      - NO MultiIndex columns
-    """
-    import yfinance as yf
-
-    df = yf.download(
-        symbol,
-        interval="5m",
         period="60d",       # or whatever window you prefer
         progress=False,
         auto_adjust=False,  # avoid future default-change warning
@@ -403,6 +323,95 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
     out.columns = out.columns.astype(str)
 
     return out
+"""
+
+
+def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
+    """
+    Build 130-minute bars from 5-minute Yahoo data.
+
+    Invariants:
+      - index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
+      - columns: open, high, low, close, adj_close, volume
+      - NO MultiIndex columns
+      - 130m bars anchored at 09:30 America/New_York
+    """
+    import yfinance as yf
+
+    df = yf.download(
+        symbol,
+        interval="5m",
+        period="60d",
+        progress=False,
+        auto_adjust=False,  # keep close + adj close separate
+        group_by="column",
+    )
+
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Flatten any MultiIndex columns
+    # ------------------------------------------------------------------
+    cols = df.columns
+    if isinstance(cols, pd.MultiIndex):
+        cols = cols.get_level_values(0)
+
+    df.columns = [str(c).lower().replace(" ", "_") for c in cols]
+
+    # ------------------------------------------------------------------
+    # Timezone handling + session filter
+    # ------------------------------------------------------------------
+    df = df.tz_convert("America/New_York")
+
+    if session == "regular":
+        df = df.between_time("09:30", "16:00")
+
+    if df.empty:
+        return pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Resample 5m -> 130m with clean 09:30 anchoring
+    # ------------------------------------------------------------------
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum",
+    }
+
+    has_adj = "adj_close" in df.columns
+    if has_adj:
+        agg["adj_close"] = "last"
+
+    resampled = df.resample(
+        "130min",
+        origin="start_day",
+        offset="9h30min",
+        label="left",
+        closed="left",
+    ).agg(agg)
+
+    if resampled.empty:
+        return pd.DataFrame()
+
+    # If no adj_close from Yahoo, mirror close
+    if not has_adj:
+        resampled["adj_close"] = resampled["close"]
+
+    # Enforce column order and drop any rows that are all-NaN
+    resampled = resampled[["open", "high", "low", "close", "adj_close", "volume"]]
+    resampled = resampled.dropna(how="all")
+
+    # Normalize index to tz-naive NY time
+    resampled.index = resampled.index.tz_localize(None)
+    resampled.index.name = "date"
+
+    # Ensure plain string columns
+    resampled.columns = resampled.columns.astype(str)
+
+    return resampled
 
 
 
