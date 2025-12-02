@@ -175,22 +175,6 @@ with tab_monthly:
         st.info("Monthly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 with tab_130mdw:
     st.subheader("Stocks – W/M/Q Multi-Timeframe Combos")
 
@@ -246,48 +230,7 @@ with tab_130mdw:
         st.info("130mDW shortlist combo not found. Run jobs/run_combo.py stocks stocks_d_130mdw_shortlist")
 
     st.markdown("---")
-    """
-    # ---------- WMQ Options-eligible ----------
-    st.markdown("### Options-eligible universe (W/M/Q combo)")
-    p_wmq_all = DATA / "combo_stocks_b_wmq_all.parquet"
-    if p_wmq_all.exists():
-        df_wmq_all = pd.read_parquet(p_wmq_all)
-
-        # Apply signal filter
-        if "signal" in df_wmq_all.columns and wmq_signal_filter != "all":
-            df_wmq_all = df_wmq_all[df_wmq_all["signal"] == wmq_signal_filter]
-
-        # Sort by scores
-        if {"mtf_long_score", "mtf_short_score"}.issubset(df_wmq_all.columns):
-            df_wmq_all = df_wmq_all.sort_values(
-                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
-            )
-
-        wmq_cols_all = [
-            "symbol",
-            "signal",
-            "mtf_long_score",
-            "mtf_short_score",
-            "lower_wyckoff_stage",
-            "lower_exh_abs_pa_current_bar",
-            "lower_exh_abs_pa_prior_bar",
-            "lower_significant_volume",
-            "lower_spy_qqq_vol_ma_ratio",
-            "lower_ma_trend_cloud",
-            "lower_macdv_core",
-            "lower_ttm_squeeze_pro",
-            "middle_wyckoff_stage",
-            "middle_exh_abs_pa_prior_bar",
-            "middle_significant_volume",
-            "middle_spy_qqq_vol_ma_ratio",
-            "upper_wyckoff_stage",
-            "upper_exh_abs_pa_prior_bar",
-        ]
-        wmq_existing_all = [c for c in wmq_cols_all if c in df_wmq_all.columns]
-        st.dataframe(df_wmq_all[wmq_existing_all])
-    else:
-        st.info("WMQ options combo not found. Run jobs/run_combo.py stocks stocks_c_wmq_all")
-    """
+    
 
 with tab_dwm:
     st.subheader("Stocks – D/W/M Multi-Timeframe Combos")
