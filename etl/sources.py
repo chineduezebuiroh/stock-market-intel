@@ -248,96 +248,25 @@ def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     return out.dropna()
 
 
-"""
-def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
-    
-    #Build 130-minute bars from 5-minute Yahoo data.
-
-    #Invariants:
-      #- index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
-      #- columns: open, high, low, close, adj_close, volume
-      #- NO MultiIndex columns
-    
-    import yfinance as yf
-
-    df = yf.download(
-        symbol,
-        interval="5m",
-        period="60d",       # or whatever window you prefer
-        progress=False,
-        auto_adjust=False,  # avoid future default-change warning
-        group_by="column",  # helps keep columns flat for single ticker
-    )
-
-    # If nothing came back, bail early
-    if df is None or df.empty:
-        return pd.DataFrame()
-
-    # ------------------------------------------------------------------
-    # Flatten any MultiIndex columns (yfinance can return ('Open',) etc.)
-    # ------------------------------------------------------------------
-    cols = df.columns
-    if isinstance(cols, pd.MultiIndex):
-        # For a single symbol, level 0 is usually 'Open','High',...
-        cols = cols.get_level_values(0)
-
-    df.columns = [str(c).lower().replace(" ", "_") for c in cols]
-
-    # ------------------------------------------------------------------
-    # Timezone handling + session filter
-    # ------------------------------------------------------------------
-    df = df.tz_convert("America/New_York")
-
-    if session == "regular":
-        # Regular trading hours
-        df = df.between_time("09:30", "16:00")
-
-    # ------------------------------------------------------------------
-    # Resample 5m -> 130m
-    # ------------------------------------------------------------------
-    rule = "130min"
-
-    o = df["open"].resample(rule).first()
-    h = df["high"].resample(rule).max()
-    l = df["low"].resample(rule).min()
-    c = df["close"].resample(rule).last()
-    v = df["volume"].resample(rule).sum()
-
-    # Adj close: if present, resample; otherwise mirror close
-    if "adj_close" in df.columns:
-        ac = df["adj_close"].resample(rule).last()
-    else:
-        ac = c
-
-    out = pd.concat([o, h, l, c, ac, v], axis=1)
-    out.columns = ["open", "high", "low", "close", "adj_close", "volume"]
-
-    # Drop rows that are completely empty (e.g., incomplete first bucket)
-    out = out.dropna(how="all")
-
-    # Normalize index to tz-naive NY time
-    out.index = out.index.tz_localize(None)
-    out.index.name = "date"
-
-    # Ensure plain string columns
-    out.columns = out.columns.astype(str)
-
-    return out
-"""
-
-
 def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
     """
-    Build 130-minute bars from 5-minute Yahoo data.
+    Build 130-minute bars from 5-minute Yahoo data, anchored at 09:30 ET.
 
     Invariants:
-      - index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
+      - Yahoo tz-aware UTC -> converted to America/New_York -> tz-naive
       - columns: open, high, low, close, adj_close, volume
       - NO MultiIndex columns
-      - 130m bars anchored at 09:30 America/New_York
+      - 130m buckets per trading day:
+          [09:30, 11:40), [11:40, 13:50), [13:50, 16:00]
+        (fewer if not enough data that day)
     """
     import yfinance as yf
+    import pandas as pd
+    import numpy as np
 
+    # ------------------------------------------------------------------
+    # 1) Download raw 5m bars
+    # ------------------------------------------------------------------
     df = yf.download(
         symbol,
         interval="5m",
@@ -351,7 +280,7 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
         return pd.DataFrame()
 
     # ------------------------------------------------------------------
-    # Flatten any MultiIndex columns
+    # 2) Flatten any MultiIndex columns
     # ------------------------------------------------------------------
     cols = df.columns
     if isinstance(cols, pd.MultiIndex):
@@ -359,8 +288,16 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
 
     df.columns = [str(c).lower().replace(" ", "_") for c in cols]
 
+    # We only care about the price/volume columns for now
+    keep = [c for c in ["open", "high", "low", "close", "adj_close", "volume"] if c in df.columns]
+    df = df[keep]
+
+    # If no adj_close, mirror close (intraday sometimes behaves oddly)
+    if "adj_close" not in df.columns:
+        df["adj_close"] = df["close"]
+
     # ------------------------------------------------------------------
-    # Timezone handling + session filter
+    # 3) Timezone handling + regular session filter
     # ------------------------------------------------------------------
     df = df.tz_convert("America/New_York")
 
@@ -371,47 +308,69 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
         return pd.DataFrame()
 
     # ------------------------------------------------------------------
-    # Resample 5m -> 130m with clean 09:30 anchoring
+    # 4) Build 130m bars per-day explicitly
     # ------------------------------------------------------------------
-    agg = {
-        "open": "first",
-        "high": "max",
-        "low": "min",
-        "close": "last",
-        "volume": "sum",
-    }
+    frames = []
+    tz = df.index.tz
 
-    has_adj = "adj_close" in df.columns
-    if has_adj:
-        agg["adj_close"] = "last"
+    # group by calendar date in NY time
+    for day, day_df in df.groupby(df.index.date):
+        day_df = day_df.sort_index()
 
-    resampled = df.resample(
-        "130min",
-        origin="start_day",
-        offset="9h30min",
-        label="left",
-        closed="left",
-    ).agg(agg)
+        # Anchor at 09:30 local for that day
+        anchor = pd.Timestamp(day).tz_localize(tz) + pd.Timedelta(hours=9, minutes=30)
 
-    if resampled.empty:
+        # Minutes since 09:30; any small drift still maps into the right bucket
+        minutes_since_open = (day_df.index - anchor).total_seconds() / 60.0
+
+        # We only want bars at/after 09:30
+        valid_mask = minutes_since_open >= 0
+        if not valid_mask.any():
+            continue
+
+        day_df = day_df[valid_mask]
+        minutes_since_open = minutes_since_open[valid_mask]
+
+        # Bucket index: 0,1,2,... for each 130-minute chunk
+        bucket = (minutes_since_open // 130).astype(int)
+
+        # Aggregate by bucket
+        agg = day_df.groupby(bucket).agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "adj_close": "last",
+                "volume": "sum",
+            }
+        )
+
+        # Set index timestamps to anchor + 130min * bucket_id
+        new_index = [anchor + pd.Timedelta(minutes=130 * int(k)) for k in agg.index]
+        agg.index = pd.DatetimeIndex(new_index, tz=tz)
+
+        # Drop buckets with no real trading activity (volume 0 or NaN close)
+        agg = agg.replace({"volume": {0: np.nan}})
+        agg = agg.dropna(subset=["close", "volume"], how="any")
+
+        if not agg.empty:
+            frames.append(agg)
+
+    if not frames:
         return pd.DataFrame()
 
-    # If no adj_close from Yahoo, mirror close
-    if not has_adj:
-        resampled["adj_close"] = resampled["close"]
+    out = pd.concat(frames).sort_index()
 
-    # Enforce column order and drop any rows that are all-NaN
-    resampled = resampled[["open", "high", "low", "close", "adj_close", "volume"]]
-    resampled = resampled.dropna(how="all")
+    # ------------------------------------------------------------------
+    # 5) Normalize index & columns
+    # ------------------------------------------------------------------
+    out.index = out.index.tz_localize(None)
+    out.index.name = "date"
+    out = out[["open", "high", "low", "close", "adj_close", "volume"]]
+    out.columns = out.columns.astype(str)
 
-    # Normalize index to tz-naive NY time
-    resampled.index = resampled.index.tz_localize(None)
-    resampled.index.name = "date"
-
-    # Ensure plain string columns
-    resampled.columns = resampled.columns.astype(str)
-
-    return resampled
+    return out
 
 
 
