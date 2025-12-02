@@ -130,11 +130,12 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 # -----------------------------------------------------------------------------
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
 
-tab_daily, tab_weekly, tab_monthly, tab_dwm, tab_wmq, tab_mqy = st.tabs(
+tab_daily, tab_weekly, tab_monthly, tab_130mdw, tab_dwm, tab_wmq, tab_mqy = st.tabs(
     [
         "Stocks – Daily",
         "Stocks – Weekly",
         "Stocks – Monthly",
+        "Stocks – 130m/D/W (Combos)",
         "Stocks – D/W/M (Combos)",
         "Stocks – W/M/Q (Combos)",
         "Stocks – M/Q/Y (Combos)",
@@ -173,6 +174,120 @@ with tab_monthly:
     else:
         st.info("Monthly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+with tab_130mdw:
+    st.subheader("Stocks – W/M/Q Multi-Timeframe Combos")
+
+    # Shared signal filter for both 130mDW tables
+    intra130mdw_signal_filter = st.radio(
+        "Filter by signal:",
+        options=["all", "long", "short", "watch"],
+        index=0,
+        horizontal=True,
+        key="intra130mdw_signal_filter",
+    )
+
+    # ---------- 130mDW Shortlist ----------
+    st.markdown("### Shortlist universe (W/M/Q combo)")
+    p_intra130mdw_short = DATA / "combo_stocks_d_130mdw_shortlist.parquet"
+    if p_intra130mdw_short.exists():
+        df_intra130mdw_short = pd.read_parquet(p_intra130mdw_short)
+
+        # Apply signal filter
+        if "signal" in df_intra130mdw_short.columns and intra130mdw_signal_filter != "all":
+            df_intra130mdw_short = df_intra130mdw_short[df_intra130mdw_short["signal"] == intra130mdw_signal_filter]
+
+        # Sort by scores
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_intra130mdw_short.columns):
+            df_intra130mdw_short = df_intra130mdw_short.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        # Choose key columns to display
+        intra130mdw_cols_short = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
+        ]
+        intra130mdw_existing_short = [c for c in intra130mdw_cols_short if c in df_intra130mdw_short.columns]
+        st.dataframe(df_intra130mdw_short[intra130mdw_existing_short])
+    else:
+        st.info("130mDW shortlist combo not found. Run jobs/run_combo.py stocks stocks_d_130mdw_shortlist")
+
+    st.markdown("---")
+    """
+    # ---------- WMQ Options-eligible ----------
+    st.markdown("### Options-eligible universe (W/M/Q combo)")
+    p_wmq_all = DATA / "combo_stocks_b_wmq_all.parquet"
+    if p_wmq_all.exists():
+        df_wmq_all = pd.read_parquet(p_wmq_all)
+
+        # Apply signal filter
+        if "signal" in df_wmq_all.columns and wmq_signal_filter != "all":
+            df_wmq_all = df_wmq_all[df_wmq_all["signal"] == wmq_signal_filter]
+
+        # Sort by scores
+        if {"mtf_long_score", "mtf_short_score"}.issubset(df_wmq_all.columns):
+            df_wmq_all = df_wmq_all.sort_values(
+                ["mtf_long_score", "mtf_short_score"], ascending=[False, False]
+            )
+
+        wmq_cols_all = [
+            "symbol",
+            "signal",
+            "mtf_long_score",
+            "mtf_short_score",
+            "lower_wyckoff_stage",
+            "lower_exh_abs_pa_current_bar",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_significant_volume",
+            "lower_spy_qqq_vol_ma_ratio",
+            "lower_ma_trend_cloud",
+            "lower_macdv_core",
+            "lower_ttm_squeeze_pro",
+            "middle_wyckoff_stage",
+            "middle_exh_abs_pa_prior_bar",
+            "middle_significant_volume",
+            "middle_spy_qqq_vol_ma_ratio",
+            "upper_wyckoff_stage",
+            "upper_exh_abs_pa_prior_bar",
+        ]
+        wmq_existing_all = [c for c in wmq_cols_all if c in df_wmq_all.columns]
+        st.dataframe(df_wmq_all[wmq_existing_all])
+    else:
+        st.info("WMQ options combo not found. Run jobs/run_combo.py stocks stocks_c_wmq_all")
+    """
 
 with tab_dwm:
     st.subheader("Stocks – D/W/M Multi-Timeframe Combos")
