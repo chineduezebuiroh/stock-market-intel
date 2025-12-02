@@ -247,6 +247,7 @@ def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     out.columns = ['open', 'high', 'low', 'close', 'volume']
     return out.dropna()
 
+"""
 def load_130m_from_5m(ticker: str, session: str = 'regular') -> pd.DataFrame:
     df5 = load_intraday_yf(ticker, interval='5m', period='30d', session=session)
     if df5.empty:
@@ -261,6 +262,88 @@ def load_130m_from_5m(ticker: str, session: str = 'regular') -> pd.DataFrame:
     out = resample_ohlcv(df5, '130T')
     out = _sanitize_eod_df(out) # <-- New line added
     return out
+"""
+
+def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
+    """
+    Build 130-minute bars from 5-minute Yahoo data.
+
+    Invariants:
+      - index tz-aware UTC from Yahoo -> converted to America/New_York -> tz-naive
+      - columns: open, high, low, close, adj_close, volume
+      - NO MultiIndex columns
+    """
+    import yfinance as yf
+
+    df = yf.download(
+        symbol,
+        interval="5m",
+        period="60d",       # or whatever you chose
+        progress=False,
+        auto_adjust=False,  # avoid future default-change warning
+    )
+
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    # Standardize column names
+    df.columns = [c.lower().replace(" ", "_") for c in df.columns]
+
+    # Convert to NYC and filter regular session if you do that elsewhere
+    df = df.tz_convert("America/New_York")
+
+    if session == "regular":
+        df = df.between_time("09:30", "16:00")
+
+    # Resample 5m -> 130m. Use "min" instead of deprecated "T".
+    rule = "130min"
+
+    o = df["open"].resample(rule).first()
+    h = df["high"].resample(rule).max()
+    l = df["low"].resample(rule).min()
+    c = df["close"].resample(rule).last()
+    v = df["volume"].resample(rule).sum()
+
+    # Adj close: if Yahoo gave us an adj_close/adj_close column, resample it;
+    # otherwise just mirror close (for intraday, that's usually fine).
+    if "adj_close" in df.columns:
+        ac = df["adj_close"].resample(rule).last()
+    elif "adj_close" in df.columns:
+        ac = df["adj_close"].resample(rule).last()
+    elif "adj_close" in df.columns:
+        # (defensive; depending on exact name from yfinance version)
+        ac = df["adj_close"].resample(rule).last()
+    elif "adj_close" in df.columns:
+        ac = df["adj_close"].resample(rule).last()
+    elif "adj_close" in df.columns:
+        ac = df["adj_close"].resample(rule).last()
+    else:
+        ac = c
+
+    out = pd.DataFrame(
+        {
+            "open": o,
+            "high": h,
+            "low": l,
+            "close": c,
+            "adj_close": ac,
+            "volume": v,
+        }
+    )
+
+    # Drop rows that are completely empty (e.g., incomplete first bucket)
+    out = out.dropna(how="all")
+
+    # Normalize index to tz-naive NY time
+    out.index = out.index.tz_localize(None)
+    out.index.name = "date"
+
+    # Ensure plain string columns
+    out.columns = out.columns.astype(str)
+
+    return out
+
+
 
 
 def _resample_monthly_to_yearly(df: pd.DataFrame) -> pd.DataFrame:
