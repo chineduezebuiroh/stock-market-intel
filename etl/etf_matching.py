@@ -16,11 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CFG = ROOT / "config"
 REF = ROOT / "ref"
 
-_token_re = re.compile(r"[A-Za-z0-9]+")
-
 # -----------------------------------------------------------
 # Tokenization + similarity
 # -----------------------------------------------------------
+
+_token_re = re.compile(r"[A-Za-z0-9]+")
 
 _STOPWORDS = {
     "etf",
@@ -44,17 +44,56 @@ _STOPWORDS = {
     "diversified",
 }
 
+# A few known exceptions where trailing "s" is *not* just a plural.
+_PLURAL_EXCEPTIONS = {
+    "ms", "us", "gas", "as", "is", "this", "yes"
+}
 
+
+def _normalize_token(tok: str) -> str:
+    """
+    Basic "singularization"/normalization:
+      - lowercase
+      - handle 'ies' -> 'y' (technologies -> technology)
+      - strip trailing 's' for simple plurals (industrials -> industrial)
+      - leave alone if very short or in exceptions set
+    """
+    tok = tok.lower()
+
+    if len(tok) <= 3:
+        return tok
+
+    if tok in _PLURAL_EXCEPTIONS:
+        return tok
+
+    # technologies -> technology, utilities -> utility
+    if tok.endswith("ies") and len(tok) > 4:
+        return tok[:-3] + "y"
+
+    # simple plural: industrials -> industrial, banks -> bank
+    if tok.endswith("s"):
+        return tok[:-1]
+
+    return tok
+    
 
 def _tokenize(text: str | None) -> set[str]:
-    """Very simple tokenizer: lowercase, strip punctuation, drop stopwords."""
+    """Tokenize with stopword removal + plural/inflection normalization."""
     if not isinstance(text, str) or not text:
         return set()
 
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", " ", text)  # non-alphanum -> space
-    tokens = [t for t in text.split() if t and t not in _STOPWORDS]
-    return set(tokens)
+    # Grab alphanumeric tokens
+    raw_tokens = _token_re.findall(text.lower())
+
+    tokens: set[str] = set()
+    for t in raw_tokens:
+        if not t or t in _STOPWORDS:
+            continue
+        norm = _normalize_token(t)
+        if norm and norm not in _STOPWORDS:
+            tokens.add(norm)
+
+    return tokens
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
@@ -105,7 +144,7 @@ class EtfInfo:
 # -----------------------------------------------------------
 # Public API
 # -----------------------------------------------------------
-
+"""
 def build_symbol_to_etf_map(
     stocks_meta: pd.DataFrame,
     etfs_df: pd.DataFrame,
@@ -114,7 +153,8 @@ def build_symbol_to_etf_map(
     sector_min_score: float = 0.50,
     default_etf: str = "SPY",
 ) -> pd.DataFrame:
-    """
+"""
+"""
     Build a stock -> ETF mapping based on fuzzy similarity between
     sector/industry strings and ETF names.
 
@@ -141,7 +181,8 @@ def build_symbol_to_etf_map(
           'sector_score', 'sector_etf', 'sector_etf_name',
           'chosen_by'
         ]
-    """
+"""
+"""
     required_stock_cols = {"symbol", "sector", "industry"}
     missing_stock = required_stock_cols - set(stocks_meta.columns)
     if missing_stock:
@@ -221,6 +262,133 @@ def build_symbol_to_etf_map(
         )
 
     return pd.DataFrame(rows)
+"""
+
+
+def build_symbol_to_etf_map(
+    stocks_meta: pd.DataFrame,
+    etfs_df: pd.DataFrame,
+    *,
+    industry_min_score: float = 0.20,
+    sector_min_score: float = 0.10,
+    default_etf: str = "SPY",
+) -> pd.DataFrame:
+    """
+    Build a stock -> ETF mapping using Jaccard over normalized tokens.
+
+    stocks_meta: must have columns:
+        - 'symbol'
+        - 'sector'
+        - 'industry'
+        - (optional) 'name'  (company name; we’ll pass it through)
+
+    etfs_df: must have columns:
+        - 'symbol'
+        - 'name'   (ETF name / description)
+
+    Logic per stock:
+      1) Tokenize industry & sector separately.
+      2) For each ETF:
+           - industry_score = jaccard(tokens(industry), tokens(etf_name))
+           - sector_score   = jaccard(tokens(sector),   tokens(etf_name))
+      3) If best industry_score >= industry_min_score -> choose its ETF.
+         Else, if best sector_score >= sector_min_score -> choose its ETF.
+         Else, choose default_etf.
+
+    Returns DataFrame with columns:
+      ['symbol', 'name', 'sector', 'industry',
+       'etf_symbol',
+       'industry_score', 'industry_etf', 'industry_etf_name',
+       'sector_score',   'sector_etf',   'sector_etf_name',
+       'chosen_by']
+    """
+    required_stock_cols = {"symbol", "sector", "industry"}
+    missing_stock = required_stock_cols - set(stocks_meta.columns)
+    if missing_stock:
+        raise KeyError(f"stocks_meta missing columns: {sorted(missing_stock)}")
+
+    required_etf_cols = {"symbol", "name"}
+    missing_etf = required_etf_cols - set(etfs_df.columns)
+    if missing_etf:
+        raise KeyError(f"etfs_df missing columns: {sorted(missing_etf)}")
+
+    # Precompute ETF tokens
+    etfs = []
+    for _, row in etfs_df.iterrows():
+        etf_sym = str(row["symbol"])
+        etf_name = str(row["name"])
+        etfs.append(
+            {
+                "symbol": etf_sym,
+                "name": etf_name,
+                "tokens": _tokenize(etf_name),
+            }
+        )
+
+    rows: list[dict] = []
+
+    for _, s in stocks_meta.iterrows():
+        sym = str(s["symbol"])
+        sector = str(s["sector"])
+        industry = str(s["industry"])
+        name = str(s.get("name", ""))  # stock’s long name if available
+
+        industry_tokens = _tokenize(industry)
+        sector_tokens = _tokenize(sector)
+
+        best_industry_score = 0.0
+        best_industry_etf = None
+        best_industry_name = None
+
+        best_sector_score = 0.0
+        best_sector_etf = None
+        best_sector_name = None
+
+        for etf in etfs:
+            etf_tokens = etf["tokens"]
+
+            ind_score = _jaccard(industry_tokens, etf_tokens)
+            if ind_score > best_industry_score:
+                best_industry_score = ind_score
+                best_industry_etf = etf["symbol"]
+                best_industry_name = etf["name"]
+
+            sec_score = _jaccard(sector_tokens, etf_tokens)
+            if sec_score > best_sector_score:
+                best_sector_score = sec_score
+                best_sector_etf = etf["symbol"]
+                best_sector_name = etf["name"]
+
+        # Selection rule
+        if best_industry_etf is not None and best_industry_score >= industry_min_score:
+            chosen_etf = best_industry_etf
+            chosen_by = "industry"
+        elif best_sector_etf is not None and best_sector_score >= sector_min_score:
+            chosen_etf = best_sector_etf
+            chosen_by = "sector"
+        else:
+            chosen_etf = default_etf
+            chosen_by = "default"
+
+        rows.append(
+            {
+                "symbol": sym,
+                "name": name,
+                "sector": sector,
+                "industry": industry,
+                "etf_symbol": chosen_etf,
+                "industry_score": float(best_industry_score),
+                "industry_etf": best_industry_etf,
+                "industry_etf_name": best_industry_name,
+                "sector_score": float(best_sector_score),
+                "sector_etf": best_sector_etf,
+                "sector_etf_name": best_sector_name,
+                "chosen_by": chosen_by,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
 
 
 # ---------------------------------------------------------------------
