@@ -112,7 +112,7 @@ def build_symbol_to_etf_map(
     default_etf: str = "SPY",
 ) -> pd.DataFrame:
 """
-    """
+"""
     Build a stock -> ETF mapping based purely on token similarity.
 
     stocks_meta: must have columns:
@@ -137,7 +137,7 @@ def build_symbol_to_etf_map(
 
     Returns DataFrame with columns:
         ['symbol', 'etf_symbol', 'industry_score', 'sector_score', 'chosen_by']
-    """
+"""
 """
     required_stock_cols = {"symbol", "sector", "industry"}
     missing_stock = required_stock_cols - set(stocks_meta.columns)
