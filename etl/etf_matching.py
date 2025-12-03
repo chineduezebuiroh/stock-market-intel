@@ -274,6 +274,7 @@ def build_symbol_to_etf_map(
 
     for _, s in stocks_meta.iterrows():
         sym = str(s["symbol"])
+        name = str(s["name"])  # safely pull company name if available
         sector = str(s["sector"])
         industry = str(s["industry"])
 
