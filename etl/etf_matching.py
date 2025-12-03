@@ -9,10 +9,14 @@ from typing import Iterable
 import pandas as pd
 from pathlib import Path
 
+import difflib
+
 # Project roots
 ROOT = Path(__file__).resolve().parents[1]
 CFG = ROOT / "config"
 REF = ROOT / "ref"
+
+_token_re = re.compile(r"[A-Za-z0-9]+")
 
 # -----------------------------------------------------------
 # Tokenization + similarity
@@ -34,6 +38,7 @@ _STOPWORDS = {
     "and",
     "&",
     "usd",
+    "services",
 }
 
 
@@ -57,6 +62,32 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return inter / union if union else 0.0
 
 
+def _normalize_for_fuzzy(s: str) -> str:
+    """
+    Lowercase, tokenize to alphanumerics, drop stopwords, dedupe+sort tokens.
+
+    This keeps your old stopword behavior while making the string friendlier
+    for fuzzy matching.
+    """
+    if not isinstance(s, str):
+        return ""
+    tokens = _token_re.findall(s.lower())
+    if _STOPWORDS:
+        tokens = [t for t in tokens if t not in _STOPWORDS]
+    tokens = sorted(set(tokens))
+    return " ".join(tokens)
+
+
+def _fuzzy_similarity(a: str, b: str, stopwords: set[str] | None = None) -> float:
+    """
+    Return similarity in [0, 1] using SequenceMatcher on normalized strings.
+    """
+    na = _normalize_for_fuzzy(a)
+    nb = _normalize_for_fuzzy(b)
+    if not na or not nb:
+        return 0.0
+    return difflib.SequenceMatcher(None, na, nb).ratio()
+
 # -----------------------------------------------------------
 # DTOs
 # -----------------------------------------------------------
@@ -71,7 +102,7 @@ class EtfInfo:
 # -----------------------------------------------------------
 # Public API
 # -----------------------------------------------------------
-
+"""
 def build_symbol_to_etf_map(
     stocks_meta: pd.DataFrame,
     etfs_df: pd.DataFrame,
@@ -80,6 +111,7 @@ def build_symbol_to_etf_map(
     sector_min_score: float = 0.10,
     default_etf: str = "SPY",
 ) -> pd.DataFrame:
+"""
     """
     Build a stock -> ETF mapping based purely on token similarity.
 
@@ -106,6 +138,7 @@ def build_symbol_to_etf_map(
     Returns DataFrame with columns:
         ['symbol', 'etf_symbol', 'industry_score', 'sector_score', 'chosen_by']
     """
+"""
     required_stock_cols = {"symbol", "sector", "industry"}
     missing_stock = required_stock_cols - set(stocks_meta.columns)
     if missing_stock:
@@ -187,6 +220,121 @@ def build_symbol_to_etf_map(
         )
 
     return pd.DataFrame(rows)
+"""
+
+
+def build_symbol_to_etf_map(
+    stocks_meta: pd.DataFrame,
+    etfs_df: pd.DataFrame,
+    *,
+    industry_min_score: float = 0.20,
+    sector_min_score: float = 0.10,
+    default_etf: str = "SPY",
+) -> pd.DataFrame:
+    """
+    Build a stock -> ETF mapping based on fuzzy similarity between
+    sector/industry strings and ETF names.
+
+    stocks_meta: must have columns:
+        - 'symbol'
+        - 'sector'
+        - 'industry'
+
+    etfs_df: must have columns:
+        - 'symbol'
+        - 'name'   (ETF name / description from shortlist_sector_etfs.csv)
+
+    Logic per stock:
+      1) Compute fuzzy similarity between industry and each ETF name.
+      2) Compute fuzzy similarity between sector and each ETF name.
+      3) If best industry_score >= industry_min_score -> choose its ETF.
+         Else, if best sector_score >= sector_min_score -> choose its ETF.
+         Else, choose default_etf.
+
+    Returns DataFrame with columns:
+        [
+          'symbol', 'sector', 'industry', 'etf_symbol',
+          'industry_score', 'industry_etf', 'industry_etf_name',
+          'sector_score', 'sector_etf', 'sector_etf_name',
+          'chosen_by'
+        ]
+    """
+    required_stock_cols = {"symbol", "sector", "industry"}
+    missing_stock = required_stock_cols - set(stocks_meta.columns)
+    if missing_stock:
+        raise KeyError(f"stocks_meta missing columns: {sorted(missing_stock)}")
+
+    required_etf_cols = {"symbol", "name"}
+    missing_etf = required_etf_cols - set(etfs_df.columns)
+    if missing_etf:
+        raise KeyError(f"etfs_df missing columns: {sorted(missing_etf)}")
+
+    # We'll just iterate directly over the ETF rows and call _fuzzy_similarity().
+    rows: list[dict] = []
+
+    for _, s in stocks_meta.iterrows():
+        sym = str(s["symbol"])
+        sector = str(s["sector"])
+        industry = str(s["industry"])
+
+        best_industry_score = 0.0
+        best_industry_etf = None
+        best_industry_name = None
+
+        best_sector_score = 0.0
+        best_sector_etf = None
+        best_sector_name = None
+
+        for _, e in etfs_df.iterrows():
+            etf_sym = str(e["symbol"])
+            etf_name = str(e["name"])
+
+            # Fuzzy similarity uses normalized (tokenized + stopword-stripped) strings
+            ind_score = _fuzzy_similarity(industry, etf_name)
+            if ind_score > best_industry_score:
+                best_industry_score = ind_score
+                best_industry_etf = etf_sym
+                best_industry_name = etf_name
+
+            sec_score = _fuzzy_similarity(sector, etf_name)
+            if sec_score > best_sector_score:
+                best_sector_score = sec_score
+                best_sector_etf = etf_sym
+                best_sector_name = etf_name
+
+        # Choose ETF according to the hierarchy:
+        #  - prefer strong industry match
+        #  - else fall back to sector
+        #  - else default
+        if best_industry_etf is not None and best_industry_score >= industry_min_score:
+            chosen_etf = best_industry_etf
+            chosen_by = "industry"
+        elif best_sector_etf is not None and best_sector_score >= sector_min_score:
+            chosen_etf = best_sector_etf
+            chosen_by = "sector"
+        else:
+            chosen_etf = default_etf
+            chosen_by = "default"
+
+        rows.append(
+            {
+                "symbol": sym,
+                "name": name,
+                "sector": sector,
+                "industry": industry,
+                "etf_symbol": chosen_etf,
+                "industry_score": float(best_industry_score),
+                "industry_etf": best_industry_etf,
+                "industry_etf_name": best_industry_name,  # NEW
+                "sector_score": float(best_sector_score),
+                "sector_etf": best_sector_etf,
+                "sector_etf_name": best_sector_name,      # NEW
+                "chosen_by": chosen_by,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
 
 # ---------------------------------------------------------------------
 # Public entrypoint: build ETF mapping for options-eligible only
