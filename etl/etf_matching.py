@@ -28,6 +28,7 @@ _STOPWORDS = {
     "sector",
     "select",
     "spdr",
+    "kbw"
     "ishares",
     "index",
     "trust",
@@ -38,7 +39,9 @@ _STOPWORDS = {
     "and",
     "&",
     "usd",
-    "services",
+    "regional",
+    "invesco",
+    "diversified",
 }
 
 
@@ -102,126 +105,6 @@ class EtfInfo:
 # -----------------------------------------------------------
 # Public API
 # -----------------------------------------------------------
-"""
-def build_symbol_to_etf_map(
-    stocks_meta: pd.DataFrame,
-    etfs_df: pd.DataFrame,
-    *,
-    industry_min_score: float = 0.20,
-    sector_min_score: float = 0.10,
-    default_etf: str = "SPY",
-) -> pd.DataFrame:
-"""
-"""
-    Build a stock -> ETF mapping based purely on token similarity.
-
-    stocks_meta: must have columns:
-        - 'symbol'
-        - 'sector'
-        - 'industry'
-      (If you also have 'long_name', you can optionally concatenate it into
-       the industry text if you want more richness.)
-
-    etfs_df: must have columns:
-        - 'symbol'
-        - 'name'   (ETF name / description from shortlist_sector_etfs.csv)
-
-    Logic per stock:
-      1) Tokenize industry & sector separately.
-      2) For each ETF:
-           - industry_score = jaccard(tokens(industry), tokens(etf_name))
-           - sector_score   = jaccard(tokens(sector),   tokens(etf_name))
-      3) If best industry_score >= industry_min_score -> choose its ETF.
-         Else, if best sector_score >= sector_min_score -> choose its ETF.
-         Else, choose default_etf.
-
-    Returns DataFrame with columns:
-        ['symbol', 'etf_symbol', 'industry_score', 'sector_score', 'chosen_by']
-"""
-"""
-    required_stock_cols = {"symbol", "sector", "industry"}
-    missing_stock = required_stock_cols - set(stocks_meta.columns)
-    if missing_stock:
-        raise KeyError(f"stocks_meta missing columns: {sorted(missing_stock)}")
-
-    required_etf_cols = {"symbol", "name"}
-    missing_etf = required_etf_cols - set(etfs_df.columns)
-    if missing_etf:
-        raise KeyError(f"etfs_df missing columns: {sorted(missing_etf)}")
-
-    # Precompute ETF tokens
-    etfs: list[EtfInfo] = []
-    for _, row in etfs_df.iterrows():
-        etf_sym = str(row["symbol"])
-        etf_name = str(row["name"])
-        etfs.append(
-            EtfInfo(
-                symbol=etf_sym,
-                name=etf_name,
-                tokens=_tokenize(etf_name),
-            )
-        )
-
-    rows: list[dict] = []
-
-    for _, s in stocks_meta.iterrows():
-        sym = str(s["symbol"])
-        sector = str(s["sector"])
-        industry = str(s["industry"])
-
-        industry_tokens = _tokenize(industry)
-        sector_tokens = _tokenize(sector)
-
-        best_industry_score = 0.0
-        best_industry_etf = None
-
-        best_sector_score = 0.0
-        best_sector_etf = None
-
-        for etf in etfs:
-            # industry-based similarity
-            ind_score = _jaccard(industry_tokens, etf.tokens)
-            if ind_score > best_industry_score:
-                best_industry_score = ind_score
-                best_industry_etf = etf.symbol
-
-            # sector-based similarity
-            sec_score = _jaccard(sector_tokens, etf.tokens)
-            if sec_score > best_sector_score:
-                best_sector_score = sec_score
-                best_sector_etf = etf.symbol
-
-        # Choose ETF according to your rule:
-        #  - prefer strong industry match
-        #  - else fall back to sector
-        #  - else default
-        if best_industry_etf is not None and best_industry_score >= industry_min_score:
-            chosen_etf = best_industry_etf
-            chosen_by = "industry"
-        elif best_sector_etf is not None and best_sector_score >= sector_min_score:
-            chosen_etf = best_sector_etf
-            chosen_by = "sector"
-        else:
-            chosen_etf = default_etf
-            chosen_by = "default"
-
-        rows.append(
-            {
-                "symbol": sym,
-                "sector": sector,
-                "industry": industry,
-                "etf_symbol": chosen_etf,
-                "industry_score": best_industry_score,
-                "industry_etf": best_industry_etf,
-                "sector_score": best_sector_score,
-                "sector_etf": best_sector_etf,
-                "chosen_by": chosen_by,
-            }
-        )
-
-    return pd.DataFrame(rows)
-"""
-
 
 def build_symbol_to_etf_map(
     stocks_meta: pd.DataFrame,
