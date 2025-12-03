@@ -190,7 +190,7 @@ def build_symbol_to_etf_map(
         #  - prefer strong industry match
         #  - else fall back to sector
         #  - else default
-        """
+        
         if best_industry_etf is not None and best_industry_score >= industry_min_score:
             chosen_etf = best_industry_etf
             chosen_by = "industry"
@@ -200,24 +200,8 @@ def build_symbol_to_etf_map(
         else:
             chosen_etf = default_etf
             chosen_by = "default"
-        """
+        
 
-        if best_industry_etf is not None and best_sector_etf is not None and best_industry_score > industry_min_score and best_sector_score > sector_min_score:
-            if best_industry_score >= best_sector_score:
-                chosen_etf1 = best_industry_etf
-                chosen_etf2 = best_sector_etf
-            else:
-                chosen_etf1 = best_sector_etf
-                chosen_etf2 = best_industry_etf
-        elif (best_industry_etf is not None and best_sector_etf is None) or (best_industry_score > industry_min_score and best_sector_score <= sector_min_score):
-            chosen_etf1 = best_industry_etf
-            chosen_etf2 = ""
-        elif (best_industry_etf is None and best_sector_etf is not None) or (best_industry_score <= industry_min_score and best_sector_score > sector_min_score):
-            chosen_etf1 = best_sector_etf
-            chosen_etf2 = ""
-        else:
-            chosen_etf1 = ""
-            chosen_etf2 = ""
 
         rows.append(
             {
@@ -225,8 +209,8 @@ def build_symbol_to_etf_map(
                 "name": name,
                 "sector": sector,
                 "industry": industry,
-                "etf_match_1": chosen_etf1,
-                "etf_match_2": chosen_etf2,
+                "etf_match": chosen_etf,
+                "chosen_by": chosen_by,
                 "industry_score": float(best_industry_score),
                 "industry_etf": best_industry_etf,
                 "industry_etf_name": best_industry_name,  # NEW
