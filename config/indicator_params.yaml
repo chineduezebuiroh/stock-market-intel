@@ -34,6 +34,10 @@ indicators:
       macdv_core:
         id: macdv
         z: 1
+        
+      macdv_guard:
+        id: macdv_guard
+        z: 0
 
       ttm_squeeze_pro:
         id: ttm_squeeze_pro
@@ -72,6 +76,10 @@ indicators:
 
       macdv_core:
         id: macdv
+        z: 0
+
+      macdv_guard:
+        id: macdv_guard
         z: 0
 
       ttm_squeeze_pro:
@@ -113,6 +121,10 @@ indicators:
         id: macdv
         z: 0
 
+      macdv_guard:
+        id: macdv_guard
+        z: 0
+
       ttm_squeeze_pro:
         id: ttm_squeeze_pro
         z: 0
@@ -151,6 +163,10 @@ indicators:
       macdv_core:
         id: macdv
         z: 1
+
+      macdv_guard:
+        id: macdv_guard
+        z: 0
 
       ttm_squeeze_pro:
         id: ttm_squeeze_pro
@@ -191,6 +207,10 @@ indicators:
         id: macdv
         z: 1
 
+      macdv_guard:
+        id: macdv_guard
+        z: 0
+
       ttm_squeeze_pro:
         id: ttm_squeeze_pro
         z: 1
@@ -229,6 +249,10 @@ indicators:
       macdv_core:
         id: macdv
         z: 1
+
+      macdv_guard:
+        id: macdv_guard
+        z: 0
 
       ttm_squeeze_pro:
         id: ttm_squeeze_pro
