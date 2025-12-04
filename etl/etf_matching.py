@@ -356,8 +356,8 @@ def build_options_eligible_etf_map() -> pd.DataFrame:
     mapping = build_symbol_to_etf_map(
         stocks_meta=stocks_meta,
         etfs_df=etfs_df,
-        industry_min_score=0.35,  # tweakable
-        sector_min_score=0.25,    # tweakable
+        #industry_min_score=0.35,  # tweakable
+        #sector_min_score=0.25,    # tweakable
     )
 
     out = REF / "symbol_to_etf_options_eligible.csv"
