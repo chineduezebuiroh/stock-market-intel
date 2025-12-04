@@ -466,6 +466,9 @@ def evaluate_stocks_options_signal(
     if short_score >= 5.0:
         return "short", long_score, short_score
 
+    if long_score < 5.0 and short_score < 5.0:
+        return "none", long_score, short_score
+
     #return "none", long_score, short_score
     
     #ETF overlay: look at primary + secondary, but preserve "no data" as NaN
