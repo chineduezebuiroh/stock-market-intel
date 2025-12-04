@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from screens.style_helpers import style_etf_scores
+
 
 # -----------------------------------------------------------------------------
 # Paths
@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 DATA = ROOT / "data"
 
+from screens.style_helpers import style_etf_scores
 # -----------------------------------------------------------------------------
 # Streamlit page config
 # -----------------------------------------------------------------------------
