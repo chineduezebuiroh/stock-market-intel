@@ -22,8 +22,8 @@ def _spy_qqq_vol_ma_for_timeframe(timeframe: str, length: int) -> tuple[pd.Serie
         qqq_df = load_130m_from_5m("QQQ")
     else:
         # EOD-style for D/W/M, exactly what we've been doing
-        spy_df = load_eod("SPY")
-        qqq_df = load_eod("QQQ")
+        spy_df = load_eod("SPY", timeframe=timeframe)
+        qqq_df = load_eod("QQQ", timeframe=timeframe)
 
     # Normalize column names, then compute rolling volume MA
     for df in (spy_df, qqq_df):
@@ -36,7 +36,6 @@ def _spy_qqq_vol_ma_for_timeframe(timeframe: str, length: int) -> tuple[pd.Serie
     qqq_ma = qqq_vol.rolling(length, min_periods=length).mean()
 
     return spy_ma, qqq_ma
-
 
 
 def indicator_spy_qqq_volume_ma_ratio(
@@ -72,29 +71,7 @@ def indicator_spy_qqq_volume_ma_ratio(
     # SMA of the symbol's own volume
     vol_ma_symbol = volume.rolling(window=L, min_periods=L).mean()
 
-    """
-    # Load benchmark volume MAs (SPY & QQQ) for this timeframe
-    spy_ma_full = _load_benchmark_vol_ma(timeframe_name, symbol_spy, L)
-    qqq_ma_full = _load_benchmark_vol_ma(timeframe_name, symbol_qqq, L)
-    
-    # Align benchmarks to this symbol's index
-    spy_ma = spy_ma_full.reindex(df_sorted.index)
-    qqq_ma = qqq_ma_full.reindex(df_sorted.index)
-
-    # Take the elementwise minimum of SPY/QQQ volume MA
-    bench_min = pd.concat([spy_ma, qqq_ma], axis=1).min(axis=1)
-
-    # Avoid divide-by-zero / negative nonsense
-    with np.errstate(divide="ignore", invalid="ignore"):
-        ratio = vol_ma_symbol / bench_min.replace(0, np.nan)
-
-    ratio = ratio.astype(float)
-
-    # Reindex back to original df index (usually already sorted)
-    return ratio.reindex(df.index)
-    """
-
-    spy_ma, qqq_ma = _spy_qqq_vol_ma_for_timeframe(timeframe, length)
+    spy_ma, qqq_ma = _spy_qqq_vol_ma_for_timeframe(timeframe, L)
     
     # Align SPY/QQQ to this symbol’s index without inventing future values.
     spy_aligned = spy_ma.reindex(df_sorted.index)
