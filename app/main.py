@@ -183,7 +183,7 @@ def apply_signal_filter(df: pd.DataFrame, signal_filter: str) -> pd.DataFrame:
 """    
 
 with tab_130mdw:
-    st.subheader("Stocks – W/M/Q Multi-Timeframe Combos")
+    st.subheader("Stocks – 130m/D/W Multi-Timeframe Combos")
 
     # Shared signal filter for both 130mDW tables
     intra130mdw_signal_filter = st.radio(
@@ -195,7 +195,7 @@ with tab_130mdw:
     )
 
     # ---------- 130mDW Shortlist ----------
-    st.markdown("### Shortlist universe (W/M/Q combo)")
+    st.markdown("### Shortlist universe (130m/D/W combo)")
     p_intra130mdw_short = DATA / "combo_stocks_d_130mdw_shortlist.parquet"
     if p_intra130mdw_short.exists():
         df_intra130mdw_short = pd.read_parquet(p_intra130mdw_short)
