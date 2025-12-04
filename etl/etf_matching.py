@@ -27,7 +27,7 @@ _STOPWORDS = {
     "&",
     "and",
     "care",
-    "consumer",
+    #"consumer",
     "corp",
     "corporation",
     "diversified",
