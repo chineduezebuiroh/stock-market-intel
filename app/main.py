@@ -323,7 +323,18 @@ with tab_dwm:
             "middle_spy_qqq_vol_ma_ratio",
             "upper_wyckoff_stage",
             "upper_exh_abs_pa_prior_bar",
+            # New columns for ETF scoring
+            "etf_symbol_primary",
+            "etf_primary_long_score",
+            "etf_primary_short_score",
+            "etf_symbol_secondary",
+            "etf_secondary_long_score",
+            "etf_secondary_short_score",
+
         ]
+
+        opt_view = opt[cols_opts]
+        
         existing_cols_opts = [c for c in cols_opts if c in df_opts.columns]
 
         st.dataframe(df_opts[existing_cols_opts])
