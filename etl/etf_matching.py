@@ -63,6 +63,7 @@ _SPECIAL_STEMS = {
     "healthcare": "health",
     "health": "health",
     "jets": "airlines",
+    "airlines": "airlines",
     # you can extend this later, e.g.:
     # "utilities": "utility", etc., but plural handling already helps a lot
 }
