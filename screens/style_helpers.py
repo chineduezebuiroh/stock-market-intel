@@ -15,7 +15,7 @@ def style_etf_scores(df: pd.DataFrame) -> Styler:
         for v in col:
             if pd.isna(v) or v < 4:
                 styles.append("")
-            elif v >= 4:
+            elif v >= 6:
                 styles.append("background-color: rgba(0, 170, 0, 0.25); color: #006400;")
             else:
                 styles.append("background-color: rgba(0, 170, 0, 0.15); color: #006400;")
@@ -24,9 +24,9 @@ def style_etf_scores(df: pd.DataFrame) -> Styler:
     def color_short(col: pd.Series):
         styles = []
         for v in col:
-            if pd.isna(v) or v == 0:
+            if pd.isna(v) or v < 4:
                 styles.append("")
-            elif v > 2:
+            elif v >= 6:
                 styles.append("background-color: rgba(220, 20, 60, 0.25); color: #8B0000;")
             else:
                 styles.append("background-color: rgba(220, 20, 60, 0.15); color: #8B0000;")
