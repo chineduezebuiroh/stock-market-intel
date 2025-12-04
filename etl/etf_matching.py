@@ -31,7 +31,7 @@ _STOPWORDS = {
     "corp",
     "corporation",
     "diversified",
-    #"equal",
+    "equal",
     "etf",
     "exchange",
     "expanded",
