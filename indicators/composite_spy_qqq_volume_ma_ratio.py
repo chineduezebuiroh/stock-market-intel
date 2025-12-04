@@ -5,7 +5,7 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 
-from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
+#from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
 
 from etl.sources import load_eod, load_130m_from_5m  # adjust import paths if needed
 
@@ -43,7 +43,7 @@ def indicator_spy_qqq_volume_ma_ratio(
     symbol_spy: str = "SPY",
     symbol_qqq: str = "QQQ",
     length: int = 26,
-    timeframe_name: str = "daily",
+    timeframe: str = "daily",
     **_,
 ) -> pd.Series:
     """
