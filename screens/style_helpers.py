@@ -1,7 +1,8 @@
 # screens/style_helpers.py
 import pandas as pd
+from pandas.io.formats.style import Styler
 
-def style_etf_scores(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+def style_etf_scores(df: pd.DataFrame) -> Styler:
     """
     Shade ETF scores:
       - long_score > 0 => green-ish
