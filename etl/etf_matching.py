@@ -62,8 +62,8 @@ _PLURAL_EXCEPTIONS = {
 _SPECIAL_STEMS = {
     "healthcare": "health",
     "health": "health",
-    "jets": "airlines",
-    "airlines": "airlines",
+    "airlines": "jets",
+    "jets": "jets",
     "discretionary": "cyclical",
     "cyclical": "cyclical",
     "staples": "defensive",
