@@ -51,6 +51,7 @@ _STOPWORDS = {
     "equal",
     "weight",
     "care",
+    "global",
 }
 
 # A few known exceptions where trailing "s" is *not* just a plural.
@@ -62,8 +63,8 @@ _PLURAL_EXCEPTIONS = {
 _SPECIAL_STEMS = {
     "healthcare": "health",
     "health": "health",
-    "airlines": "jets",
-    "jets": "jets",
+    "jets": "airlines",
+    "airlines": "airlines",
     "discretionary": "cyclical",
     "cyclical": "cyclical",
     "staples": "defensive",
