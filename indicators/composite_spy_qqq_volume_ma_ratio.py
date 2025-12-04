@@ -43,7 +43,7 @@ def indicator_spy_qqq_volume_ma_ratio(
     symbol_spy: str = "SPY",
     symbol_qqq: str = "QQQ",
     length: int = 26,
-    timeframe: str = "daily",
+    timeframe_name: str = "daily",
     **_,
 ) -> pd.Series:
     """
@@ -71,7 +71,7 @@ def indicator_spy_qqq_volume_ma_ratio(
     # SMA of the symbol's own volume
     vol_ma_symbol = volume.rolling(window=L, min_periods=L).mean()
 
-    spy_ma, qqq_ma = _spy_qqq_vol_ma_for_timeframe(timeframe, L)
+    spy_ma, qqq_ma = _spy_qqq_vol_ma_for_timeframe(timeframe_name, L)
     
     # Align SPY/QQQ to this symbol’s index without inventing future values.
     spy_aligned = spy_ma.reindex(df_sorted.index)
