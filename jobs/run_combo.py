@@ -14,12 +14,13 @@ import numpy as np
 from datetime import datetime
 
 from etl.window import parquet_path
-
 from etl.universe import symbols_for_universe
+from screens.etf_trend_engine import compute_etf_trend_scores
 
 
 DATA = ROOT / "data"
 CFG = ROOT / "config"
+REF = ROOT / "ref"
 
 MTF_CFG_PATH = CFG / "multi_timeframe_combos.yaml"
 
@@ -45,6 +46,82 @@ BASE_COLS = [
     "volume_sma_20",
     "atr_14",
 ]
+
+
+
+def attach_etf_trends_for_options_combo(
+    combo_df: pd.DataFrame,
+    combo_cfg: dict,
+    timeframe_for_etf: str = "weekly",
+) -> pd.DataFrame:
+    """
+    For options-eligible combos, join ETF trend scores using the
+    symbol_to_etf_options_eligible.csv mapping and the ETF weekly scores.
+
+    Assumes mapping has at least:
+        - symbol
+        - etf_symbol_primary
+    """
+    universe = combo_cfg.get("universe")
+    if universe != "options_eligible":
+        # Nothing to do for shortlist / futures / anything else
+        return combo_df
+
+    mapping_path = REF / "symbol_to_etf_options_eligible.csv"
+    if not mapping_path.exists():
+        print(f"[WARN] ETF mapping not found at {mapping_path}; skipping ETF guardrail join.")
+        return combo_df
+
+    mapping = pd.read_csv(mapping_path)
+
+    if "symbol" not in mapping.columns or "etf_symbol_primary" not in mapping.columns:
+        print(
+            "[WARN] symbol_to_etf_options_eligible.csv missing "
+            "'symbol' and/or 'etf_symbol_primary'; skipping ETF join."
+        )
+        return combo_df
+
+    etf_scores = compute_etf_trend_scores(timeframe_for_etf)  # index=etf_symbol
+    etf_scores = etf_scores.reset_index()  # columns: etf_symbol, etf_long_score, etf_short_score
+
+    # 1) attach primary ETF symbol to combo rows
+    combo = combo_df.merge(
+        mapping[["symbol", "etf_symbol_primary", "etf_symbol_secondary"]],
+        on="symbol",
+        how="left",
+    )
+
+    
+    # 2) attach ETF scores for that primary ETF
+    combo = combo.merge(
+        etf_scores.rename(columns={"etf_symbol": "etf_symbol_primary"}),
+        on="etf_symbol_primary",
+        how="left",
+    )
+    # Rename scores to make their role clear
+    combo = combo.rename(
+        columns={
+            "etf_long_score": "etf_primary_long_score",
+            "etf_short_score": "etf_primary_short_score",
+        }
+    )
+
+    
+    # 3) attach ETF scores for the ** secondary ** ETF
+    combo = combo.merge(
+        etf_scores.rename(columns={"etf_symbol": "etf_symbol_secondary"}),
+        on="etf_symbol_secondary",
+        how="left",
+    )
+    # Rename scores to make their role clear
+    combo = combo.rename(
+        columns={
+            "etf_long_score": "etf_secondary_long_score",
+            "etf_short_score": "etf_secondary_short_score",
+        }
+    )
+
+    return combo
 
 
 def _tf_pattern(combo_cfg: dict) -> str:
@@ -114,7 +191,7 @@ def symbols_for_universe(universe: str) -> list[str]:
         return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
 
     if universe == "options_eligible":
-        p = ROOT / "ref" / "options_eligible.csv"
+        p = REF / "options_eligible.csv"
         return pd.read_csv(p)["symbol"].tolist() if p.exists() else []
 
     # Future: add ETF shortlist universes here if needed.
@@ -242,7 +319,7 @@ def evaluate_stocks_shortlist_signal(
     lw_sqz = row.get("lower_ttm_squeeze_pro", np.nan)
 
     # Middle: context / confirmation (e.g., weekly)
-    md_wyckoff = row.get("middle_wyckoff_stage", np.nan)  # if you wire it later
+    md_wyckoff = row.get("middle_wyckoff_stage", np.nan) 
     md_exh_abs = row.get("middle_exh_abs_pa_prior_bar", np.nan) 
     md_sigvol = row.get("middle_significant_volume", np.nan)
     md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
@@ -296,7 +373,7 @@ def evaluate_stocks_shortlist_signal(
     if short_score >= 4.0:
         return "short", long_score, short_score
 
-    return "watch", long_score, short_score
+    return "none", long_score, short_score
 
 
 def evaluate_stocks_options_signal(
@@ -317,7 +394,7 @@ def evaluate_stocks_options_signal(
     """
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col)
 
-    vol_ratio_th1 = 0.1
+    vol_ratio_th1 = 0.10
     vol_ratio_th2 = 0.25
 
     # If there is no directional signal, nothing to add.
@@ -344,16 +421,47 @@ def evaluate_stocks_options_signal(
     # ======================================================
     # Decision mapping (v1 thresholds, easy to tune)
     # ======================================================
+    """
     if long_score <= 0 and short_score <= 0:
         return "none", long_score, short_score
-
+    """
+    
     if long_score >= 5.0:
         return "long", long_score, short_score
 
     if short_score >= 5.0:
         return "short", long_score, short_score
 
-    return "watch", long_score, short_score
+    #return "none", long_score, short_score
+
+
+
+
+    # --- NEW: ETF guardrail ---
+    etf_long = max(row.get("etf_primary_long_score"), row.get("etf_secondary_long_score"))
+    etf_short = max(row.get("etf_primary_short_score"), row.get("etf_secondary_short_score"))
+
+    # None / NaN -> treat as 0
+    #etf_long = float(etf_long) if etf_long is not None else 0.0
+    #etf_short = float(etf_short) if etf_short is not None else 0.0
+
+    # For now, *only* gate the signal; don't change mtf_* scores
+    if base_signal == "long" and etf_long is not None and etf_long < 4.0:
+        signal = "watch"
+    elif base_signal == "short" and etf_short is not None and etf_short < 4.0:
+        signal = "watch"
+
+    #return signal, long_score, short_score
+
+
+
+
+
+
+
+
+
+    
 
     # Otherwise keep the base directional signal
     return base_signal, long_score, short_score
@@ -429,6 +537,14 @@ def run(namespace: str, combo_name: str):
 
     # 2) Apply multi-timeframe signal engine using the PER-COMBO cfg
     combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
+
+    # NEW: attach ETF guardrail info for options-eligible combos
+    middle_tf = combo_cfg.get("middle_tf", "weekly") #<--- "weekly" here is just a default
+    combo_df = attach_etf_trends_for_options_combo(
+        combo_df,
+        combo_cfg=combo_cfg,
+        timeframe_for_etf=middle_tf,  # for DWM, this is 'weekly'
+    )
 
     # 3) Save as before
     # Old convention: "combo_" + combo_name
