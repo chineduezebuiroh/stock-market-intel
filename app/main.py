@@ -1,21 +1,20 @@
 import sys
 from pathlib import Path
 
-import pandas as pd
-import streamlit as st
-
-
-
-# -----------------------------------------------------------------------------
-# Paths
-# -----------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import pandas as pd
+import streamlit as st
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
 DATA = ROOT / "data"
 
 from screens.style_helpers import style_etf_scores
+
 # -----------------------------------------------------------------------------
 # Streamlit page config
 # -----------------------------------------------------------------------------
@@ -23,7 +22,6 @@ st.set_page_config(
     page_title="Stock Market Intel – MTF Dashboard",
     layout="wide",
 )
-
 
 # -----------------------------------------------------------------------------
 # Helpers
