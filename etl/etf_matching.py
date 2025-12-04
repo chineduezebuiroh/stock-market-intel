@@ -63,11 +63,11 @@ _PLURAL_EXCEPTIONS = {
 _SPECIAL_STEMS = {
     "healthcare": "health",
     "health": "health",
-    "jet": "airline",
-    "airline": "airline",
+    "jets": "airlines",
+    "airlines": "airlines",
     "discretionary": "cyclical",
     "cyclical": "cyclical",
-    "staple": "defensive",
+    "staples": "defensive",
     "defensive": "defensive",
     # you can extend this later, e.g.:
     # "utilities": "utility", etc., but plural handling already helps a lot
