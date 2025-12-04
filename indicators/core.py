@@ -89,7 +89,7 @@ from .composite_using_percentiles import (
 )
 from .composite_spy_qqq_volume_ma_ratio import indicator_spy_qqq_volume_ma_ratio
 from .composite_movingavg_trend_cloud import indicator_movingavg_trend_cloud
-from .composite_macdv import indicator_macdv
+from .composite_macdv import indicator_macdv, indicator_macdv_guardrail
 from .composite_ttm_squeeze_pro import (
     indicator_ttm_squeeze_pro,
     indicator_entry_signal,
@@ -114,6 +114,7 @@ INDICATOR_FUNCS: Dict[str, Callable[..., pd.Series]] = {
     "spy_qqq_volume_ma_ratio": indicator_spy_qqq_volume_ma_ratio,
     "movingavg_trend_cloud": indicator_movingavg_trend_cloud,
     "macdv": indicator_macdv,
+    "macdv_guard": indicator_macdv_guardrail,
     "ttm_squeeze_pro": indicator_ttm_squeeze_pro,
 }
 
