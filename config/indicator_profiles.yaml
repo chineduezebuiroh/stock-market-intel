@@ -12,7 +12,7 @@ profiles:
   middle_core_v1:
     - wyckoff_stage
     - exh_abs_pa_prior_bar
-    - macdv_core
+    - macdv_guard
     - significant_volume
     - spy_qqq_vol_ma_ratio
 
