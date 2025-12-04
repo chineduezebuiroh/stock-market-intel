@@ -376,6 +376,40 @@ def evaluate_stocks_shortlist_signal(
     return "none", long_score, short_score
 
 
+def _aggregate_etf_score(row: pd.Series, cols: list[str]) -> float:
+    """
+    Combine primary / secondary ETF scores for one direction.
+
+    Behavior:
+      - If *both* columns are missing or NaN -> return np.nan (no ETF data)
+      - Otherwise:
+          - treat None / NaN as 0.0
+          - return max(cleaned_scores)
+    """
+    raw_vals = []
+    for c in cols:
+        if c in row:
+            raw_vals.append(row[c])
+        else:
+            raw_vals.append(np.nan)
+
+    # If all values are missing/NaN, this symbol has no ETF mapping/data
+    if all(pd.isna(v) for v in raw_vals):
+        return np.nan
+
+    cleaned = []
+    for v in raw_vals:
+        if v is None or pd.isna(v):
+            cleaned.append(0.0)
+        else:
+            try:
+                cleaned.append(float(v))
+            except (TypeError, ValueError):
+                cleaned.append(0.0)
+
+    return max(cleaned)
+
+
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
@@ -433,35 +467,31 @@ def evaluate_stocks_options_signal(
         return "short", long_score, short_score
 
     #return "none", long_score, short_score
-
-
-
-
-    # --- NEW: ETF guardrail ---
-    etf_long = max(row.get("etf_primary_long_score"), row.get("etf_secondary_long_score"))
-    etf_short = max(row.get("etf_primary_short_score"), row.get("etf_secondary_short_score"))
+    
+    #ETF overlay: look at primary + secondary, but preserve "no data" as NaN
+    etf_long = _aggregate_etf_score(
+        row,
+        ["etf_primary_long_score", "etf_secondary_long_score"],
+    )
+    etf_short = _aggregate_etf_score(
+        row,
+        ["etf_primary_short_score", "etf_secondary_short_score"],
+    )
 
     # None / NaN -> treat as 0
     #etf_long = float(etf_long) if etf_long is not None else 0.0
     #etf_short = float(etf_short) if etf_short is not None else 0.0
 
-    # For now, *only* gate the signal; don't change mtf_* scores
-    if base_signal == "long" and etf_long is not None and etf_long < 4.0:
-        signal = "watch"
-    elif base_signal == "short" and etf_short is not None and etf_short < 4.0:
-        signal = "watch"
+    # Apply guardrails **only when ETF data exists**
+    # Long side
+    if not pd.isna(etf_long) and (base_signal == "long" or long_score >= 5) and etf_long < 4:
+        base_signal = "watch"
+    # Short side
+    elif not pd.isna(etf_short) and (base_signal == "short" or short_score >= 5) and etf_short < 4:
+        base_signal = "watch"
 
     #return signal, long_score, short_score
 
-
-
-
-
-
-
-
-
-    
 
     # Otherwise keep the base directional signal
     return base_signal, long_score, short_score
