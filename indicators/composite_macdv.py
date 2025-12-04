@@ -172,8 +172,8 @@ def indicator_macdv_guardrail(
     Signal = EMA(MACD-V, signal_length)
 
     Encoding (matches TOS scan logic):
-        +1  = strong bullish MACD-V thrust
-        -1  = strong bearish MACD-V thrust
+        +2  = strong bullish MACD-V thrust
+        -2  = strong bearish MACD-V thrust
          0  = otherwise
 
     Uses bar offsets like macdv[z], macdv[z+1], macdv[z+2] where z is bars ago.
@@ -222,7 +222,7 @@ def indicator_macdv_guardrail(
     macdv_min_z_z1 = macdv_z.combine(macdv_z1, np.minimum)
 
     # ------------------------------------------------------------------
-    # Strong bullish / bearish conditions (value 1 / -1)
+    # Strong bullish / bearish conditions (value 2 / -2)
     # ------------------------------------------------------------------
     strong_bull = (
         (macdv_max_z_z1 > th)
@@ -242,7 +242,7 @@ def indicator_macdv_guardrail(
     scan = pd.Series(0.0, index=df_sorted.index)
 
     # ...strong signals where applicable
-    scan[strong_bear] = -1.0
-    scan[strong_bull] = 1.0
+    scan[strong_bear] = -2.0
+    scan[strong_bull] = 2.0
 
     return scan.reindex(df.index)
