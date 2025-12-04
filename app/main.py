@@ -330,10 +330,19 @@ with tab_dwm:
             "etf_symbol_secondary",
             "etf_secondary_long_score",
             "etf_secondary_short_score",
-
         ]
 
         opt_view = opt[cols_opts]
+
+        from screens.style_helpers import style_etf_scores  # or from current file
+
+        styled_options = style_etf_scores(opt_view)
+    
+        st.dataframe(
+            styled_options,
+            use_container_width=True,
+            hide_index=True,
+        )
         
         existing_cols_opts = [c for c in cols_opts if c in df_opts.columns]
 
