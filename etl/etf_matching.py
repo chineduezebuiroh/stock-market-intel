@@ -24,7 +24,7 @@ _token_re = re.compile(r"[A-Za-z0-9]+")
 
 _STOPWORDS = {
     "500",
-    #"&",
+    "&",
     "and",
     "care",
     "consumer",
