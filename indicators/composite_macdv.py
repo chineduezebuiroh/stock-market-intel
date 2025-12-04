@@ -152,3 +152,97 @@ def indicator_macdv(
     scan[strong_bull] = 2.0
 
     return scan.reindex(df.index)
+
+
+
+def indicator_macdv_guardrail(
+    df: pd.DataFrame,
+    fast_length: int = 12,
+    slow_length: int = 26,
+    signal_length: int = 9,
+    atr_length: int = 26,
+    macdv_threshold: float = 45.0,
+    z: int = 0,
+    **_,
+) -> pd.Series:
+    """
+    MACD-V (Thinkorswim port).
+
+    MACD-V = (fastEMA(close) - slowEMA(close)) / ATR(atr_length) * 100
+    Signal = EMA(MACD-V, signal_length)
+
+    Encoding (matches TOS scan logic):
+        +1  = strong bullish MACD-V thrust
+        -1  = strong bearish MACD-V thrust
+         0  = otherwise
+
+    Uses bar offsets like macdv[z], macdv[z+1], macdv[z+2] where z is bars ago.
+    """
+    required = {"high", "low", "close"}
+    if not required.issubset(df.columns):
+        return pd.Series(index=df.index, dtype="float64")
+
+    # Ensure chronological order
+    df_sorted = df.sort_index()
+    price = df_sorted["close"].astype(float)
+
+    # ------------------------------------------------------------------
+    # MACD-V core: fast/slow EMAs and ATR-normalized difference
+    # ------------------------------------------------------------------
+    fast_ema = _ema(price, fast_length)
+    slow_ema = _ema(price, slow_length)
+
+    # ATR over atr_length bars
+    atr = _atr(df_sorted, atr_length)
+    atr_safe = atr.replace(0, np.nan)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        macdv = (fast_ema - slow_ema) / atr_safe * 100.0
+
+    # Signal line: EMA of MACD-V
+    signal = _ema(macdv, signal_length)
+
+    # ------------------------------------------------------------------
+    # Shifted versions to emulate macdv[z], macdv[z+1], macdv[z+2], etc.
+    # In TOS, x[1] = one bar ago, so we use Series.shift(1).
+    # ------------------------------------------------------------------
+    z_int = int(z)
+
+    macdv_z   = macdv.shift(z_int)
+    macdv_z1  = macdv.shift(z_int + 1)
+
+    signal_z  = signal.shift(z_int)
+    signal_z1 = signal.shift(z_int + 1)
+
+    th = float(macdv_threshold)
+
+    # max(macdv[z], macdv[z+1]) and min(...) equivalents
+    macdv_max_z_z1 = macdv_z.combine(macdv_z1, np.maximum)
+
+    macdv_min_z_z1 = macdv_z.combine(macdv_z1, np.minimum)
+
+    # ------------------------------------------------------------------
+    # Strong bullish / bearish conditions (value 1 / -1)
+    # ------------------------------------------------------------------
+    strong_bull = (
+        (macdv_max_z_z1 > th)
+        & (macdv_z > signal_z)
+        & (signal_z > signal_z1)
+    )
+
+    strong_bear = (
+        (macdv_min_z_z1 < -th)
+        & (macdv_z < signal_z)
+        & (signal_z < signal_z1)
+    )
+
+    # ------------------------------------------------------------------
+    # Combine with priority: strong bull (1) > strong bear (-1) > 0
+    # ------------------------------------------------------------------
+    scan = pd.Series(0.0, index=df_sorted.index)
+
+    # ...strong signals where applicable
+    scan[strong_bear] = -1.0
+    scan[strong_bull] = 1.0
+
+    return scan.reindex(df.index)
