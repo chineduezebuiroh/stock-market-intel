@@ -220,22 +220,80 @@ def load_eod(
 
 
 
+def load_intraday_yf(ticker: str, interval: str = "5m", period: str = "30d", session: str = "regular") -> pd.DataFrame:
+    prepost = (session == "extended")
 
-def load_intraday_yf(ticker: str, interval: str = '5m', period: str = '30d', session: str = 'regular') -> pd.DataFrame:
-    prepost = (session == 'extended')
     df = yf.download(
         ticker,
         period=period,
         interval=interval,
         prepost=prepost,
-        progress=False
+        progress=False,
+        auto_adjust=False,
     )
-    if df.empty:
-        return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+    if df is None or df.empty:
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+
+    # yfinance intraday index is tz-aware (UTC) – normalize like load_eod
+    if getattr(df.index, "tz", None) is not None:
+        df.index = df.index.tz_convert("America/New_York").tz_localize(None)
 
     df = df.rename(columns=str.lower)
-    df = _sanitize_eod_df(df) # <-- New line added
-    return df #[['open', 'high', 'low', 'close', 'volume']]
+    df = _sanitize_eod_df(df)
+    return df
+
+
+
+def load_futures_intraday(
+    symbol: str,
+    timeframe: str,
+    window_bars: int,
+    session: str = "extended",
+) -> pd.DataFrame:
+    """
+    Futures intraday loader for 1h and 4h bars, backed by yfinance.
+
+    - intraday_1h: pulls 60m bars directly.
+    - intraday_4h: pulls 60m bars, resamples to 4H.
+
+    We over-fetch by ~2x the requested window and let update_fixed_window()
+    enforce the final bar count.
+    """
+    tf = timeframe.lower()
+
+    if tf not in ("intraday_1h", "intraday_4h"):
+        raise ValueError(f"Unsupported futures intraday timeframe: {timeframe}")
+
+    # Rough bars/day for futures 1h:
+    bars_per_day_1h = 24  # 24h futures session
+    if tf == "intraday_1h":
+        bars_per_day = bars_per_day_1h
+    else:  # intraday_4h
+        bars_per_day = bars_per_day_1h / 4.0  # ~6 bars per day
+
+    # Over-fetch by 2x
+    approx_days = max(5, int((window_bars / max(bars_per_day, 1)) * 2))
+    period = f"{approx_days}d"
+
+    # 1) Load 60m bars
+    df_1h = load_intraday_yf(
+        symbol,
+        interval="60m",
+        period=period,
+        session=session,
+    )
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame()
+
+    if tf == "intraday_1h":
+        # Let update_fixed_window trim to window_bars later
+        return df_1h
+
+    # 2) For intraday_4h: resample 1h → 4h
+    df_4h = resample_ohlcv(df_1h, "4H")
+    return df_4h
+
+
 
 def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     o = df['open'].resample(rule).first()
