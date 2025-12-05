@@ -214,7 +214,7 @@ def load_eod(
     df = _sanitize_eod_df(df)
     return df
 
-
+"""
 def load_intraday_yf(ticker: str, interval: str = "5m", period: str = "30d", session: str = "regular") -> pd.DataFrame:
     prepost = (session == "extended")
 
@@ -236,6 +236,47 @@ def load_intraday_yf(ticker: str, interval: str = "5m", period: str = "30d", ses
     df = df.rename(columns=str.lower)
     df = _sanitize_eod_df(df)
     return df
+"""
+
+def load_intraday_yf(
+    ticker: str,
+    interval: str = '5m',
+    period: str = '30d',
+    session: str = 'regular',
+) -> pd.DataFrame:
+    prepost = (session == 'extended')
+
+    df = yf.download(
+        ticker,
+        period=period,
+        interval=interval,
+        prepost=prepost,
+        progress=False,
+        auto_adjust=False,   # keep raw OHLCV, like load_eod
+    )
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+
+    # Normalize index to America/New_York tz-naive (same as load_eod)
+    if getattr(df.index, "tz", None) is not None:
+        df.index = df.index.tz_convert("America/New_York").tz_localize(None)
+
+    # Normalize column names, then sanitize
+    df = df.rename(columns=str.lower)
+    df = _sanitize_eod_df(df)
+
+    # 🔹 Guarantee adj_close exists (important for snapshots + indicators)
+    if "adj_close" not in df.columns:
+        df["adj_close"] = df["close"]
+
+    # Optional: enforce column order
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    df = df[[c for c in cols if c in df.columns]]
+
+    return df
+
+
+
 
 
 def load_futures_intraday(
