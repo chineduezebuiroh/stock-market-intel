@@ -53,8 +53,8 @@ CASCADE = {
         "monthly": ["quarterly", "yearly"],
     },
     "futures": {
-        "hourly": ["four_hour", "daily"],
-        "four_hour": ["daily", "weekly"],
+        "intraday_1h": ["intraday_4h", "daily"],
+        "intraday_4h": ["daily", "weekly"],
         "daily": ["weekly", "monthly"],
     },
 }
