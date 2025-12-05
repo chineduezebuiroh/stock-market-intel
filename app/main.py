@@ -91,6 +91,58 @@ def sort_for_view(df: pd.DataFrame, signal_filter: str) -> pd.DataFrame:
 
 
 
+
+# -----------------------------------------------------------------------------
+# UNIVERSAL SYMBOL DEBUG PANEL
+# -----------------------------------------------------------------------------
+def render_symbol_debug_panel(
+    df: pd.DataFrame,
+    label: str = "Debug panel",
+    key: str = "debug_symbol_select",
+):
+    """
+    Renders a dropdown to pick a symbol and shows the full row of all
+    columns (lower_*, middle_*, upper_*, scores, etc.) for QA.
+
+    df should already be filtered/sorted to match what the user is seeing
+    in the main table, but should *not* be column-trimmed.
+    """
+    if df is None or df.empty or "symbol" not in df.columns:
+        return
+
+    st.markdown(f"#### {label}")
+
+    symbols = sorted(df["symbol"].dropna().unique().tolist())
+    if not symbols:
+        st.info("No symbols available for debug.")
+        return
+
+    selected = st.selectbox(
+        "Select symbol to inspect",
+        options=symbols,
+        key=key,
+    )
+
+    row_df = df[df["symbol"] == selected]
+    if row_df.empty:
+        st.info("No data for selected symbol.")
+        return
+
+    # Take the first row (they should all be identical for a symbol).
+    row = row_df.iloc[0]
+
+    # Transpose for readability: one column with all fields
+    row_t = row.to_frame(name=selected)
+
+    st.dataframe(
+        row_t,
+        use_container_width=True,
+        hide_index=False,
+    )
+
+
+
+
 # =============================================================================
 # Stocks MTF unified view (all combos)
 # =============================================================================
@@ -146,7 +198,7 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
     cols = [c for c in base_cols if c in df.columns]
     return df[cols] if cols else df
 
-
+"""
 def render_stocks_mtf_tab():
     st.subheader("Stocks – Multi-Timeframe Combos")
 
@@ -191,9 +243,69 @@ def render_stocks_mtf_tab():
     st.caption(
         f"Rows: {len(df_view)} · Combo: `{combo_name}` · Universe: {universe_type}"
     )
+"""
 
 
+def render_stocks_mtf_tab():
+    st.subheader("Stocks – Multi-Timeframe Combos")
 
+    col_left, col_right = st.columns([2, 1])
+
+    with col_left:
+        combo_label = st.selectbox(
+            "Combo family",
+            options=[label for (label, _, _) in STOCK_COMBOS],
+            index=0,
+            key="stocks_combo_select",
+        )
+    with col_right:
+        signal_filter = st.selectbox(
+            "Signal filter",
+            options=["all", "long", "short", "watch"],
+            index=0,
+            key="stocks_signal_filter",
+        )
+
+    label_to_cfg = {label: (name, universe) for (label, name, universe) in STOCK_COMBOS}
+    combo_name, universe_type = label_to_cfg[combo_label]
+
+    df = load_combo_safe(combo_name)
+    if df.empty:
+        st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py stocks {combo_name}.")
+        return
+
+    # Apply signal filter + sorting on the *full* frame first
+    df_full = apply_signal_filter(df, signal_filter)
+    df_full = sort_for_view(df_full, signal_filter)
+
+    if df_full.empty:
+        st.info("No rows match the selected signal filter.")
+        return
+
+    # Trim for main display
+    df_view = select_display_cols_stocks(df_full, universe_type)
+
+    # ETF styling only for options universe
+    if universe_type == "options" and not df_view.empty:
+        df_view = style_etf_scores(df_view)
+
+    st.dataframe(
+        df_view,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption(
+        f"Rows: {len(df_view)} · Combo: `{combo_name}` · Universe: {universe_type}"
+    )
+
+    # --- Symbol-level debug panel (full row, not trimmed view) ---
+    st.markdown("---")
+    render_symbol_debug_panel(
+        df_full,
+        label=f"Inspect symbol – {combo_label}",
+        key="stocks_debug_symbol",
+    )
 
 
 
@@ -239,7 +351,7 @@ def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in preferred if c in df.columns]
     return df[cols] if cols else df
 
-
+"""
 def render_futures_mtf_tab():
     st.subheader("Futures – Multi-Timeframe Combos")
 
@@ -281,10 +393,66 @@ def render_futures_mtf_tab():
     st.caption(
         f"Rows: {len(df_view)} · Combo: `{combo_name}`"
     )
+"""
 
 
 
+def render_futures_mtf_tab():
+    st.subheader("Futures – Multi-Timeframe Combos")
 
+    col_left, col_right = st.columns([2, 1])
+
+    with col_left:
+        combo_label = st.selectbox(
+            "Futures combo",
+            options=[label for (label, _) in FUTURES_COMBOS],
+            index=0,
+            key="futures_combo_select",
+        )
+    with col_right:
+        signal_filter = st.selectbox(
+            "Signal filter",
+            options=["all", "long", "short", "watch", "none"],
+            index=0,
+            key="futures_signal_filter",
+        )
+
+    label_to_name = {label: name for (label, name) in FUTURES_COMBOS}
+    combo_name = label_to_name[combo_label]
+
+    df = load_combo_safe(combo_name)
+    if df.empty:
+        st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py futures {combo_name}.")
+        return
+
+    # Apply signal filter + sorting on full frame
+    df_full = apply_signal_filter(df, signal_filter)
+    df_full = sort_for_view(df_full, signal_filter)
+
+    if df_full.empty:
+        st.info("No rows match the selected signal filter.")
+        return
+
+    # Trim for main futures view
+    df_view = select_display_cols_futures(df_full)
+
+    st.dataframe(
+        df_view,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption(
+        f"Rows: {len(df_view)} · Combo: `{combo_name}`"
+    )
+
+    # --- Symbol-level debug panel for futures ---
+    st.markdown("---")
+    render_symbol_debug_panel(
+        df_full,
+        label=f"Inspect futures symbol – {combo_label}",
+        key="futures_debug_symbol",
+    )
 
 
 
