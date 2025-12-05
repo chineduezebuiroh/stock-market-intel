@@ -301,10 +301,10 @@ def evaluate_stocks_options_signal(
     # ======================================================
     
     if base_signal == "long" and long_score < 5.0:
-        base_signal == "none"
+        base_signal = "none"
 
     if base_signal == "short" and short_score < 5.0:
-        base_signal == "none"
+        base_signal = "none"
     
     #ETF overlay: look at primary + secondary, but preserve "no data" as NaN
     etf_long = _aggregate_etf_score(
@@ -569,10 +569,10 @@ def score_futures_4hdw_signal(
     # Decision mapping (v1 thresholds, easy to tune)
     # ======================================================
     if base_signal == "long" and long_score < 5.0:
-        base_signal == "none"
+        base_signal = "none"
 
     if base_signal == "short" and short_score < 5.0:
-        base_signal == "none"
+        base_signal = "none"
 
     return base_signal, long_score, short_score
 
@@ -616,9 +616,9 @@ def score_futures_dwm_signal(
     # Decision mapping (v1 thresholds, easy to tune)
     # ======================================================
     if base_signal == "long" and long_score < 5.0:
-        base_signal == "none"
+        base_signal = "none"
 
     if base_signal == "short" and short_score < 5.0:
-        base_signal == "none"
+        base_signal = "none"
 
     return base_signal, long_score, short_score
