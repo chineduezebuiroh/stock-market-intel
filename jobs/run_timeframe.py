@@ -188,38 +188,6 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
     # --- 2) Ingest this timeframe (per-symbol parquet with indicators) ---
     ingest_one(namespace, timeframe, symbols, session, window_bars)
 
-    """
-    # 3) Build single-timeframe snapshot (no screening/pivoting for now)
-    rows = []
-    for sym in symbols:
-        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        if not p.exists():
-            continue
-
-        df = pd.read_parquet(p)
-        if df.empty:
-            continue
-
-        # Take the last bar only
-        last = df.iloc[-1:].copy()
-        last["symbol"] = sym
-        rows.append(last)
-
-    if rows:
-        snap = pd.concat(rows, axis=0)
-
-        # Optional: ensure the index name is something nice
-        if snap.index.name is None:
-            snap.index.name = "date"
-
-        # Make sure all column names are plain strings
-        snap.columns = snap.columns.astype(str)
-        
-        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-        snap.to_parquet(out)
-        
-        print(f"[OK] Wrote snapshot: {out}")
-    """
 
     # 3) Build single-timeframe snapshot (no screening/pivoting for now)
     base_cols = get_snapshot_base_cols(namespace, timeframe)
