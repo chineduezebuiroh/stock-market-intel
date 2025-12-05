@@ -51,7 +51,6 @@ def _sanitize_eod_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-
 def compute_start_date_for_window(timeframe: str, window_bars: int) -> str:
     """
     Compute a reasonable start date so we only fetch enough history to
@@ -78,7 +77,6 @@ def compute_start_date_for_window(timeframe: str, window_bars: int) -> str:
     return start_date.isoformat()
 
 
-
 def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tuple[str, int]:
     """
     Map internal timeframe names to yfinance intervals and a rough lookback in days.
@@ -103,8 +101,6 @@ def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tup
 
     # Fallback: treat unknown as daily
     return "1d", window_bars * 2
-
-
 
 
 def load_eod(
@@ -219,7 +215,6 @@ def load_eod(
     return df
 
 
-
 def load_intraday_yf(ticker: str, interval: str = "5m", period: str = "30d", session: str = "regular") -> pd.DataFrame:
     prepost = (session == "extended")
 
@@ -241,7 +236,6 @@ def load_intraday_yf(ticker: str, interval: str = "5m", period: str = "30d", ses
     df = df.rename(columns=str.lower)
     df = _sanitize_eod_df(df)
     return df
-
 
 
 def load_futures_intraday(
@@ -290,9 +284,56 @@ def load_futures_intraday(
         return df_1h
 
     # 2) For intraday_4h: resample 1h → 4h
-    df_4h = resample_ohlcv(df_1h, "4H")
+    df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
     return df_4h
 
+
+def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
+    """
+    Resample 1h futures bars into 4h bars, with the day defined as:
+      - Session start: 17:00 (5pm) America/New_York
+      - 6 bars per session:
+          17:00–21:00
+          21:00–01:00
+          01:00–05:00
+          05:00–09:00
+          09:00–13:00
+          13:00–17:00
+
+    Assumes df_1h:
+      - DatetimeIndex is tz-naive America/New_York (same as load_eod/load_intraday_yf)
+      - Columns: open, high, low, close, volume (adj_close optional / ignored here)
+    """
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame()
+
+    df_1h = df_1h.sort_index()
+
+    # Shift index so that 17:00 becomes "00:00" from resample's POV
+    shifted = df_1h.copy()
+    shifted.index = shifted.index - pd.Timedelta(hours=17)
+
+    # Standard OHLCV resample on the shifted index
+    o = shifted["open"].resample("4H").first()
+    h = shifted["high"].resample("4H").max()
+    l = shifted["low"].resample("4H").min()
+    c = shifted["close"].resample("4H").last()
+    v = shifted["volume"].resample("4H").sum()
+
+    out = pd.concat([o, h, l, c, v], axis=1)
+    out.columns = ["open", "high", "low", "close", "volume"]
+
+    # Shift back so bars are labeled at the true session times
+    out.index = out.index + pd.Timedelta(hours=17)
+
+    # Drop empty / all-NaN bars
+    out = out.dropna(how="any")
+
+    # Optional: enforce no zero-volume bars
+    if "volume" in out.columns:
+        out = out[out["volume"] > 0]
+
+    return out
 
 
 def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
