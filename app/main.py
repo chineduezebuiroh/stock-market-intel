@@ -7,25 +7,26 @@ if str(ROOT) not in sys.path:
 
 import pandas as pd
 import streamlit as st
+import numpy as np
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Paths
-# -----------------------------------------------------------------------------
+# =============================================================================
 DATA = ROOT / "data"
 
 from screens.style_helpers import style_etf_scores
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Streamlit page config
-# -----------------------------------------------------------------------------
+# =============================================================================
 st.set_page_config(
     page_title="Stock Market Intel – MTF Dashboard",
     layout="wide",
 )
 
-# -----------------------------------------------------------------------------
-# Helpers
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Generic combo helpers (stocks + futures)
+# =============================================================================
 def load_parquet_safe(path: Path) -> pd.DataFrame | None:
     """
     Load a parquet file if it exists, otherwise return None.
@@ -37,6 +38,254 @@ def load_parquet_safe(path: Path) -> pd.DataFrame | None:
     except Exception as e:
         st.error(f"Failed to read {path.name}: {e}")
         return None
+
+
+def load_combo_safe(combo_name: str) -> pd.DataFrame:
+    """
+    Load data/combo_<combo_name>.parquet, or return empty DataFrame.
+    """
+    path = DATA / f"combo_{combo_name}.parquet"
+    df = load_parquet_safe(path)
+    if df is None:
+        return pd.DataFrame()
+
+    # Ensure core signal columns exist
+    for col in ["symbol", "signal", "signal_side", "mtf_long_score", "mtf_short_score"]:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    # Backfill signal_side if missing
+    if "signal_side" in df.columns and "signal" in df.columns:
+        df["signal_side"] = df["signal_side"].fillna(df["signal"])
+
+    return df
+
+
+def apply_signal_filter(df: pd.DataFrame, signal_filter: str) -> pd.DataFrame:
+    if df.empty or signal_filter == "all":
+        return df
+
+    col = "signal" if "signal" in df.columns else "signal_side"
+    if col not in df.columns:
+        return df
+
+    return df[df[col] == signal_filter]
+
+
+def sort_for_view(df: pd.DataFrame, signal_filter: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    if signal_filter == "long" and "mtf_long_score" in df.columns:
+        return df.sort_values("mtf_long_score", ascending=False, na_position="last")
+    if signal_filter == "short" and "mtf_short_score" in df.columns:
+        return df.sort_values("mtf_short_score", ascending=False, na_position="last")
+
+    if {"mtf_long_score", "mtf_short_score"}.issubset(df.columns):
+        df = df.copy()
+        df["mtf_abs_max"] = df[["mtf_long_score", "mtf_short_score"]].abs().max(axis=1)
+        df = df.sort_values("mtf_abs_max", ascending=False, na_position="last")
+        df = df.drop(columns=["mtf_abs_max"])
+    return df
+
+
+
+
+# =============================================================================
+# Stocks MTF unified view (all combos)
+# =============================================================================
+STOCK_COMBOS = [
+    ("130m/D/W – Shortlist",      "stocks_d_130mdw_shortlist", "shortlist"),
+    ("D/W/M – Shortlist",         "stocks_c_dwm_shortlist",  "shortlist"),
+    ("D/W/M – Options-eligible",  "stocks_c_dwm_all",        "options"),
+    ("W/M/Q – Shortlist",         "stocks_b_wmq_shortlist",  "shortlist"),
+    ("W/M/Q – Options-eligible",  "stocks_b_wmq_all",        "options"),
+    ("M/Q/Y – Shortlist",         "stocks_a_mqy_shortlist",  "shortlist"),
+    ("M/Q/Y – Options-eligible",  "stocks_a_mqy_all",        "options"),
+]
+
+
+def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    base_cols = [
+        "symbol",
+        "signal",
+        "mtf_long_score",
+        "mtf_short_score",
+        # lower
+        "lower_wyckoff_stage",
+        "lower_exh_abs_pa_current_bar",
+        "lower_exh_abs_pa_prior_bar",
+        "lower_significant_volume",
+        "lower_spy_qqq_vol_ma_ratio",
+        "lower_ma_trend_cloud",
+        "lower_macdv_core",
+        "lower_ttm_squeeze_pro",
+        # middle
+        "middle_wyckoff_stage",
+        "middle_exh_abs_pa_prior_bar",
+        "middle_significant_volume",
+        "middle_spy_qqq_vol_ma_ratio",
+        # upper
+        "upper_wyckoff_stage",
+        "upper_exh_abs_pa_prior_bar",
+    ]
+
+    if universe_type == "options":
+        base_cols += [
+            "etf_symbol_primary",
+            "etf_primary_long_score",
+            "etf_primary_short_score",
+            "etf_symbol_secondary",
+            "etf_secondary_long_score",
+            "etf_secondary_short_score",
+        ]
+
+    cols = [c for c in base_cols if c in df.columns]
+    return df[cols] if cols else df
+
+
+def render_stocks_mtf_tab():
+    st.subheader("Stocks – Multi-Timeframe Combos")
+
+    col_left, col_right = st.columns([2, 1])
+
+    with col_left:
+        combo_label = st.selectbox(
+            "Combo family",
+            options=[label for (label, _, _) in STOCK_COMBOS],
+            index=0,
+            key="stocks_combo_select",
+        )
+    with col_right:
+        signal_filter = st.selectbox(
+            "Signal filter",
+            options=["all", "long", "short", "watch"],
+            index=0,
+            key="stocks_signal_filter",
+        )
+
+    label_to_cfg = {label: (name, universe) for (label, name, universe) in STOCK_COMBOS}
+    combo_name, universe_type = label_to_cfg[combo_label]
+
+    df = load_combo_safe(combo_name)
+    if df.empty:
+        st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py stocks {combo_name}.")
+        return
+
+    df = apply_signal_filter(df, signal_filter)
+    df = sort_for_view(df, signal_filter)
+    df_view = select_display_cols_stocks(df, universe_type)
+
+    if universe_type == "options" and not df_view.empty:
+        df_view = style_etf_scores(df_view)
+
+    st.dataframe(
+        df_view,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption(
+        f"Rows: {len(df_view)} · Combo: `{combo_name}` · Universe: {universe_type}"
+    )
+
+
+
+
+
+
+# =============================================================================
+# Futures MTF view
+# =============================================================================
+FUTURES_COMBOS = [
+    ("Futures 1 · 1h / 4h / D", "futures_1_1h4hd_shortlist"),
+    ("Futures 2 · 4h / D / W",  "futures_2_4hdw_shortlist"),
+    ("Futures 3 · D / W / M",   "futures_3_dwm_shortlist"),
+]
+
+
+def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    preferred = [
+        "symbol",
+        "signal",
+        "mtf_long_score",
+        "mtf_short_score",
+        # lower (1h / 4h / D depending on combo)
+        "lower_wyckoff_stage",
+        "lower_ma_trend_cloud",
+        "lower_macdv_core",
+        "lower_ttm_squeeze_pro",
+        "lower_exh_abs_pa_current_bar",
+        "lower_exh_abs_pa_prior_bar",
+        "lower_significant_volume",
+        "lower_spy_qqq_vol_ma_ratio",
+        # middle
+        "middle_wyckoff_stage",
+        "middle_ma_trend_cloud",
+        "middle_macdv_core",
+        "middle_exh_abs_pa_prior_bar",
+        "middle_significant_volume",
+        # upper
+        "upper_wyckoff_stage",
+        "upper_exh_abs_pa_prior_bar",
+    ]
+
+    cols = [c for c in preferred if c in df.columns]
+    return df[cols] if cols else df
+
+
+def render_futures_mtf_tab():
+    st.subheader("Futures – Multi-Timeframe Combos")
+
+    col_left, col_right = st.columns([2, 1])
+
+    with col_left:
+        combo_label = st.selectbox(
+            "Futures combo",
+            options=[label for (label, _) in FUTURES_COMBOS],
+            index=0,
+            key="futures_combo_select",
+        )
+    with col_right:
+        signal_filter = st.selectbox(
+            "Signal filter",
+            options=["all", "long", "short", "watch", "none"],
+            index=0,
+            key="futures_signal_filter",
+        )
+
+    label_to_name = {label: name for (label, name) in FUTURES_COMBOS}
+    combo_name = label_to_name[combo_label]
+
+    df = load_combo_safe(combo_name)
+    if df.empty:
+        st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py futures {combo_name}.")
+        return
+
+    df = apply_signal_filter(df, signal_filter)
+    df = sort_for_view(df, signal_filter)
+    df_view = select_display_cols_futures(df)
+
+    st.dataframe(
+        df_view,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.caption(
+        f"Rows: {len(df_view)} · Combo: `{combo_name}`"
+    )
+
+
+
+
+
 
 
 def render_snapshot_tab(namespace: str, timeframe: str, title: str):
@@ -130,7 +379,7 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 # Layout / Tabs
 # -----------------------------------------------------------------------------
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
-
+"""
 tab_daily, tab_weekly, tab_monthly, tab_130mdw, tab_dwm, tab_wmq, tab_mqy = st.tabs(
     [
         "Stocks – Daily",
@@ -142,6 +391,18 @@ tab_daily, tab_weekly, tab_monthly, tab_130mdw, tab_dwm, tab_wmq, tab_mqy = st.t
         "Stocks – M/Q/Y (Combos)",
     ]
 )
+"""
+
+tab_daily, tab_weekly, tab_monthly, tab_stocks_mtf, tab_futures_mtf = st.tabs(
+    [
+        "Stocks – Daily",
+        "Stocks – Weekly",
+        "Stocks – Monthly",
+        "Stocks – MTF Combos",
+        "Futures – MTF Combos",
+    ]
+)
+
 
 
 with tab_daily:
@@ -175,13 +436,9 @@ with tab_monthly:
     else:
         st.info("Monthly snapshot not found. Run jobs/run_timeframe.py stocks daily --cascade")
 
-"""
-def apply_signal_filter(df: pd.DataFrame, signal_filter: str) -> pd.DataFrame:
-    if signal_filter == "all":
-        return df
-    return df[df["signal"] == signal_filter]
-"""    
 
+
+"""
 with tab_130mdw:
     st.subheader("Stocks – 130m/D/W Multi-Timeframe Combos")
 
@@ -561,4 +818,10 @@ with tab_mqy:
         st.dataframe(df_mqy_all[mqy_existing_all])
     else:
         st.info("MQY options combo not found. Run jobs/run_combo.py stocks stocks_a_mqy_all")
+"""
 
+with tab_stocks_mtf:
+    render_stocks_mtf_tab()
+
+with tab_futures_mtf:
+    render_futures_mtf_tab()
