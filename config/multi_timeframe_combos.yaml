@@ -92,26 +92,40 @@ stocks:
 
 
 futures:
-  futures_1_1hd_shortlist:
+  futures_1_1h4hd_shortlist:
     universe: shortlist_futures
     
-    lower_tf: hourly
-    middle_tf: null
+    lower_tf: intraday_1h
+    lower_profile: lower_core_v1
+    
+    middle_tf: intraday_4h
+    middle_profile: middle_core_v1
+    
     upper_tf: daily
+    upper_profile: upper_core_v1
     
 
   futures_2_4hdw_shortlist:
     universe: shortlist_futures
     
-    lower_tf: four_hour
+    lower_tf: intraday_4h
+    lower_profile: lower_core_v1
+    
     middle_tf: daily
+    middle_profile: middle_core_v1
+    
     upper_tf: weekly
+    upper_profile: upper_core_v1
     
 
   futures_3_dwm_shortlist:
     universe: shortlist_futures
     
     lower_tf: daily
-    middle_tf: weekly
-    upper_tf: monthly
+    lower_profile: lower_core_v1
     
+    middle_tf: weekly
+    middle_profile: middle_core_v1
+    
+    upper_tf: monthly
+    upper_profile: upper_core_v1
