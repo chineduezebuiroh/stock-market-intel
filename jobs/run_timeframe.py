@@ -34,7 +34,7 @@ CFG = ROOT / "config"
 
 
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
+DEV_MAX_STOCK_SYMBOLS_PER_TF = 250  # set to None to disable the cap
 
 # Load timeframe config (structure only)
 with open(CFG / "timeframes.yaml", "r") as f:
