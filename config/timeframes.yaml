@@ -19,10 +19,10 @@ stocks:
     window_bars: 200
 
 futures:
-  hourly:
+  intraday_1h:
     session: extended
     window_bars: 250
-  four_hour:
+  intraday_4h:
     session: extended
     window_bars: 250
   daily:
