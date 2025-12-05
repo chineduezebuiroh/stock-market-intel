@@ -89,12 +89,37 @@ def sort_for_view(df: pd.DataFrame, signal_filter: str) -> pd.DataFrame:
     return df
 
 
+def add_score_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add a human-readable score summary column combining 
+    mtf_long_score and mtf_short_score as 'L/S'.
 
+    Keeps original numeric score columns untouched.
+    """
+    if df is None or df.empty:
+        return df
 
+    if "mtf_long_score" not in df.columns or "mtf_short_score" not in df.columns:
+        return df
 
-# -----------------------------------------------------------------------------
+    df = df.copy()
+
+    def _fmt(row):
+        ls = row.get("mtf_long_score", np.nan)
+        ss = row.get("mtf_short_score", np.nan)
+        try:
+            if pd.isna(ls) and pd.isna(ss):
+                return ""
+            return f"{float(ls):.1f} / {float(ss):.1f}"
+        except Exception:
+            return ""
+
+    df["score_summary"] = df.apply(_fmt, axis=1)
+    return df
+
+# =============================================================================
 # UNIVERSAL SYMBOL DEBUG PANEL
-# -----------------------------------------------------------------------------
+# =============================================================================
 def render_symbol_debug_panel(
     df: pd.DataFrame,
     label: str = "Debug panel",
@@ -164,6 +189,7 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
     base_cols = [
         "symbol",
         "signal",
+        "score_summary",        # <-- NEW: right after signal
         "mtf_long_score",
         "mtf_short_score",
         # lower
@@ -226,7 +252,7 @@ def render_stocks_mtf_tab():
     if df.empty:
         st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py stocks {combo_name}.")
         return
-
+    
     # Apply signal filter + sorting on the *full* frame first
     df_full = apply_signal_filter(df, signal_filter)
     df_full = sort_for_view(df_full, signal_filter)
@@ -234,15 +260,12 @@ def render_stocks_mtf_tab():
     if df_full.empty:
         st.info("No rows match the selected signal filter.")
         return
+
+    # Add score summary for display
+    df_full = add_score_summary(df_full)
     
     # Trim for main display (plain DataFrame)
     df_view = select_display_cols_stocks(df_full, universe_type)
-    """
-    # Only the displayed table gets styled, not df_view itself
-    display_df = df_view
-    if universe_type == "options" and not df_view.empty:
-        display_df = style_etf_scores(df_view)
-    """
     
     # --- Styling chain: ETF styling (options only) -> signal row shading ---
     display_obj = df_view  # can be DataFrame or Styler
@@ -289,6 +312,7 @@ def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
     preferred = [
         "symbol",
         "signal",
+        "score_summary",        # <-- NEW
         "mtf_long_score",
         "mtf_short_score",
         # lower (1h / 4h / D depending on combo)
@@ -351,6 +375,9 @@ def render_futures_mtf_tab():
         st.info("No rows match the selected signal filter.")
         return
 
+    # Add score summary
+    df_full = add_score_summary(df_full)
+    
     # Trim for main futures view
     df_view = select_display_cols_futures(df_full)
 
