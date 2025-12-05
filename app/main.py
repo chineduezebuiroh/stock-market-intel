@@ -14,7 +14,7 @@ import numpy as np
 # =============================================================================
 DATA = ROOT / "data"
 
-from screens.style_helpers import style_etf_scores
+from screens.style_helpers import style_etf_scores, apply_signal_row_styles
 
 # =============================================================================
 # Streamlit page config
@@ -234,17 +234,28 @@ def render_stocks_mtf_tab():
     if df_full.empty:
         st.info("No rows match the selected signal filter.")
         return
-
+    
     # Trim for main display (plain DataFrame)
     df_view = select_display_cols_stocks(df_full, universe_type)
-
+    """
     # Only the displayed table gets styled, not df_view itself
     display_df = df_view
     if universe_type == "options" and not df_view.empty:
         display_df = style_etf_scores(df_view)
+    """
+    
+    # --- Styling chain: ETF styling (options only) -> signal row shading ---
+    display_obj = df_view  # can be DataFrame or Styler
+
+    if universe_type == "options" and not df_view.empty:
+        # style_etf_scores returns a Styler
+        display_obj = style_etf_scores(df_view)
+
+    # Row shading for all universes (works with DataFrame or Styler)
+    display_obj = apply_signal_row_styles(display_obj)
 
     st.dataframe(
-        display_df,
+        display_obj,
         use_container_width=True,
         hide_index=True,
     )
@@ -343,8 +354,11 @@ def render_futures_mtf_tab():
     # Trim for main futures view
     df_view = select_display_cols_futures(df_full)
 
+    # Apply row shading based on signal
+    display_obj = apply_signal_row_styles(df_view)
+
     st.dataframe(
-        df_view,
+        display_obj,
         use_container_width=True,
         hide_index=True,
     )
