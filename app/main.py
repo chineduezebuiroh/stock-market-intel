@@ -198,53 +198,6 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
     cols = [c for c in base_cols if c in df.columns]
     return df[cols] if cols else df
 
-"""
-def render_stocks_mtf_tab():
-    st.subheader("Stocks – Multi-Timeframe Combos")
-
-    col_left, col_right = st.columns([2, 1])
-
-    with col_left:
-        combo_label = st.selectbox(
-            "Combo family",
-            options=[label for (label, _, _) in STOCK_COMBOS],
-            index=0,
-            key="stocks_combo_select",
-        )
-    with col_right:
-        signal_filter = st.selectbox(
-            "Signal filter",
-            options=["all", "long", "short", "watch"],
-            index=0,
-            key="stocks_signal_filter",
-        )
-
-    label_to_cfg = {label: (name, universe) for (label, name, universe) in STOCK_COMBOS}
-    combo_name, universe_type = label_to_cfg[combo_label]
-
-    df = load_combo_safe(combo_name)
-    if df.empty:
-        st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py stocks {combo_name}.")
-        return
-
-    df = apply_signal_filter(df, signal_filter)
-    df = sort_for_view(df, signal_filter)
-    df_view = select_display_cols_stocks(df, universe_type)
-
-    if universe_type == "options" and not df_view.empty:
-        df_view = style_etf_scores(df_view)
-
-    st.dataframe(
-        df_view,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    st.caption(
-        f"Rows: {len(df_view)} · Combo: `{combo_name}` · Universe: {universe_type}"
-    )
-"""
-
 
 def render_stocks_mtf_tab():
     st.subheader("Stocks – Multi-Timeframe Combos")
@@ -282,15 +235,16 @@ def render_stocks_mtf_tab():
         st.info("No rows match the selected signal filter.")
         return
 
-    # Trim for main display
+    # Trim for main display (plain DataFrame)
     df_view = select_display_cols_stocks(df_full, universe_type)
 
-    # ETF styling only for options universe
+    # Only the displayed table gets styled, not df_view itself
+    display_df = df_view
     if universe_type == "options" and not df_view.empty:
-        df_view = style_etf_scores(df_view)
+        display_df = style_etf_scores(df_view)
 
     st.dataframe(
-        df_view,
+        display_df,
         use_container_width=True,
         hide_index=True,
     )
@@ -299,15 +253,13 @@ def render_stocks_mtf_tab():
         f"Rows: {len(df_view)} · Combo: `{combo_name}` · Universe: {universe_type}"
     )
 
-    # --- Symbol-level debug panel (full row, not trimmed view) ---
+    # --- Symbol-level debug panel (full row, not trimmed/styled view) ---
     st.markdown("---")
     render_symbol_debug_panel(
         df_full,
         label=f"Inspect symbol – {combo_label}",
         key="stocks_debug_symbol",
     )
-
-
 
 # =============================================================================
 # Futures MTF view
@@ -350,51 +302,6 @@ def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
 
     cols = [c for c in preferred if c in df.columns]
     return df[cols] if cols else df
-
-"""
-def render_futures_mtf_tab():
-    st.subheader("Futures – Multi-Timeframe Combos")
-
-    col_left, col_right = st.columns([2, 1])
-
-    with col_left:
-        combo_label = st.selectbox(
-            "Futures combo",
-            options=[label for (label, _) in FUTURES_COMBOS],
-            index=0,
-            key="futures_combo_select",
-        )
-    with col_right:
-        signal_filter = st.selectbox(
-            "Signal filter",
-            options=["all", "long", "short", "watch", "none"],
-            index=0,
-            key="futures_signal_filter",
-        )
-
-    label_to_name = {label: name for (label, name) in FUTURES_COMBOS}
-    combo_name = label_to_name[combo_label]
-
-    df = load_combo_safe(combo_name)
-    if df.empty:
-        st.info(f"No data for `{combo_name}`. Run jobs/run_combo.py futures {combo_name}.")
-        return
-
-    df = apply_signal_filter(df, signal_filter)
-    df = sort_for_view(df, signal_filter)
-    df_view = select_display_cols_futures(df)
-
-    st.dataframe(
-        df_view,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    st.caption(
-        f"Rows: {len(df_view)} · Combo: `{combo_name}`"
-    )
-"""
-
 
 
 def render_futures_mtf_tab():
@@ -453,7 +360,6 @@ def render_futures_mtf_tab():
         label=f"Inspect futures symbol – {combo_label}",
         key="futures_debug_symbol",
     )
-
 
 
 def render_snapshot_tab(namespace: str, timeframe: str, title: str):
@@ -541,11 +447,9 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 
     st.dataframe(df_view, use_container_width=True)
 
-
-
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Layout / Tabs
-# -----------------------------------------------------------------------------
+# =============================================================================
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
 """
 tab_daily, tab_weekly, tab_monthly, tab_130mdw, tab_dwm, tab_wmq, tab_mqy = st.tabs(
