@@ -214,29 +214,6 @@ def load_eod(
     df = _sanitize_eod_df(df)
     return df
 
-"""
-def load_intraday_yf(ticker: str, interval: str = "5m", period: str = "30d", session: str = "regular") -> pd.DataFrame:
-    prepost = (session == "extended")
-
-    df = yf.download(
-        ticker,
-        period=period,
-        interval=interval,
-        prepost=prepost,
-        progress=False,
-        auto_adjust=False,
-    )
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
-
-    # yfinance intraday index is tz-aware (UTC) – normalize like load_eod
-    if getattr(df.index, "tz", None) is not None:
-        df.index = df.index.tz_convert("America/New_York").tz_localize(None)
-
-    df = df.rename(columns=str.lower)
-    df = _sanitize_eod_df(df)
-    return df
-"""
 
 def load_intraday_yf(
     ticker: str,
@@ -274,9 +251,6 @@ def load_intraday_yf(
     df = df[[c for c in cols if c in df.columns]]
 
     return df
-
-
-
 
 
 def load_futures_intraday(
@@ -328,9 +302,10 @@ def load_futures_intraday(
     df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
     return df_4h
 
-
+"""
 def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
-    """
+"""
+"""
     Resample 1h futures bars into 4h bars, with the day defined as:
       - Session start: 17:00 (5pm) America/New_York
       - 6 bars per session:
@@ -344,7 +319,8 @@ def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
     Assumes df_1h:
       - DatetimeIndex is tz-naive America/New_York (same as load_eod/load_intraday_yf)
       - Columns: open, high, low, close, volume (adj_close optional / ignored here)
-    """
+"""
+"""
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
 
@@ -373,6 +349,65 @@ def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
     # Optional: enforce no zero-volume bars
     if "volume" in out.columns:
         out = out[out["volume"] > 0]
+
+    return out
+"""
+
+def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
+    """
+    Resample 1h futures bars into 4h bars, with the day defined as:
+      - Session start: 17:00 (5pm) America/New_York
+      - 6 bars per session:
+          17:00–21:00
+          21:00–01:00
+          01:00–05:00
+          05:00–09:00
+          09:00–13:00
+          13:00–17:00
+
+    Assumes df_1h:
+      - DatetimeIndex tz-naive America/New_York
+      - Columns: open, high, low, close, volume (+ adj_close optional)
+    """
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame()
+
+    df_1h = df_1h.sort_index().copy()
+
+    # Ensure adj_close exists (mirrors load_intraday_yf / load_eod behavior)
+    if "adj_close" not in df_1h.columns:
+        df_1h["adj_close"] = df_1h["close"]
+
+    # Shift index so that 17:00 becomes "00:00" from resample's POV
+    shifted = df_1h.copy()
+    shifted.index = shifted.index - pd.Timedelta(hours=17)
+
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "adj_close": "last",
+        "volume": "sum",
+    }
+
+    # Use '4h' instead of '4H' to avoid FutureWarning
+    out = shifted.resample("4h").agg(agg)
+
+    # Shift back so bars are labeled at the true session times
+    out.index = out.index + pd.Timedelta(hours=17)
+
+    # Drop all-NaN rows
+    out = out.dropna(how="all")
+
+    # Optional: enforce no zero-volume bars
+    if "volume" in out.columns:
+        out = out[out["volume"] > 0]
+
+    # Final column order & types
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    out = out[[c for c in cols if c in out.columns]]
+    out.columns = out.columns.astype(str)
 
     return out
 
