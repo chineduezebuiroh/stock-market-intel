@@ -568,18 +568,14 @@ def score_futures_4hdw_signal(
     # ======================================================
     # Decision mapping (v1 thresholds, easy to tune)
     # ======================================================
-    
-    if long_score >= 5.0:
-        return "long", long_score, short_score
+    if base_signal == "long" and long_score < 5.0:
+        base_signal == "none"
 
-    if short_score >= 5.0:
-        return "short", long_score, short_score
+    if base_signal == "short" and short_score < 5.0:
+        base_signal == "none"
 
-    if long_score < 5.0 and short_score < 5.0:
-        return "none", long_score, short_score
-
-    # Otherwise keep the base directional signal
     return base_signal, long_score, short_score
+
 
 
 def score_futures_dwm_signal(
@@ -619,15 +615,10 @@ def score_futures_dwm_signal(
     # ======================================================
     # Decision mapping (v1 thresholds, easy to tune)
     # ======================================================
-    
-    if long_score >= 5.0:
-        return "long", long_score, short_score
+    if base_signal == "long" and long_score < 5.0:
+        base_signal == "none"
 
-    if short_score >= 5.0:
-        return "short", long_score, short_score
+    if base_signal == "short" and short_score < 5.0:
+        base_signal == "none"
 
-    if long_score < 5.0 and short_score < 5.0:
-        return "none", long_score, short_score
-
-    # Otherwise keep the base directional signal
     return base_signal, long_score, short_score
