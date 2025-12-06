@@ -298,7 +298,10 @@ def render_stocks_mtf_tab():
     df_full = add_score_summary(df_full)
     
     # Trim for main display (plain DataFrame)
-    df_view = select_display_cols_stocks(df_full, universe_type)
+    df_view_flat = select_display_cols_stocks(df_full, universe_type)
+
+    # Add grouped headers (META / LOWER / MIDDLE / UPPER)
+    df_view = add_mtf_grouped_headers(df_view_flat)
     
     # --- Styling chain: ETF styling (options only) -> signal row shading ---
     display_obj = df_view  # can be DataFrame or Styler
@@ -412,7 +415,10 @@ def render_futures_mtf_tab():
     df_full = add_score_summary(df_full)
     
     # Trim for main futures view
-    df_view = select_display_cols_futures(df_full)
+    df_view_flat = select_display_cols_futures(df_full)
+
+    # Add grouped headers
+    df_view = add_mtf_grouped_headers(df_view_flat)
 
     # Apply row shading based on signal
     display_obj = apply_signal_row_styles(df_view)
