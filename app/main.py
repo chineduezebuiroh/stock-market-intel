@@ -153,53 +153,139 @@ def add_mtf_grouped_headers(df: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # UNIVERSAL SYMBOL DEBUG PANEL
 # =============================================================================
+def _fmt_val(v):
+    """Human-friendly formatting for debug panel values."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return "—"
+    try:
+        # For small ints like -2..2, show as int; otherwise one decimal.
+        if isinstance(v, (int, np.integer)):
+            return str(v)
+        if isinstance(v, (float, np.floating)):
+            return f"{v:.2f}"
+        return str(v)
+    except Exception:
+        return str(v)
+
+
+def _render_tf_block(col_container, row: pd.Series, prefix: str, title: str):
+    """
+    Render a single timeframe block (lower/middle/upper) in the debug panel.
+    prefix: 'lower', 'middle', or 'upper'
+    """
+    fields = [
+        ("close", "Close"),
+        ("volume", "Volume"),
+        ("wyckoff_stage", "Wyckoff Stage"),
+        ("exh_abs_pa_current_bar", "Exh/Abs (current)"),
+        ("exh_abs_pa_prior_bar", "Exh/Abs (prior)"),
+        ("significant_volume", "Significant Volume"),
+        ("spy_qqq_vol_ma_ratio", "SPY/QQQ Vol Ratio"),
+        ("ma_trend_cloud", "MA Trend Cloud"),
+        ("macdv_core", "MACDV Core"),
+        ("ttm_squeeze_pro", "TTM Squeeze Pro"),
+        ("ema_8", "EMA 8"),
+        ("ema_21", "EMA 21"),
+        ("atr_14", "ATR 14"),
+    ]
+
+    col_container.markdown(f"### {title}")
+
+    lines = []
+    for col_suffix, label in fields:
+        col_name = f"{prefix}_{col_suffix}"
+        if col_name in row.index:
+            val = row[col_name]
+            lines.append(f"- **{label}**: {_fmt_val(val)}")
+
+    if lines:
+        col_container.markdown("\n".join(lines))
+    else:
+        col_container.info("No fields available for this timeframe.")
+
+
 def render_symbol_debug_panel(
-    df: pd.DataFrame,
-    label: str = "Debug panel",
-    key: str = "debug_symbol_select",
+    df_full: pd.DataFrame,
+    label: str = "Inspect symbol",
+    key: str | None = None,
 ):
     """
-    Renders a dropdown to pick a symbol and shows the full row of all
-    columns (lower_*, middle_*, upper_*, scores, etc.) for QA.
+    Symbol-level deep dive panel:
 
-    df should already be filtered/sorted to match what the user is seeing
-    in the main table, but should *not* be column-trimmed.
+    - Select a symbol from the current combo.
+    - Show meta summary (signal, scores, ETF guardrails if present).
+    - Show three columns: LOWER / MIDDLE / UPPER timeframe blocks.
     """
-    if df is None or df.empty or "symbol" not in df.columns:
+    if df_full is None or df_full.empty or "symbol" not in df_full.columns:
         return
 
-    st.markdown(f"#### {label}")
-
-    symbols = sorted(df["symbol"].dropna().unique().tolist())
+    symbols = sorted(df_full["symbol"].unique())
     if not symbols:
-        st.info("No symbols available for debug.")
         return
 
-    selected = st.selectbox(
-        "Select symbol to inspect",
-        options=symbols,
-        key=key,
-    )
+    with st.expander(label, expanded=False):
+        sym = st.selectbox(
+            "Symbol",
+            options=symbols,
+            key=f"{key}_symbol_select" if key else None,
+        )
 
-    row_df = df[df["symbol"] == selected]
-    if row_df.empty:
-        st.info("No data for selected symbol.")
-        return
+        df_sym = df_full[df_full["symbol"] == sym]
+        if df_sym.empty:
+            st.info("No rows for selected symbol.")
+            return
 
-    # Take the first row (they should all be identical for a symbol).
-    row = row_df.iloc[0]
+        # Assume one row per symbol in combo output
+        row = df_sym.iloc[0]
 
-    # Transpose for readability: one column with all fields
-    row_t = row.to_frame(name=selected)
+        # ------------------------------------------------------------------
+        # Meta summary
+        # ------------------------------------------------------------------
+        signal = row.get("signal", "none")
+        score_summary = row.get("score_summary", "")
+        mtf_long = row.get("mtf_long_score", np.nan)
+        mtf_short = row.get("mtf_short_score", np.nan)
 
-    st.dataframe(
-        row_t,
-        use_container_width=True,
-        hide_index=False,
-    )
+        st.markdown(f"#### {sym} – Multi-Timeframe Summary")
+        st.markdown(
+            f"- **Signal**: `{signal}`  \n"
+            f"- **Scores**: {score_summary} "
+            f"(L={_fmt_val(mtf_long)}, S={_fmt_val(mtf_short)})"
+        )
 
+        # ETF overlay if present (options-eligible stocks)
+        etf_lines = []
+        if "etf_symbol_primary" in row.index:
+            etf_lines.append(
+                f"- **Primary ETF**: {row.get('etf_symbol_primary', '—')} "
+                f"(L={_fmt_val(row.get('etf_primary_long_score'))}, "
+                f"S={_fmt_val(row.get('etf_primary_short_score'))})"
+            )
+        if "etf_symbol_secondary" in row.index:
+            etf_lines.append(
+                f"- **Secondary ETF**: {row.get('etf_symbol_secondary', '—')} "
+                f"(L={_fmt_val(row.get('etf_secondary_long_score'))}, "
+                f"S={_fmt_val(row.get('etf_secondary_short_score'))})"
+            )
 
+        if etf_lines:
+            st.markdown("**ETF Trend Overlay:**")
+            st.markdown("\n".join(etf_lines))
 
+        st.markdown("---")
+
+        # ------------------------------------------------------------------
+        # Three-column MTF breakdown
+        # ------------------------------------------------------------------
+        col_l, col_m, col_u = st.columns(3)
+
+        _render_tf_block(col_l, row, prefix="lower", title="Lower TF")
+        _render_tf_block(col_m, row, prefix="middle", title="Middle TF")
+        _render_tf_block(col_u, row, prefix="upper", title="Upper TF")
+
+        # Optional: raw row toggle for deep debugging
+        with st.expander("Raw row (all columns)", expanded=False):
+            st.write(df_sym.T)
 
 # =============================================================================
 # Stocks MTF unified view (all combos)
