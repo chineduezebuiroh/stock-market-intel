@@ -116,6 +116,39 @@ def add_score_summary(df: pd.DataFrame) -> pd.DataFrame:
 
     df["score_summary"] = df.apply(_fmt, axis=1)
     return df
+    
+
+def add_mtf_grouped_headers(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert flat columns like 'lower_close', 'middle_ema_8', 'upper_wyckoff_stage'
+    into a MultiIndex with top-level groups: META / LOWER / MIDDLE / UPPER.
+
+    Example:
+        'symbol' -> ('META', 'symbol')
+        'lower_close' -> ('LOWER', 'close')
+        'middle_ema_8' -> ('MIDDLE', 'ema_8')
+        'upper_wyckoff_stage' -> ('UPPER', 'wyckoff_stage')
+    """
+    if df is None or df.empty:
+        return df
+
+    new_cols = []
+    for c in df.columns:
+        # we only expect plain strings here
+        name = str(c)
+
+        if name.startswith("lower_"):
+            new_cols.append(("LOWER", name.replace("lower_", "")))
+        elif name.startswith("middle_"):
+            new_cols.append(("MIDDLE", name.replace("middle_", "")))
+        elif name.startswith("upper_"):
+            new_cols.append(("UPPER", name.replace("upper_", "")))
+        else:
+            new_cols.append(("META", name))
+
+    out = df.copy()
+    out.columns = pd.MultiIndex.from_tuples(new_cols)
+    return out
 
 # =============================================================================
 # UNIVERSAL SYMBOL DEBUG PANEL
