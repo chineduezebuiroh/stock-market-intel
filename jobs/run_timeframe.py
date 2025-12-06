@@ -80,12 +80,15 @@ def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
 
 
 
-def symbols_for_timeframe(namespace: str, timeframe: str) -> list[str]:
+def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set[str] | None = None) -> list[str]:
     """
     Union of all symbols for all universes that reference this timeframe,
     with a dev-only cap for stocks so local runs stay fast.
     """
     universes = universes_for_timeframe(namespace, timeframe)
+
+    if allowed_universes is not None:
+        universes = [u for u in universes if u in allowed_universes]
 
     shortlist_syms: set[str] = set()
     other_syms: set[str] = set()
@@ -169,8 +172,7 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         merged.to_parquet(parquet)
 
 
-
-def run(namespace: str, timeframe: str, cascade: bool = False):
+def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes: set[str] | None = None):
     """
     Primary entry point: ingest for a namespace+timeframe for all symbols
     implied by the MTF combos, optionally cascade to higher timeframes,
@@ -186,7 +188,8 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
     session = cfg_tf["session"]
     window_bars = int(cfg_tf["window_bars"])
 
-    symbols = symbols_for_timeframe(namespace, timeframe)
+    symbols = symbols_for_timeframe(namespace, timeframe, allowed_universes)
+
     if not symbols:
         print(f"[WARN] No symbols found for {namespace}:{timeframe} via combos.")
         return
@@ -250,7 +253,9 @@ def run(namespace: str, timeframe: str, cascade: bool = False):
         child_tfs = CASCADE.get(namespace, {}).get(timeframe, [])
         for child_tf in child_tfs:
             # Important: child runs with cascade=False to avoid infinite recursion
-            run(namespace, child_tf, cascade=False)
+            run(namespace, child_tf, cascade=False, # prevent infinite recursion
+                allowed_universes=allowed_universes,  # propagate restriction
+            )
 
 
 
