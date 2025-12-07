@@ -1,9 +1,13 @@
-name: Weekly Rollup – Stocks
+# .github/workflows/weekly_rollup_stocks.yml
+name: Weekly Rollup – Stocks (WMQ)
 
 on:
   schedule:
     # Weekly rollup: Sat 06:00 UTC ≈ 01:00 ET Sat
     - cron: "0 6 * * 6"
+    # Weekly on Saturdays at 10:30, 11:30, and 12:30 UTC
+    # Guard script will decide whether to actually run.
+    - cron: "30 10-12 * * 6"
   workflow_dispatch: {}
 
 jobs:
@@ -23,6 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run weekly rollup profile
+      - name: Run weekly rollup (DST-aware guarded)
         run: |
-          python jobs/run_profile.py weekly_rollup
+          python .github/scripts/run_weekly_rollup_stocks_guarded.py
