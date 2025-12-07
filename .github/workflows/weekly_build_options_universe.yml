@@ -1,0 +1,82 @@
+# .github/workflows/weekly_build_options_universe.yml
+name: Weekly – Build Options Universe
+
+on:
+  schedule:
+    # Every Sunday at 06:00 UTC (~01:30 est DST-aware)
+    - cron: "30 5-7 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  build-options-universe:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run weekly options-universe build (DST-aware, NY time)
+        run: |
+          python - << 'PY'
+          from __future__ import annotations
+
+          import sys
+          import subprocess
+          from datetime import datetime, time
+          from zoneinfo import ZoneInfo
+          from pathlib import Path
+
+          TARGET_TIME = time(hour=1, minute=0)   # 01:30 America/New_York
+          TOLERANCE_MIN = 45                    # +/- 45 minutes
+
+          def minutes_since_midnight(t: time) -> int:
+              return t.hour * 60 + t.minute
+
+          def main() -> None:
+              tz = ZoneInfo("America/New_York")
+              now = datetime.now(tz)
+              now_time = now.time()
+              today = now.date()
+              weekday = now.weekday()  # Monday=0 ... Sunday=6
+
+              # Require Sunday (6)
+              if weekday != 6:
+                  print(f"[INFO] Today ({today}) is not Sunday in NY. Skipping options-universe build.")
+                  sys.exit(0)
+
+              now_min = minutes_since_midnight(now_time)
+              target_min = minutes_since_midnight(TARGET_TIME)
+              diff = abs(now_min - target_min)
+
+              if diff > TOLERANCE_MIN:
+                  print(
+                      f"[INFO] {now} local (NY) is outside +/-{TOLERANCE_MIN} minutes "
+                      f"of target {TARGET_TIME}. Skipping options-universe build."
+                  )
+                  sys.exit(0)
+
+              print(f"[INFO] Within window at {now} NY. Running tools/build_options_universe.py ...")
+
+              root = Path(__file__).resolve().parents[2]
+              cmd = [
+                  sys.executable,
+                  str(root / "tools" / "build_options_universe.py"),
+              ]
+              print(f"[INFO] Running: {' '.join(cmd)}")
+              subprocess.run(cmd, check=True)
+              print("[OK] options universe build completed.")
+
+          if __name__ == "__main__":
+              main()
+          PY
+          
