@@ -1,9 +1,11 @@
-name: Monthly Rollups – Stocks
+# .github/workflows/monthly_rollup_stocks.yml
+name: Monthly Rollup – Stocks (MQY)
 
 on:
   schedule:
-    # Monthly rollup: 1st Sunday of the month 07:00 UTC ≈ 02:00 ET
-    - cron: "0 7 * * 0"
+    # Weekly on Sundays at 10:30, 11:30, and 12:30 UTC
+    # Guard script will check "first Sunday" and time window.
+    - cron: "30 10-12 * * 0"
   workflow_dispatch: {}
 
 jobs:
@@ -23,13 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run monthly rollup profile
+      - name: Run monthly rollup (DST-aware guarded, first Sunday)
         run: |
-          day=$(date -u +%d)   # 01..31 in UTC
-          if [ "$day" -le 7 ]; then
-            echo "First Sunday of month – running monthly_rollup."
-            python jobs/run_profile.py monthly_rollup
-          else
-            echo "Not first Sunday – skipping monthly_rollup."
-          fi
+          python .github/scripts/run_monthly_rollup_stocks_guarded.py
           
