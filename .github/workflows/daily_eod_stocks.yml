@@ -1,9 +1,12 @@
+# .github/workflows/daily_eod_stocks.yml
 name: Daily EOD – Stocks
 
 on:
   schedule:
-    # Mon–Fri 21:15 UTC ≈ 16:15 ET
-    - cron: "15 21 * * 1-5"
+    # Weekdays Mon–Fri at 20:15, 21:15, and 22:15 UTC
+    # - In Standard, 21:15 UTC ≈ 16:15 ET
+    # - In DST, 20:15 UTC or 22:15 ≈ 16:15 ET (don't remember)
+    - cron: "15 20-22 * * 1-5"
   workflow_dispatch: {}
 
 jobs:
@@ -23,6 +26,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run daily EOD profile (stocks)
+      - name: Run stocks EOD (DST-aware guarded)
         run: |
-          python jobs/run_profile.py daily_eod_stocks
+          python .github/scripts/run_stocks_eod_guarded.py
