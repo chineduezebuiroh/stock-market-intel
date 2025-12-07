@@ -1,0 +1,28 @@
+name: Daily EOD – Stocks
+
+on:
+  schedule:
+    # Mon–Fri 21:15 UTC ≈ 16:15 ET
+    - cron: "15 21 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  daily-eod-stocks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily EOD profile (stocks)
+        run: |
+          python jobs/run_profile.py daily_eod_stocks
