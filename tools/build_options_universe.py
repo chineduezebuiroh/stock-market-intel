@@ -22,8 +22,44 @@ REF_DIR.mkdir(parents=True, exist_ok=True)
 
 OUT_PATH = REF_DIR / "options_eligible.csv"
 
+CFG = ROOT / "config"
+EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 # ---------- CANDIDATE UNIVERSE HELPERS ----------
+def load_symbol_exclusions() -> set[str]:
+    if not EXCLUSIONS_FILE.exists():
+        return set()
+
+    try:
+        df = pd.read_csv(EXCLUSIONS_FILE)
+    except Exception as e:
+        print(f"[WARN] Failed to read exclusions from {EXCLUSIONS_FILE}: {e}")
+        return set()
+
+    col = None
+    for candidate in ("symbol", "Symbol", "ticker", "Ticker"):
+        if candidate in df.columns:
+            col = candidate
+            break
+
+    if col is None:
+        print(
+            f"[WARN] {EXCLUSIONS_FILE} has no 'symbol' or 'ticker' column; "
+            "no exclusions will be applied."
+        )
+        return set()
+
+    symbols = (
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .tolist()
+    )
+    return set(symbols)
+
+
 def get_candidate_symbols() -> List[str]:
     """
     Build an initial candidate universe of stock tickers.
@@ -131,6 +167,22 @@ def get_candidate_symbols() -> List[str]:
         candidates = candidates[:MAX_SYMBOLS]
 
     print(f"[INFO] Using {len(candidates)} candidate symbols in total.")
+
+    exclusions = load_symbol_exclusions()
+    if exclusions:
+        candidates["symbol_norm"] = (
+            candidates["symbol"].astype(str).str.strip().str.upper()
+        )
+        before = len(candidates)
+        candidates = candidates[~candidates["symbol_norm"].isin(exclusions)].copy()
+        candidates = candidates.drop(columns=["symbol_norm"])
+        after = len(candidates)
+    
+        print(
+            f"[INFO] Excluded {before - after} symbols based on {EXCLUSIONS_FILE} "
+            f"(remaining: {after})"
+        )
+
     return candidates
 
 
