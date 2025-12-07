@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# jobs/run_timeframe.py
+
 import sys
 from pathlib import Path
 
@@ -22,6 +24,8 @@ from etl.window import parquet_path, update_fixed_window
 
 from etl.universe import symbols_for_universe
 
+from functools import lru_cache
+
 #from indicators.core import apply_core
 from indicators.core import (
     apply_core,
@@ -32,9 +36,10 @@ from indicators.core import (
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 
+DEV_MAX_STOCK_SYMBOLS_PER_TF = 100  # set to None to disable the cap
 
+EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = 500  # set to None to disable the cap
 
 # Load timeframe config (structure only)
 with open(CFG / "timeframes.yaml", "r") as f:
@@ -58,6 +63,47 @@ CASCADE = {
         "daily": ["weekly", "monthly"],
     },
 }
+
+
+@lru_cache(maxsize=1)
+def _load_symbol_exclusions() -> set[str]:
+    """
+    Load a global list of symbols to exclude from all timeframes/universes.
+
+    Expected file: config/excluded_symbols.csv with at least a 'symbol' column.
+    """
+    if not EXCLUSIONS_FILE.exists():
+        return set()
+
+    try:
+        df = pd.read_csv(EXCLUSIONS_FILE)
+    except Exception as e:
+        print(f"[WARN] Failed to read exclusions from {EXCLUSIONS_FILE}: {e}")
+        return set()
+
+    col = None
+    for candidate in ("symbol", "Symbol", "ticker", "Ticker"):
+        if candidate in df.columns:
+            col = candidate
+            break
+
+    if col is None:
+        print(
+            f"[WARN] {EXCLUSIONS_FILE} has no 'symbol' or 'ticker' column; "
+            "no exclusions will be applied."
+        )
+        return set()
+
+    # Normalize to upper-case strings with no spaces
+    symbols = (
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .tolist()
+    )
+    return set(symbols)
 
 
 def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
@@ -115,6 +161,14 @@ def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set
     else:
         # futures or no dev cap: everything
         symbols = sorted(shortlist_syms.union(other_syms))
+
+    # 🔹 Global exclusions guardrail
+    excluded = _load_symbol_exclusions()
+    if excluded:
+        symbols = [
+            s for s in symbols
+            if s is not None and str(s).strip().upper() not in excluded
+        ]
 
     return symbols
 
