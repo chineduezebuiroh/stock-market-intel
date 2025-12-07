@@ -7,10 +7,16 @@ from typing import Protocol
 
 import numpy as np
 import pandas as pd
-
-from screens.etf_trend_engine import compute_etf_trend_scores
-
 from pathlib import Path
+
+#from screens.etf_trend_engine import compute_etf_trend_scores
+from etf.trend_engine import write_etf_trend_scores
+
+from etf.guardrails import (
+    attach_etf_trends_for_options_combo,
+    aggregate_etf_score,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 REF = ROOT / "ref"
@@ -26,12 +32,10 @@ class MTFScore:
 class MTFScorer(Protocol):
     def __call__(self, row: pd.Series) -> MTFScore: ...
     
-# ==================================================================================
-# ==================================================================================
-# Resolve signal-routing logic
-# ==================================================================================
-# ==================================================================================
 
+# ==============================================================================
+# Resolve signal-routing logic
+# ==============================================================================
 def basic_signal_logic(
     namespace: str,
     combo_name: str,
@@ -152,12 +156,10 @@ def _resolve_signal_routing(
         # Fallback: no evaluator
         return "none", ""  
 
-# ========================================================================
-# ========================================================================
-# STOCK (SHORTLIST) scoring functions
-# ========================================================================
-# ========================================================================
 
+# ===========================================================================
+# STOCK (SHORTLIST) scoring functions
+# ===========================================================================
 def evaluate_stocks_shortlist_signal(
     row: pd.Series,
     exh_abs_col: str,
@@ -177,9 +179,9 @@ def evaluate_stocks_shortlist_signal(
         short_score: float
     """
 
-    # =====================================================
+    # -----------------------------------------------------
     # Unpack fields
-    # =====================================================
+    # -----------------------------------------------------
 
     # Lower (timing / PA): usually daily
     lw_wyckoff = row.get("lower_wyckoff_stage", np.nan)
@@ -203,18 +205,18 @@ def evaluate_stocks_shortlist_signal(
     long_score = 0.0
     short_score = 0.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Block 1: Trend / Regime (upper + middle)
-    # ======================================================
+    # ------------------------------------------------------
     # Upper regime bias: aligned bullish vs bearish
     if (~np.isnan(up_wyckoff) and (up_wyckoff > 0 or up_exh_abs > 0)) or (np.isnan(up_wyckoff) and (md_wyckoff > 0 or md_exh_abs > 0)):
         long_score += 1.0
     if (~np.isnan(up_wyckoff) and (up_wyckoff < 0 or up_exh_abs < 0)) or (np.isnan(up_wyckoff) and (md_wyckoff < 0 or md_exh_abs < 0)):
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Block 2: Price Action / Momentum (lower)
-    # ======================================================
+    # ------------------------------------------------------
     # Lower regime moving average trend cloud
     if lw_trend_cloud > 0:
         long_score += 1.0
@@ -233,9 +235,9 @@ def evaluate_stocks_shortlist_signal(
     if lw_macdv == -2 or (lw_macdv == -1 and ~np.isnan(lw_sqz) and lw_sqz <= 0):
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
-    # ======================================================
+    # ------------------------------------------------------
     if long_score <= 0 and short_score <= 0:
         return "none", long_score, short_score
 
@@ -248,12 +250,10 @@ def evaluate_stocks_shortlist_signal(
     return "none", long_score, short_score
 
 
-# ========================================================================
-# ========================================================================
-# STOCK (OPTIONS-ELIGIBLE) scoring functions
-# ========================================================================
-# ========================================================================
 
+# =========================================================================
+# STOCK (OPTIONS-ELIGIBLE) scoring functions
+# =========================================================================
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
@@ -285,9 +285,9 @@ def evaluate_stocks_options_signal(
     lw_sigvol = row.get("lower_significant_volume", np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
 
-    # ======================================================
+    # ------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
-    # ======================================================
+    # ------------------------------------------------------
     # Significant volume + beating SPY/QQQ volume baseline -> strong participation
     if ~np.isnan(up_wyckoff) and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th1) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th1)):
         long_score += 1.0
@@ -296,9 +296,9 @@ def evaluate_stocks_options_signal(
         long_score += 1.0
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
-    # ======================================================
+    # ------------------------------------------------------
     
     if base_signal == "long" and long_score < 5.0:
         base_signal = "none"
@@ -307,11 +307,11 @@ def evaluate_stocks_options_signal(
         base_signal = "none"
     
     #ETF overlay: look at primary + secondary, but preserve "no data" as NaN
-    etf_long = _aggregate_etf_score(
+    etf_long = aggregate_etf_score(
         row,
         ["etf_primary_long_score", "etf_secondary_long_score"],
     )
-    etf_short = _aggregate_etf_score(
+    etf_short = aggregate_etf_score(
         row,
         ["etf_primary_short_score", "etf_secondary_short_score"],
     )
@@ -327,123 +327,17 @@ def evaluate_stocks_options_signal(
     return base_signal, long_score, short_score
 
 
-def _aggregate_etf_score(row: pd.Series, cols: list[str]) -> float:
-    """
-    Combine primary / secondary ETF scores for one direction.
-
-    Behavior:
-      - If *both* columns are missing or NaN -> return np.nan (no ETF data)
-      - Otherwise:
-          - treat None / NaN as 0.0
-          - return max(cleaned_scores)
-    """
-    raw_vals = []
-    for c in cols:
-        if c in row:
-            raw_vals.append(row[c])
-        else:
-            raw_vals.append(np.nan)
-
-    # If all values are missing/NaN, this symbol has no ETF mapping/data
-    if all(pd.isna(v) for v in raw_vals):
-        return np.nan
-
-    cleaned = []
-    for v in raw_vals:
-        if v is None or pd.isna(v):
-            cleaned.append(0.0)
-        else:
-            try:
-                cleaned.append(float(v))
-            except (TypeError, ValueError):
-                cleaned.append(0.0)
-
-    return max(cleaned)
 
 
-# ========================================================================
 # ========================================================================
 # ETF TRENDS scoring functions
 # ========================================================================
-# ========================================================================
-
-def attach_etf_trends_for_options_combo(
-    combo_df: pd.DataFrame,
-    combo_cfg: dict,
-    timeframe_for_etf: str = "weekly",
-) -> pd.DataFrame:
-    """
-    For options-eligible combos, join ETF trend scores using the
-    symbol_to_etf_options_eligible.csv mapping and the ETF weekly scores.
-
-    Assumes mapping has at least:
-        - symbol
-        - etf_symbol_primary
-    """
-    universe = combo_cfg.get("universe")
-    if universe != "options_eligible":
-        # Nothing to do for shortlist / futures / anything else
-        return combo_df
-
-    mapping_path = REF / "symbol_to_etf_options_eligible.csv"
-    if not mapping_path.exists():
-        print(f"[WARN] ETF mapping not found at {mapping_path}; skipping ETF guardrail join.")
-        return combo_df
-
-    mapping = pd.read_csv(mapping_path)
-
-    if "symbol" not in mapping.columns or "etf_symbol_primary" not in mapping.columns:
-        print(
-            "[WARN] symbol_to_etf_options_eligible.csv missing "
-            "'symbol' and/or 'etf_symbol_primary'; skipping ETF join."
-        )
-        return combo_df
-
-    etf_scores = compute_etf_trend_scores(timeframe_for_etf)  # index=etf_symbol
-    etf_scores = etf_scores.reset_index()  # columns: etf_symbol, etf_long_score, etf_short_score
-
-    # 1) attach primary ETF symbol to combo rows
-    combo = combo_df.merge(
-        mapping[["symbol", "etf_symbol_primary", "etf_symbol_secondary"]],
-        on="symbol",
-        how="left",
-    )
-  
-    # 2) attach ETF scores for that primary ETF
-    combo = combo.merge(
-        etf_scores.rename(columns={"etf_symbol": "etf_symbol_primary"}),
-        on="etf_symbol_primary",
-        how="left",
-    )
-    # Rename scores to make their role clear
-    combo = combo.rename(
-        columns={
-            "etf_long_score": "etf_primary_long_score",
-            "etf_short_score": "etf_primary_short_score",
-        }
-    )
-
-    # 3) attach ETF scores for the ** secondary ** ETF
-    combo = combo.merge(
-        etf_scores.rename(columns={"etf_symbol": "etf_symbol_secondary"}),
-        on="etf_symbol_secondary",
-        how="left",
-    )
-    # Rename scores to make their role clear
-    combo = combo.rename(
-        columns={
-            "etf_long_score": "etf_secondary_long_score",
-            "etf_short_score": "etf_secondary_short_score",
-        }
-    )
-
-    return combo
 
 
-# ========================================================================
+
+
 # ========================================================================
 # FUTURES scoring functions – one per combo
-# ========================================================================
 # ========================================================================
 
 def score_futures_base_signal(
@@ -460,9 +354,9 @@ def score_futures_base_signal(
     but with a slightly more intraday-leaning weighting.
     """
 
-    # =====================================================
+    # -----------------------------------------------------
     # Unpack fields
-    # =====================================================
+    # -----------------------------------------------------
 
     # Lower (timing / PA): usually daily
     lw_wyckoff = row.get("lower_wyckoff_stage", np.nan)
@@ -486,18 +380,18 @@ def score_futures_base_signal(
     long_score = 0.0
     short_score = 0.0
 
-    # ======================================================
+    # -----------------------------------------------------
     # Block 1: Trend / Regime (upper + middle)
-    # ======================================================
+    # -----------------------------------------------------
     # Upper regime bias: aligned bullish vs bearish
     if (~np.isnan(up_wyckoff) and (up_wyckoff > 0 or up_exh_abs > 0)) or (np.isnan(up_wyckoff) and (md_wyckoff > 0 or md_exh_abs > 0)):
         long_score += 1.0
     if (~np.isnan(up_wyckoff) and (up_wyckoff < 0 or up_exh_abs < 0)) or (np.isnan(up_wyckoff) and (md_wyckoff < 0 or md_exh_abs < 0)):
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Block 2: Price Action / Momentum (lower)
-    # ======================================================
+    # ------------------------------------------------------
     # Lower regime moving average trend cloud
     if lw_trend_cloud > 0:
         long_score += 1.0
@@ -516,9 +410,9 @@ def score_futures_base_signal(
     if lw_macdv == -2 or (lw_macdv == -1 and ~np.isnan(lw_sqz) and lw_sqz <= 0):
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
-    # ======================================================
+    # ------------------------------------------------------
     if long_score <= 0 and short_score <= 0:
         return "none", long_score, short_score
 
@@ -557,17 +451,17 @@ def score_futures_4hdw_signal(
     md_sigvol = row.get("middle_significant_volume", np.nan)
     lw_sigvol = row.get("lower_significant_volume", np.nan)
 
-    # ======================================================
+    # ------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
-    # ======================================================
+    # ------------------------------------------------------
     # Significant volume -> strong participation
     if ~np.isnan(up_wyckoff) and md_sigvol == 1.0:
         long_score += 1.0
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
-    # ======================================================
+    # ------------------------------------------------------
     if base_signal == "long" and long_score < 5.0:
         base_signal = "none"
 
@@ -604,17 +498,17 @@ def score_futures_dwm_signal(
     md_sigvol = row.get("middle_significant_volume", np.nan)
     lw_sigvol = row.get("lower_significant_volume", np.nan)
 
-    # ======================================================
+    # ------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
-    # ======================================================
+    # ------------------------------------------------------
     # Significant volume -> strong participation
     if ~np.isnan(up_wyckoff) and (md_sigvol == 1.0 or lw_sigvol == 1.0):
         long_score += 1.0
         short_score += 1.0
 
-    # ======================================================
+    # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
-    # ======================================================
+    # ------------------------------------------------------
     if base_signal == "long" and long_score < 5.0:
         base_signal = "none"
 
