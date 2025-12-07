@@ -2,8 +2,8 @@ name: Monthly Rollups – Stocks
 
 on:
   schedule:
-    # Monthly rollup: 1st of month 06:30 UTC ≈ 01:30 ET
-    - cron: "30 6 1 * *"
+    # Monthly rollup: 1st Sunday of the month 07:00 UTC ≈ 02:00 ET
+    - cron: "0 7 * * 0"
   workflow_dispatch: {}
 
 jobs:
@@ -25,5 +25,11 @@ jobs:
 
       - name: Run monthly rollup profile
         run: |
-          python jobs/run_profile.py monthly_rollup
+          day=$(date -u +%d)   # 01..31 in UTC
+          if [ "$day" -le 7 ]; then
+            echo "First Sunday of month – running monthly_rollup."
+            python jobs/run_profile.py monthly_rollup
+          else
+            echo "Not first Sunday – skipping monthly_rollup."
+          fi
           
