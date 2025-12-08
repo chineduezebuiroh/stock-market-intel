@@ -244,6 +244,7 @@ def indicator_significant_volume(
     df: pd.DataFrame,
     percentile_ceiling: float = 67.0,
     lookback_period: int = 126,
+    z: int = 0,
     **_,
 ) -> pd.Series:
 
@@ -283,7 +284,7 @@ def indicator_significant_volume(
     pc = float(percentile_ceiling)
     scan = pd.Series(0.0, index=df_sorted.index)
 
-    cond = (vol_pct_ceil >= pc) | (vol_pct_ceil.shift(1) >= pc)
+    cond = (vol_pct_ceil.shift(z) >= pc) | (vol_pct_ceil.shift(z+1) >= pc)
     scan[cond] = 1.0
 
     # Reindex back to original df index (preserves caller's index order)
