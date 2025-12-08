@@ -70,7 +70,7 @@ jobs:
               root = Path(__file__).resolve().parents[2]
               cmd = [
                   sys.executable,
-                  str(root / "tools" / "build_options_universe.py"),
+                  str(root / "jobs" / "run_build_options_universe.py"),                  
               ]
               print(f"[INFO] Running: {' '.join(cmd)}")
               subprocess.run(cmd, check=True)
