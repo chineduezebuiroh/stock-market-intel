@@ -111,7 +111,7 @@ def _resolve_signal_routing(
     namespace: str,
     combo_name: str,
     combo_cfg: dict,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     """
     Decide which evaluator to use and which lower_* Exh/Abs column to read.
 
@@ -126,36 +126,35 @@ def _resolve_signal_routing(
     if namespace == "stocks" and universe == "shortlist_stocks":
         # Family A: DWM & WMQ -> use current-bar Exh/Abs on *lower* timeframe
         if pattern in ("daily-weekly-monthly", "weekly-monthly-quarterly"):
-            return "stocks_shortlist", "lower_exh_abs_pa_current_bar"
+            return "stocks_shortlist", "lower_exh_abs_pa_current_bar", "lower_sig_vol_current_bar"
         # Family B: all other combos -> use prior-bar Exh/Abs on lower
-        return "stocks_shortlist", "lower_exh_abs_pa_prior_bar"
+        return "stocks_shortlist", "lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"
 
     # Stocks: options-eligible universe
     if namespace == "stocks" and universe == "options_eligible":
         # For now we'll route options through the same evaluator,
         # but we might tune thresholds later.
         if pattern in ("daily-weekly-monthly", "weekly-monthly-quarterly"):
-            return "stocks_options", "lower_exh_abs_pa_current_bar"
+            return "stocks_options", "lower_exh_abs_pa_current_bar", "lower_sig_vol_current_bar"
         if pattern == "monthly-quarterly-yearly":
-            return "stocks_options", "lower_exh_abs_pa_prior_bar"
+            return "stocks_options", "lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"
         # Default for any other pattern
-        return "stocks_options", "lower_exh_abs_pa_prior_bar"
+        return "stocks_options", "lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"
 
     # Futures: shortlist universe (stubs for later)
     if namespace == "futures": #and universe == "shortlist_futures":
         # 1h / 4h / D
         if pattern == "intraday_1h-intraday_4h-daily":
-            return "futures_base", "lower_exh_abs_pa_prior_bar"
+            return "futures_base", "lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"
         # 4h / D / W
         if pattern == "intraday_4h-daily-weekly":
-            return "futures_4hdw", "lower_exh_abs_pa_prior_bar"
+            return "futures_4hdw", "lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"
         # D / W / M
         if pattern == "daily-weekly-monthly":
-            return "futures_dwm", "lower_exh_abs_pa_prior_bar"
+            return "futures_dwm", "lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"
 
         # Fallback: no evaluator
-        return "none", ""  
-
+        return "none", "", ""
 
 # ===========================================================================
 # STOCK (SHORTLIST) scoring functions
@@ -163,6 +162,7 @@ def _resolve_signal_routing(
 def evaluate_stocks_shortlist_signal(
     row: pd.Series,
     exh_abs_col: str,
+    sig_vol_col: str,
 ) -> tuple[str, float, float]:
     """
     Multi-timeframe evaluation for STOCKS in the shortlist universe
@@ -186,7 +186,7 @@ def evaluate_stocks_shortlist_signal(
     # Lower (timing / PA): usually daily
     lw_wyckoff = row.get("lower_wyckoff_stage", np.nan)
     lw_exh_abs = row.get(exh_abs_col, np.nan)  # current or prior bar, based on routing
-    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
     lw_trend_cloud = row.get("lower_ma_trend_cloud", np.nan)
     lw_macdv = row.get("lower_macdv_core", np.nan)
@@ -195,7 +195,7 @@ def evaluate_stocks_shortlist_signal(
     # Middle: context / confirmation (e.g., weekly)
     md_wyckoff = row.get("middle_wyckoff_stage", np.nan) 
     md_exh_abs = row.get("middle_exh_abs_pa_prior_bar", np.nan) 
-    md_sigvol = row.get("middle_significant_volume", np.nan)
+    md_sigvol = row.get("middle_sig_vol_current_bar", np.nan)
     md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
     
     # Upper: regime (e.g., monthly)
@@ -257,6 +257,7 @@ def evaluate_stocks_shortlist_signal(
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
+    sig_vol_col: str,
 ) -> tuple[str, float, float]:
     """
     Options-eligible version of the equity signal.
@@ -270,7 +271,7 @@ def evaluate_stocks_options_signal(
     This keeps trend/PA logic identical, but enforces stronger participation
     for options trades.
     """
-    base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col)
+    base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
     vol_ratio_th1 = 0.10
     vol_ratio_th2 = 0.25
@@ -280,9 +281,9 @@ def evaluate_stocks_options_signal(
         return base_signal, long_score, short_score
 
     up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
-    md_sigvol = row.get("middle_significant_volume", np.nan)
+    md_sigvol = row.get("middle_sig_vol_current_bar", np.nan)
     md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
-    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
 
     # ------------------------------------------------------
@@ -327,8 +328,6 @@ def evaluate_stocks_options_signal(
     return base_signal, long_score, short_score
 
 
-
-
 # ========================================================================
 # ETF TRENDS scoring functions
 # ========================================================================
@@ -343,6 +342,7 @@ def evaluate_stocks_options_signal(
 def score_futures_base_signal(
     row: pd.Series,
     exh_abs_col: str,
+    sig_vol_col: str,
 ) -> tuple[str, float, float]:
     
     """
@@ -361,7 +361,7 @@ def score_futures_base_signal(
     # Lower (timing / PA): usually daily
     lw_wyckoff = row.get("lower_wyckoff_stage", np.nan)
     lw_exh_abs = row.get(exh_abs_col, np.nan)  # current or prior bar, based on routing
-    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
     lw_trend_cloud = row.get("lower_ma_trend_cloud", np.nan)
     lw_macdv = row.get("lower_macdv_core", np.nan)
@@ -370,7 +370,7 @@ def score_futures_base_signal(
     # Middle: context / confirmation (e.g., weekly)
     md_wyckoff = row.get("middle_wyckoff_stage", np.nan) 
     md_exh_abs = row.get("middle_exh_abs_pa_prior_bar", np.nan) 
-    md_sigvol = row.get("middle_significant_volume", np.nan)
+    md_sigvol = row.get("middle_sig_vol_current_bar", np.nan)
     md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
     
     # Upper: regime (e.g., monthly)
@@ -428,6 +428,7 @@ def score_futures_base_signal(
 def score_futures_4hdw_signal(
     row: pd.Series,
     exh_abs_col: str,
+    sig_vol_col: str,
 ) -> tuple[str, float, float]:
     """
     Futures combo 2: 4h / Daily / Weekly
@@ -441,15 +442,15 @@ def score_futures_4hdw_signal(
         for any 'long' or 'short' signal to stand.
     """
 
-    base_signal, long_score, short_score = score_futures_base_signal(row, exh_abs_col)
+    base_signal, long_score, short_score = score_futures_base_signal(row, exh_abs_col, sig_vol_col)
 
     # If there is no directional signal, nothing to add.
     if base_signal not in ("long", "short"):
         return base_signal, long_score, short_score
 
     up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
-    md_sigvol = row.get("middle_significant_volume", np.nan)
-    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    md_sigvol = row.get("middle_sig_vol_current_bar", np.nan)
+    lw_sigvol = row.get(sig_vol_col, np.nan)
 
     # ------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
@@ -475,6 +476,7 @@ def score_futures_4hdw_signal(
 def score_futures_dwm_signal(
     row: pd.Series,
     exh_abs_col: str,
+    sig_vol_col: str,
 ) -> tuple[str, float, float]:
     """
     Futures combo 2: Daily / Weekly / Monthly
@@ -488,15 +490,15 @@ def score_futures_dwm_signal(
         timeframe for any 'long' or 'short' signal to stand.
     """
 
-    base_signal, long_score, short_score = score_futures_base_signal(row, exh_abs_col)
+    base_signal, long_score, short_score = score_futures_base_signal(row, exh_abs_col, sig_vol_col)
 
     # If there is no directional signal, nothing to add.
     if base_signal not in ("long", "short"):
         return base_signal, long_score, short_score
 
     up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
-    md_sigvol = row.get("middle_significant_volume", np.nan)
-    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    md_sigvol = row.get("middle_sig_vol_current_bar", np.nan)
+    lw_sigvol = row.get(sig_vol_col, np.nan)
 
     # ------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
