@@ -33,8 +33,12 @@ indicators:
         length: 30
         timeframe_name: "intraday_130m"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
+        fast_length: 15
+
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
         fast_length: 15
 
       macdv_core:
@@ -82,8 +86,12 @@ indicators:
         length: 21
         timeframe_name: "daily"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
+        fast_length: 10
+
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
         fast_length: 10
 
       macdv_core:
@@ -131,8 +139,12 @@ indicators:
         length: 26
         timeframe_name: "weekly"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
+        fast_length: 13
+
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
         fast_length: 13
 
       macdv_core:
@@ -180,10 +192,14 @@ indicators:
         length: 24
         timeframe_name: "monthly"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 12
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 12
+        
       macdv_core:
         id: macdv
         z: 1
@@ -229,10 +245,14 @@ indicators:
         length: 20
         timeframe_name: "quarterly"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 10
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 10
+        
       macdv_core:
         id: macdv
         z: 1
@@ -278,10 +298,14 @@ indicators:
         length: 20
         timeframe_name: "yearly"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 10
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 10
+        
       macdv_core:
         id: macdv
         z: 1
@@ -328,10 +352,14 @@ indicators:
         length: 23
         timeframe_name: "intraday_1h"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 10
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 10
+        
       macdv_core:
         id: macdv
         z: 1
@@ -377,10 +405,14 @@ indicators:
         length: 30
         timeframe_name: "intraday_4h"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 12
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 12
+        
       macdv_core:
         id: macdv
         z: 1
@@ -426,10 +458,14 @@ indicators:
         length: 21
         timeframe_name: "daily"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 10
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 10
+        
       macdv_core:
         id: macdv
         z: 1
@@ -475,10 +511,14 @@ indicators:
         length: 26
         timeframe_name: "weekly"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 13
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 13
+        
       macdv_core:
         id: macdv
         z: 1
@@ -524,10 +564,14 @@ indicators:
         length: 24
         timeframe_name: "monthly"
 
-      ma_trend_cloud:
-        id: movingavg_trend_cloud
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
         fast_length: 12
 
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 12
+        
       macdv_core:
         id: macdv
         z: 1
