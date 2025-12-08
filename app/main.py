@@ -182,7 +182,8 @@ def _render_tf_block(col_container, row: pd.Series, prefix: str, title: str):
         ("sig_vol_current_bar", "Sig Vol (current)"),
         ("sig_vol_prior_bar", "Sig Vol (prior)"),
         ("spy_qqq_vol_ma_ratio", "SPY/QQQ Vol Ratio"),
-        ("ma_trend_cloud", "MA Trend Cloud"),
+        ("ma_trend_bull", "MA Trend Bull"),
+        ("ma_trend_bear", "MA Trend Bear"),
         ("macdv_core", "MACDV Core"),
         ("ttm_squeeze_pro", "TTM Squeeze Pro"),
         ("ema_8", "EMA 8"),
@@ -319,7 +320,8 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
         "lower_sig_vol_current_bar",
         "lower_sig_vol_prior_bar",
         "lower_spy_qqq_vol_ma_ratio",
-        "lower_ma_trend_cloud",
+        "lower_ma_trend_bull",
+        "lower_ma_trend_bear",
         "lower_macdv_core",
         "lower_ttm_squeeze_pro",
         # middle
@@ -439,27 +441,27 @@ def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
         "score_summary",        # <-- NEW
         "mtf_long_score",
         "mtf_short_score",
-        # lower (1h / 4h / D depending on combo)
+        # lower
         "lower_wyckoff_stage",
-        "lower_ma_trend_cloud",
-        "lower_macdv_core",
-        "lower_ttm_squeeze_pro",
         "lower_exh_abs_pa_current_bar",
         "lower_exh_abs_pa_prior_bar",
         "lower_sig_vol_current_bar",
         "lower_sig_vol_prior_bar",
         "lower_spy_qqq_vol_ma_ratio",
+        "lower_ma_trend_bull",
+        "lower_ma_trend_bear",
+        "lower_macdv_core",
+        "lower_ttm_squeeze_pro",
         # middle
         "middle_wyckoff_stage",
-        "middle_ma_trend_cloud",
-        "middle_macdv_core",
         "middle_exh_abs_pa_prior_bar",
         "middle_sig_vol_current_bar",
+        "middle_spy_qqq_vol_ma_ratio",
         # upper
         "upper_wyckoff_stage",
         "upper_exh_abs_pa_prior_bar",
     ]
-
+    
     cols = [c for c in preferred if c in df.columns]
     return df[cols] if cols else df
 
