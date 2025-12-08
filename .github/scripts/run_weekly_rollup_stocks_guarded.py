@@ -57,9 +57,9 @@ def main() -> None:
     print(f"[INFO] Running: {' '.join(cmd_quarterly)}")
     subprocess.run(cmd_quarterly, check=True)
 
-    # ---------------------------------------------------------
-    # ---- 2) Refresh ETF trends on weekly (middle) timreframe
-    # ---------------------------------------------------------
+    # ----------------------------------------------------------
+    # ---- 2) Refresh ETF trends on monthly (middle) timreframe
+    # ----------------------------------------------------------
     cmd_etf_timeframe = [
         sys.executable,
         str(root / "jobs" / "run_etf_trends.py"),
