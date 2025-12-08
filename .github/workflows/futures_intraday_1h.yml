@@ -3,7 +3,9 @@ name: Futures Intraday 1h
 
 on:
   schedule:
-    - cron: "5/10 * * * *"   # starting at 5th minute, every 10 min; all days (UTC)
+    # starting at 1st minute, every 10 min
+    # all days (UTC)
+    - cron: "1/10 * * * *"   
   workflow_dispatch: {}
 
 jobs:
