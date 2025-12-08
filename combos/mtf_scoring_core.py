@@ -188,7 +188,8 @@ def evaluate_stocks_shortlist_signal(
     lw_exh_abs = row.get(exh_abs_col, np.nan)  # current or prior bar, based on routing
     lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
-    lw_trend_cloud = row.get("lower_ma_trend_cloud", np.nan)
+    lw_ma_trend_bull = row.get("lower_ma_trend_bullish", np.nan)
+    lw_ma_trend_bear = row.get("lower_ma_trend_bearish", np.nan)
     lw_macdv = row.get("lower_macdv_core", np.nan)
     lw_sqz = row.get("lower_ttm_squeeze_pro", np.nan)
 
@@ -218,9 +219,9 @@ def evaluate_stocks_shortlist_signal(
     # Block 2: Price Action / Momentum (lower)
     # ------------------------------------------------------
     # Lower regime moving average trend cloud
-    if lw_trend_cloud > 0:
+    if lw_ma_trend_bull > 0:
         long_score += 1.0
-    if lw_trend_cloud < 0:
+    if lw_ma_trend_bear < 0:
         short_score += 1.0
 
     # Exh/Abs (current or prior bar, depending on combo family)
@@ -327,14 +328,6 @@ def evaluate_stocks_options_signal(
 
     return base_signal, long_score, short_score
 
-
-# ========================================================================
-# ETF TRENDS scoring functions
-# ========================================================================
-
-
-
-
 # ========================================================================
 # FUTURES scoring functions – one per combo
 # ========================================================================
@@ -363,7 +356,8 @@ def score_futures_base_signal(
     lw_exh_abs = row.get(exh_abs_col, np.nan)  # current or prior bar, based on routing
     lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
-    lw_trend_cloud = row.get("lower_ma_trend_cloud", np.nan)
+    lw_ma_trend_bull = row.get("lower_ma_trend_bullish", np.nan)
+    lw_ma_trend_bear = row.get("lower_ma_trend_bearish", np.nan)
     lw_macdv = row.get("lower_macdv_core", np.nan)
     lw_sqz = row.get("lower_ttm_squeeze_pro", np.nan)
 
@@ -393,9 +387,9 @@ def score_futures_base_signal(
     # Block 2: Price Action / Momentum (lower)
     # ------------------------------------------------------
     # Lower regime moving average trend cloud
-    if lw_trend_cloud > 0:
+    if lw_ma_trend_bull > 0:
         long_score += 1.0
-    if lw_trend_cloud < 0:
+    if lw_ma_trend_bear < 0:
         short_score += 1.0
 
     # Exh/Abs (current or prior bar, depending on combo family)
