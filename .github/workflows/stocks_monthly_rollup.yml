@@ -1,5 +1,5 @@
 # .github/workflows/stocks_monthly_rollup.yml
-name: Monthly Rollup – Stocks (MQY)
+name: Stocks Monthly Rollup (MQY)
 
 on:
   schedule:
