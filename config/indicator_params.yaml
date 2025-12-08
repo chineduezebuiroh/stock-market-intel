@@ -18,9 +18,15 @@ indicators:
         lookback_period: 126
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 126
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 126
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -61,9 +67,15 @@ indicators:
         lookback_period: 126
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 126
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 126
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -104,9 +116,15 @@ indicators:
         lookback_period: 104
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 104
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 104
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -147,9 +165,15 @@ indicators:
         lookback_period: 60
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 60
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 60
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -189,10 +213,16 @@ indicators:
         id: exh_abs_price_action
         lookback_period: 50
         z: 1
-
-      significant_volume:
+      
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 50
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 50
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -233,9 +263,15 @@ indicators:
         lookback_period: 50
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 50
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 50
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -277,9 +313,15 @@ indicators:
         lookback_period: 115
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 115
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 115
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -320,9 +362,15 @@ indicators:
         lookback_period: 126
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 126
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 126
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -363,9 +411,15 @@ indicators:
         lookback_period: 126
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 126
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 126
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -406,9 +460,15 @@ indicators:
         lookback_period: 104
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 104
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 104
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
@@ -449,9 +509,15 @@ indicators:
         lookback_period: 60
         z: 1
 
-      significant_volume:
+      significant_volume_current_bar:
         id: significant_volume
         lookback_period: 60
+        z: 0
+
+      significant_volume_prior_bar:
+        id: significant_volume
+        lookback_period: 60
+        z: 1
 
       spy_qqq_vol_ma_ratio:
         id: spy_qqq_volume_ma_ratio
