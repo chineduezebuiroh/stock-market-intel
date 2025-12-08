@@ -1,5 +1,5 @@
 # .github/workflows/stocks_weekly_rollup.yml
-name: Weekly Rollup – Stocks (WMQ)
+name: Stocks Weekly Rollup (WMQ)
 
 on:
   schedule:
