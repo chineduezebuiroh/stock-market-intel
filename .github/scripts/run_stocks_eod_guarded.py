@@ -3,7 +3,7 @@ from __future__ import annotations
 # .github/scripts/run_stocks_eod_guarded.py
 
 import subprocess
-import os 
+import os
 import sys
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
@@ -11,7 +11,7 @@ from pathlib import Path
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
-# =======================================================\
+# =======================================================
 TARGET_TIME = time(hour=16, minute=15)  # 4:15 pm America/New_York
 TOLERANCE_MIN = 30                      # +/- 30 minutes window
 
@@ -21,56 +21,49 @@ def minutes_since_midnight(t: time) -> int:
 
 
 def run_profile() -> None:
-    root = Path(__file__).resolve().parents[1]
+    # repo_root: .../stock-market-intel
+    # this script lives in .github/scripts → parents[0]=scripts, [1]=.github, [2]=repo root
+    root = Path(__file__).resolve().parents[2]
 
     cmds = [
-        
         # ---------------------------------------------------------
-        # ---- 1) Refresh stocks daily/weekly/monthly (no Q/Y) ----
+        # 1) Refresh stocks daily/weekly/monthly (no Q/Y)
         # ---------------------------------------------------------
-        cmd_timeframe = [
+        [
             sys.executable,
             str(root / "jobs" / "run_timeframe.py"),
             "stocks",
             "daily",
             "--cascade",
-        ]
-        print(f"[INFO] Running: {' '.join(cmd_timeframe)}")
-        subprocess.run(cmd_timeframe, check=True)
-
+        ],
 
         # ---------------------------------------------------------
-        # ---- 2) Refresh ETF trends on weekly (middle) timreframe
+        # 2) Refresh ETF trends on weekly (middle) timeframe
         # ---------------------------------------------------------
-        cmd_etf_timeframe = [
+        [
             sys.executable,
             str(root / "jobs" / "run_etf_trends.py"),
             "weekly",
-        ]
-        print(f"[INFO] Running: {' '.join(cmd_etf_timeframe)}")
-        subprocess.run(cmd_etf_timeframe, check=True)
+        ],
 
-        # ------------------------------------------------------------------
-        # ---- 3) Rebuild daily-lower combos that depend on fresh D/W/M ----
-        # ------------------------------------------------------------------
+        # ---------------------------------------------------------
+        # 3) Rebuild daily-lower combos that depend on fresh D/W/M
+        # ---------------------------------------------------------
         #   - DWM Shortlist
-        cmd_dwm_short = [
+        [
             sys.executable,
             str(root / "jobs" / "run_combo.py"),
             "stocks",
             "stocks_c_dwm_shortlist",
-        ]
-        print(f"[INFO] Running: {' '.join(cmd_dwm_short)}")
-        subprocess.run(cmd_dwm_short, check=True)
-    
+        ],
+
         #   - DWM Options-eligible
-        cmd_dwm_all = [
+        [
             sys.executable,
             str(root / "jobs" / "run_combo.py"),
             "stocks",
             "stocks_c_dwm_all",
-        ]
-        
+        ],
     ]
 
     for cmd in cmds:
@@ -87,7 +80,7 @@ def main() -> None:
         run_profile()
         return
 
-    # ✅ Scheduled runs: still enforce DST-aware time window
+    # ✅ Scheduled runs: enforce DST-aware time window
     tz = ZoneInfo("America/New_York")
     now = datetime.now(tz)
     now_time = now.time()
@@ -105,6 +98,7 @@ def main() -> None:
 
     print(f"[INFO] Within window at {now} NY. Running stocks EOD profile...")
     run_profile()
+
 
 if __name__ == "__main__":
     main()
