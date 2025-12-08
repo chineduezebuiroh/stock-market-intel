@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# .github/scripts/run_monthly_rollup_stocks_guarded.py
+# .github/scripts/rrun_stocks_monthly_rollup_guarded.py
 
 import subprocess
 import os
