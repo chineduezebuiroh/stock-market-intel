@@ -45,7 +45,9 @@ def main() -> None:
     root = Path(__file__).resolve().parents[2]
     print(f"[INFO] Using repo root: {root}")
 
+    # ------------------------------------------------
     # ---- 1) Refresh quarterly bars (no cascade) ----
+    # ------------------------------------------------
     cmd_quarterly = [
         sys.executable,
         str(root / "jobs" / "run_timeframe.py"),
@@ -55,7 +57,20 @@ def main() -> None:
     print(f"[INFO] Running: {' '.join(cmd_quarterly)}")
     subprocess.run(cmd_quarterly, check=True)
 
-    # ---- 2) Rebuild WMQ combos ----
+    # ---------------------------------------------------------
+    # ---- 2) Refresh ETF trends on weekly (middle) timreframe
+    # ---------------------------------------------------------
+    cmd_etf_timeframe = [
+        sys.executable,
+        str(root / "jobs" / "run_etf_trends.py"),
+        "monthly",
+    ]
+    print(f"[INFO] Running: {' '.join(cmd_etf_timeframe)}")
+    subprocess.run(cmd_etf_timeframe, check=True)
+
+    # ------------------------------------------------
+    # ---- 3) Rebuild WMQ combos ----
+    # ------------------------------------------------
     # Shortlist WMQ
     cmd_wmq_short = [
         sys.executable,
