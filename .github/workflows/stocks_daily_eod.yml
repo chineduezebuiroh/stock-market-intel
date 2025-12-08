@@ -1,4 +1,4 @@
-# .github/workflows/daily_eod_stocks.yml
+# .github/workflows/stocks_daily_eod.yml
 name: Daily EOD – Stocks
 
 on:
