@@ -1,0 +1,28 @@
+# .github/workflows/stocks_intraday_130m.yml
+name: Stocks Intraday 130m
+
+on:
+  schedule:
+    - cron: "1/10 12-22 * * 1-5"   # starting at 1st minute, every 10 min; Mon–Fri 12:00 - 22:00 UTC (~07:00 - ~18:00 EST)
+  workflow_dispatch: {}
+
+jobs:
+  stocks_intraday_130m:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run stocks intraday 130m (guarded)
+        run: |
+          python .github/scripts/run_stocks_intraday_130m_guarded.py
