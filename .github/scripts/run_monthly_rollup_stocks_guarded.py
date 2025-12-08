@@ -52,7 +52,9 @@ def main() -> None:
     root = Path(__file__).resolve().parents[2]
     print(f"[INFO] Using repo root: {root}")
 
+    # ---------------------------------------------
     # ---- 1) Refresh yearly bars (no cascade) ----
+    # ---------------------------------------------
     cmd_yearly = [
         sys.executable,
         str(root / "jobs" / "run_timeframe.py"),
@@ -62,7 +64,20 @@ def main() -> None:
     print(f"[INFO] Running: {' '.join(cmd_yearly)}")
     subprocess.run(cmd_yearly, check=True)
 
-    # ---- 2) Rebuild MQY combos ----
+    # ------------------------------------------------------------
+    # ---- 2) Refresh ETF trends on quarterly (middle) timreframe
+    # ------------------------------------------------------------
+    cmd_etf_timeframe = [
+        sys.executable,
+        str(root / "jobs" / "run_etf_trends.py"),
+        "quarterly",
+    ]
+    print(f"[INFO] Running: {' '.join(cmd_etf_timeframe)}")
+    subprocess.run(cmd_etf_timeframe, check=True)
+
+    # ---------------------------------------------
+    # ---- 3) Rebuild MQY combos ----
+    # ---------------------------------------------
     # Shortlist MQY
     cmd_mqy_short = [
         sys.executable,
