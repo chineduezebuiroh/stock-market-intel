@@ -6,7 +6,8 @@ profiles:
     - sig_vol_current_bar
     - sig_vol_prior_bar
     - spy_qqq_vol_ma_ratio
-    - ma_trend_cloud
+    - ma_trend_bullish
+    - ma_trend_bearish
     - macdv_core
     - ttm_squeeze_pro
 
