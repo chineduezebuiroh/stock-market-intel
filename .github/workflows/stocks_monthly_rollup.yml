@@ -1,4 +1,4 @@
-# .github/workflows/monthly_rollup_stocks.yml
+# .github/workflows/stocks_monthly_rollup.yml
 name: Monthly Rollup – Stocks (MQY)
 
 on:
@@ -27,5 +27,5 @@ jobs:
 
       - name: Run monthly rollup (DST-aware guarded, first Sunday)
         run: |
-          python .github/scripts/run_monthly_rollup_stocks_guarded.py
+          python .github/scripts/run_stocks_monthly_rollup_guarded.py
           
