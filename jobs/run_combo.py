@@ -16,10 +16,9 @@ from datetime import datetime
 #from etl.window import parquet_path
 #from etl.universe import symbols_for_universe
 #from screens.etf_trend_engine import compute_etf_trend_scores
-from combos.mtf_scoring_core import (
-    basic_signal_logic,
-    attach_etf_trends_for_options_combo,
-)
+from combos.mtf_scoring_core import basic_signal_logic
+
+from etf.guardrails import attach_etf_trends_for_options_combo
 
 
 DATA = ROOT / "data"
