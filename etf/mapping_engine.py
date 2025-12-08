@@ -12,16 +12,6 @@ ROOT = Path(__file__).resolve().parents[1]
 REF = ROOT / "ref"
 
 
-def build_options_etf_mapping() -> pd.DataFrame:
-    """
-    Build stock → ETF mapping for the options-eligible universe,
-    using your existing build_symbol_to_etf_mapping() function.
-    """
-    etfs = load_etf_universe()
-    opts = load_options_universe()
-    mapping = build_symbol_to_etf_mapping(opts, etfs)
-    return mapping
-
 
 def build_options_eligible_etf_map() -> pd.DataFrame:
     """
