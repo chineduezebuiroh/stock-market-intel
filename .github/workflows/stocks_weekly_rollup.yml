@@ -1,4 +1,4 @@
-# .github/workflows/weekly_rollup_stocks.yml
+# .github/workflows/stocks_weekly_rollup.yml
 name: Weekly Rollup – Stocks (WMQ)
 
 on:
@@ -29,4 +29,4 @@ jobs:
 
       - name: Run weekly rollup (DST-aware guarded)
         run: |
-          python .github/scripts/run_weekly_rollup_stocks_guarded.py
+          python .github/scripts/run_stocks_weekly_rollup_guarded.py
