@@ -1,5 +1,5 @@
 # .github/workflows/stocks_daily_eod.yml
-name: Daily EOD – Stocks
+name: Stocks Daily EOD
 
 on:
   schedule:
