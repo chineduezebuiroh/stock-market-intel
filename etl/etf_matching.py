@@ -315,66 +315,6 @@ def build_symbol_to_etf_map(
 # Public entrypoint: build ETF mapping for options-eligible only
 # ---------------------------------------------------------------------
 
-def build_options_eligible_etf_map() -> pd.DataFrame:
-    """
-    Build a symbol -> ETF mapping for *options-eligible* stocks.
-
-    In this setup, the security_master file *is* your options-eligible universe:
-      - ref/security_master.parquet  (must have: symbol, sector, industry)
-
-    ETF universe:
-      - config/shortlist_sector_etfs.csv  (symbol, name, ...)
-
-    Output:
-      - ref/symbol_to_etf_options_eligible.csv
-    """
-    sec_master_path = REF / "options_eligible.csv"
-    etf_path = CFG / "shortlist_sector_etfs.csv"
-
-    if not sec_master_path.exists():
-        raise FileNotFoundError(f"Missing security master: {sec_master_path}")
-
-    if not etf_path.exists():
-        raise FileNotFoundError(f"Missing ETF shortlist: {etf_path}")
-
-    # 1) Load security master (this *is* your options-eligible universe)
-    #sec_master = pd.read_parquet(sec_master_path)
-    sec_master = pd.read_csv(sec_master_path)
-
-    required_cols = {"symbol", "sector", "industry"}
-    missing = required_cols - set(sec_master.columns)
-    if missing:
-        raise KeyError(
-            f"security_master.parquet missing columns: {sorted(missing)} "
-            f"(have: {sorted(sec_master.columns)})"
-        )
-
-    # This already *is* options-eligible; just drop sector/industry nulls
-    stocks_meta = sec_master.dropna(subset=["sector", "industry"]).copy()
-
-    # 2) Load ETF universe
-    etfs_df = pd.read_csv(etf_path)
-    if "symbol" not in etfs_df.columns or "name" not in etfs_df.columns:
-        raise KeyError(
-            "shortlist_sector_etfs.csv must have 'symbol' and 'name' columns"
-        )
-
-    # 3) Build mapping using your tokenized similarity helper
-    mapping = build_symbol_to_etf_map(
-        stocks_meta=stocks_meta,
-        etfs_df=etfs_df,
-        #industry_min_score=0.35,  # tweakable
-        #sector_min_score=0.25,    # tweakable
-    )
-
-    out = REF / "symbol_to_etf_options_eligible.csv"
-    mapping.to_csv(out, index=False)
-    print(
-        f"[OK] Wrote ETF mapping for options-eligible symbols "
-        f"({len(mapping)} rows) to {out}"
-    )
-
-    return mapping
 
 
 if __name__ == "__main__":
