@@ -9,25 +9,25 @@ from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
-
+# =======================================================
 # ---- Config: desired local target time + tolerance ----
-
+# =======================================================\
 TARGET_TIME = time(hour=16, minute=15)  # 4:15 pm America/New_York
 TOLERANCE_MIN = 30                      # +/- 30 minutes window
-
 
 
 def minutes_since_midnight(t: time) -> int:
     return t.hour * 60 + t.minute
 
-    
 
 def run_profile() -> None:
     root = Path(__file__).resolve().parents[1]
 
     cmds = [
-
+        
+        # ---------------------------------------------------------
         # ---- 1) Refresh stocks daily/weekly/monthly (no Q/Y) ----
+        # ---------------------------------------------------------
         cmd_timeframe = [
             sys.executable,
             str(root / "jobs" / "run_timeframe.py"),
@@ -37,8 +37,22 @@ def run_profile() -> None:
         ]
         print(f"[INFO] Running: {' '.join(cmd_timeframe)}")
         subprocess.run(cmd_timeframe, check=True)
-    
-        # ---- 2) Rebuild daily-lower combos that depend on fresh D/W/M ----
+
+
+        # ---------------------------------------------------------
+        # ---- 2) Refresh ETF trends on weekly (middle) timreframe
+        # ---------------------------------------------------------
+        cmd_etf_timeframe = [
+            sys.executable,
+            str(root / "jobs" / "run_etf_trends.py"),
+            "weekly",
+        ]
+        print(f"[INFO] Running: {' '.join(cmd_etf_timeframe)}")
+        subprocess.run(cmd_etf_timeframe, check=True)
+
+        # ------------------------------------------------------------------
+        # ---- 3) Rebuild daily-lower combos that depend on fresh D/W/M ----
+        # ------------------------------------------------------------------
         #   - DWM Shortlist
         cmd_dwm_short = [
             sys.executable,
@@ -57,14 +71,11 @@ def run_profile() -> None:
             "stocks_c_dwm_all",
         ]
         
-        #  we'll update these in section 2 for ETFs as well
-        # [sys.executable, str(root / "jobs" / "run_timeframe.py"), ...],
     ]
 
     for cmd in cmds:
         print(f"[INFO] Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
-
 
 
 def main() -> None:
