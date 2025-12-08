@@ -1,5 +1,5 @@
-# .github/workflows/daily_eod_futures.yml
-name: Daily EOD – Futures
+# .github/workflows/futures_daily_eod.yml
+name: Futures Daily EOD
 
 on:
   schedule:
