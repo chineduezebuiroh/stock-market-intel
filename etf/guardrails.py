@@ -79,7 +79,8 @@ def attach_etf_trends_for_options_combo(
         )
         return combo_df
 
-    etf_scores = compute_etf_trend_scores(timeframe_for_etf)  # index=etf_symbol
+    #etf_scores = compute_etf_trend_scores(timeframe_for_etf)  # index=etf_symbol
+    etf_scores = load_etf_trend_scores(timeframe_for_etf)
     etf_scores = etf_scores.reset_index()  # columns: etf_symbol, etf_long_score, etf_short_score
 
     # 1) attach primary ETF symbol to combo rows
