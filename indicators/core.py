@@ -90,10 +90,7 @@ from .composite_using_percentiles import (
 from .composite_spy_qqq_volume_ma_ratio import indicator_spy_qqq_volume_ma_ratio
 from .composite_movingavg_trend_cloud import indicator_movingavg_trend_bullish, indicator_movingavg_trend_bearish
 from .composite_macdv import indicator_macdv, indicator_macdv_guardrail
-from .composite_ttm_squeeze_pro import (
-    indicator_ttm_squeeze_pro,
-    indicator_entry_signal,
-)
+from .composite_ttm_squeeze_pro import indicator_ttm_squeeze_pro, indicator_entry_signal
 
 # ---------------------------------------------------------------------
 # Indicator function registry
