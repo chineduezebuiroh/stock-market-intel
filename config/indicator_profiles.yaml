@@ -3,8 +3,8 @@ profiles:
     - wyckoff_stage
     - exh_abs_pa_current_bar
     - exh_abs_pa_prior_bar
-    - significant_volume_current_bar
-    - significant_volume_prior_bar
+    - sig_vol_current_bar
+    - sig_vol_prior_bar
     - spy_qqq_vol_ma_ratio
     - ma_trend_cloud
     - macdv_core
@@ -14,7 +14,7 @@ profiles:
     - wyckoff_stage
     - exh_abs_pa_prior_bar
     - macdv_guard
-    - significant_volume_current_bar
+    - sig_vol_current_bar
     - spy_qqq_vol_ma_ratio
 
   upper_core_v1:
