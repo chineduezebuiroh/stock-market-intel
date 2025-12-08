@@ -3,13 +3,20 @@ from __future__ import annotations
 # .github/scripts/run_monthly_rollup_stocks_guarded.py
 
 import subprocess
+import os
 import sys
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
+
+
+# =======================================================
+# ---- Config: desired local target time + tolerance ----
+# =======================================================
 TARGET_TIME = time(hour=6, minute=30)  # 6:30 am America/New_York (Sunday early)
 TOLERANCE_MIN = 45                    # +/- 45 minutes window
+
 
 
 def minutes_since_midnight(t: time) -> int:
@@ -26,7 +33,65 @@ def is_first_sunday(dt: datetime) -> bool:
     return dt.day <= 7
 
 
+def run_profile() -> None:
+    # repo_root: .../stock-market-intel
+    root = Path(__file__).resolve().parents[2]
+
+    cmds = [
+        # ---------------------------------------------------------
+        # 1) Refresh stocks YEARLY only (no cascade)
+        # ---------------------------------------------------------
+        [
+            sys.executable,
+            str(root / "jobs" / "run_timeframe.py"),
+            "stocks",
+            "yearly",
+        ],
+
+        # ---------------------------------------------------------
+        # 2) Refresh ETF trends on QUARTERLY (middle TF for MQY)
+        # ---------------------------------------------------------
+        [
+            sys.executable,
+            str(root / "jobs" / "run_etf_trends.py"),
+            "quarterly",
+        ],
+
+        # ---------------------------------------------------------
+        # 3) Rebuild monthly-lower combos (MQY)
+        # ---------------------------------------------------------
+        #   - MQY Shortlist
+        [
+            sys.executable,
+            str(root / "jobs" / "run_combo.py"),
+            "stocks",
+            "stocks_a_mqy_shortlist",
+        ],
+        #   - MQY Options-eligible
+        [
+            sys.executable,
+            str(root / "jobs" / "run_combo.py"),
+            "stocks",
+            "stocks_a_mqy_all",
+        ],
+    ]
+
+    for cmd in cmds:
+        print(f"[INFO] Running: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+
+
+
 def main() -> None:
+    event_name = os.getenv("GITHUB_EVENT_NAME", "")
+
+    # ✅ Manual runs always execute, regardless of time
+    if event_name == "workflow_dispatch":
+        print("[INFO] Triggered via workflow_dispatch; bypassing time-window guard.")
+        run_profile()
+        return
+
+    # ✅ Scheduled runs: enforce DST-aware time window
     tz = ZoneInfo("America/New_York")
     now = datetime.now(tz)
     now_time = now.time()
@@ -43,62 +108,12 @@ def main() -> None:
     if diff > TOLERANCE_MIN:
         print(
             f"[INFO] {now} local (NY) is outside +/-{TOLERANCE_MIN} minutes "
-            f"of target {TARGET_TIME}. Skipping monthly rollup."
+            f"of target {TARGET_TIME}. Skipping monthly stocks rollup."
         )
         sys.exit(0)
 
-    print(f"[INFO] Within monthly window at {now} local NY on first Sunday. Running monthly rollup pipeline...")
-
-    root = Path(__file__).resolve().parents[2]
-    print(f"[INFO] Using repo root: {root}")
-
-    # ---------------------------------------------
-    # ---- 1) Refresh yearly bars (no cascade) ----
-    # ---------------------------------------------
-    cmd_yearly = [
-        sys.executable,
-        str(root / "jobs" / "run_timeframe.py"),
-        "stocks",
-        "yearly",
-    ]
-    print(f"[INFO] Running: {' '.join(cmd_yearly)}")
-    subprocess.run(cmd_yearly, check=True)
-
-    # ------------------------------------------------------------
-    # ---- 2) Refresh ETF trends on quarterly (middle) timreframe
-    # ------------------------------------------------------------
-    cmd_etf_timeframe = [
-        sys.executable,
-        str(root / "jobs" / "run_etf_trends.py"),
-        "quarterly",
-    ]
-    print(f"[INFO] Running: {' '.join(cmd_etf_timeframe)}")
-    subprocess.run(cmd_etf_timeframe, check=True)
-
-    # ---------------------------------------------
-    # ---- 3) Rebuild MQY combos ----
-    # ---------------------------------------------
-    # Shortlist MQY
-    cmd_mqy_short = [
-        sys.executable,
-        str(root / "jobs" / "run_combo.py"),
-        "stocks",
-        "stocks_a_mqy_shortlist",
-    ]
-    print(f"[INFO] Running: {' '.join(cmd_mqy_short)}")
-    subprocess.run(cmd_mqy_short, check=True)
-
-    # Options-eligible MQY
-    cmd_mqy_all = [
-        sys.executable,
-        str(root / "jobs" / "run_combo.py"),
-        "stocks",
-        "stocks_a_mqy_all",
-    ]
-    print(f"[INFO] Running: {' '.join(cmd_mqy_all)}")
-    subprocess.run(cmd_mqy_all, check=True)
-
-    print("[OK] Monthly rollup (MQY) completed.")
+    print(f"[INFO] Within window at {now} NY. Running monthly stocks rollup profile...")
+    run_profile()
 
 
 if __name__ == "__main__":
