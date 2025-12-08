@@ -52,7 +52,7 @@ def basic_signal_logic(
       - evaluator_name: which evaluation family to use
       - exh_abs_col: which lower_* Exh/Abs PA column to reference
     """
-    evaluator_name, exh_abs_col = _resolve_signal_routing(namespace, combo_name, combo_cfg)
+    evaluator_name, exh_abs_col, sig_vol_col = _resolve_signal_routing(namespace, combo_name, combo_cfg)
 
     combo_df = combo_df.copy()
     combo_df["signal"] = "none"
@@ -83,7 +83,7 @@ def basic_signal_logic(
     short_scores: list[float] = []
 
     for _, row in combo_df.iterrows():
-        sig, ls, ss = eval_fn(row, exh_abs_col)
+        sig, ls, ss = eval_fn(row, exh_abs_col, sig_vol_col)
         signals.append(sig)
         long_scores.append(ls)
         short_scores.append(ss)
