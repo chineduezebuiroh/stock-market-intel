@@ -36,7 +36,7 @@ from indicators.core import (
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = 100  # set to None to disable the cap
+DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
 
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
