@@ -39,7 +39,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add -f data/snapshot_futures_*.parquet \
-                  -f data/combo_futures_1_1h4hd_*.parquet
+                  -f data/combo_futures_1_1h4hd_*.parquet \
                   -f data/combo_history/futures/futures_1_1h4hd_shortlist/*.parquet
 
           # Don’t commit combo_history; make sure it’s in .gitignore
