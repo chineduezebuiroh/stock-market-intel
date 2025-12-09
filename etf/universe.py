@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 # etf/universe.py
-"""
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+"""
 CFG = ROOT / "config"
 REF = ROOT / "ref"
 """
-from core.paths import ROOT, REF, CFG  # NEW
+from core.paths import REF, CFG  # NEW
 
 import pandas as pd
 
