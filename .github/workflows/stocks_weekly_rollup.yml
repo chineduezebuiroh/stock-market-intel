@@ -40,9 +40,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add data/snapshot_stocks_*.parquet \
-                  data/snapshot_etf_monthly.parquet \
-                  data/combo_stocks_b_wmq_*.parquet
+          git add -f data/snapshot_stocks_*.parquet \
+                  -f data/snapshot_etf_monthly.parquet \
+                  -f data/combo_stocks_b_wmq_*.parquet \
+                  -f data/combo_history/stocks/stocks_b_wmq_shortlist/*.parquet \
+                  -f data/combo_history/stocks/stocks_b_wmq_all/*.parquet
 
           # Don’t commit combo_history; make sure it’s in .gitignore
           git commit -m "Update weekly stocks snapshots [skip ci]" || echo "No changes to commit"
