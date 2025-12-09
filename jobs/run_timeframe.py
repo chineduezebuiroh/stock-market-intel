@@ -302,21 +302,38 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
         snap.to_parquet(out)
         print(f"[OK] Wrote snapshot: {out}")
 
-
     # --- 4) Cascade to higher timeframes (if requested) ---
     if cascade:
         child_tfs = CASCADE.get(namespace, {}).get(timeframe, [])
         for child_tf in child_tfs:
             # Important: child runs with cascade=False to avoid infinite recursion
-            run(namespace, child_tf, cascade=False, # prevent infinite recursion
+            run(
+                namespace,
+                child_tf,
+                cascade=False, # prevent infinite recursion
                 allowed_universes=allowed_universes,  # propagate restriction
             )
 
-
-
 if __name__ == "__main__":
     initialize_indicator_engine(CFG)
+
+    if len(sys.argv) < 3:
+        print("Usage: python jobs/run_timeframe.py <namespace> <timeframe> [--cascade] [--allowed-universes U1 U2 ...]")
+        sys.exit(1)
+
     ns = sys.argv[1]
     tf = sys.argv[2]
     cascade = "--cascade" in sys.argv
-    run(ns, tf, cascade=cascade)
+
+    allowed_universes: set[str] | None = None
+    if "--allowed-universes" in sys.argv:
+        idx = sys.argv.index("--allowed-universes")
+        universes: list[str] = []
+        for arg in sys.argv[idx + 1 :]:
+            if arg.startswith("-"):
+                break
+            universes.append(arg)
+        if universes:
+            allowed_universes = set(universes)
+
+    run(ns, tf, cascade=cascade, allowed_universes=allowed_universes)
