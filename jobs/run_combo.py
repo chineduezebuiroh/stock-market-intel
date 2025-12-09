@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import sys
+"""
 from pathlib import Path
 
 # Ensure project root is on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+DATA = ROOT / "data"
+CFG = ROOT / "config"
+REF = ROOT / "ref"
+"""
+from core.paths import ROOT, DATA, CFG, REF  # NEW
 
 import pandas as pd
 import yaml
@@ -20,12 +27,8 @@ from combos.mtf_scoring_core import basic_signal_logic
 
 from etf.guardrails import attach_etf_trends_for_options_combo
 
-
-DATA = ROOT / "data"
-CFG = ROOT / "config"
-REF = ROOT / "ref"
-
 MTF_CFG_PATH = CFG / "multi_timeframe_combos.yaml"
+
 
 # Load multi-timeframe combos config
 with open(MTF_CFG_PATH, "r") as f:
