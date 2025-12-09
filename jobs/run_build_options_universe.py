@@ -174,23 +174,23 @@ def get_candidate_symbols() -> List[str]:
 
     print(f"[INFO] Using {len(candidates)} candidate symbols in total.")
 
+    df = pd.DataFrame({"symbol": candidates})
+
     exclusions = load_symbol_exclusions()
     if exclusions:
-        candidates["symbol_norm"] = (
-            candidates["symbol"].astype(str).str.strip().str.upper()
+        df["symbol_norm"] = (
+            df["symbol"].astype(str).str.strip().str.upper()
         )
-        before = len(candidates)
-        candidates = candidates[~candidates["symbol_norm"].isin(exclusions)].copy()
-        candidates = candidates.drop(columns=["symbol_norm"])
-        after = len(candidates)
-    
+        before = len(df)
+        df = df[~df["symbol_norm"].isin(exclusions)].copy()
+        df = df.drop(columns=["symbol_norm"])
+        after = len(df)
         print(
             f"[INFO] Excluded {before - after} symbols based on {EXCLUSIONS_FILE} "
             f"(remaining: {after})"
         )
-
-    return candidates
-
+    
+    return df["symbol"].tolist()
 
 # ---------- METADATA FETCHING ----------
 
