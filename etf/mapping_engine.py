@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 # etf/mapping_engine.py
-"""
+
+import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+"""
 REF = ROOT / "ref"
 """
-from core.paths import ROOT, REF #, CFG  # NEW
+from core.paths import REF #, CFG  # NEW
 
 import pandas as pd
 
