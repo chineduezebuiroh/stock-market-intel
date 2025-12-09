@@ -1,18 +1,21 @@
+import sys
+
+"""
 from pathlib import Path
 import os  # NEW
-import sys
-"""
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 """
+
+from core.paths import ROOT, DATA #, CFG, REF  # import what you need
+
 import pandas as pd
 import streamlit as st
 import numpy as np
 
 from screens.style_helpers import style_etf_scores, apply_signal_row_styles
-
-from core.paths import ROOT, DATA #, CFG, REF  # import what you need
 
 # =============================================================================
 # Paths / Constants
