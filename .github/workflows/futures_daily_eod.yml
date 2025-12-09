@@ -9,6 +9,9 @@ on:
   # Manual trigger for one-off runs
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # 👈 important so GITHUB_TOKEN can push
+
 jobs:
   daily-eod-futures:
     runs-on: ubuntu-latest
@@ -29,3 +32,16 @@ jobs:
       - name: Run futures EOD (DST-aware guarded)
         run: |
           python .github/scripts/run_futures_eod_guarded.py
+
+      - name: Commit updated data snapshots
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/snapshot_futures_*.parquet \
+                  data/combo_futures_3_dwm_*.parquet
+
+          # Don’t commit combo_history; make sure it’s in .gitignore
+          git commit -m "Update EOD futures snapshots [skip ci]" || echo "No changes to commit"
+          git push
