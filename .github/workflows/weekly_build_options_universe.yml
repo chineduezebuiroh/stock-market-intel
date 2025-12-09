@@ -25,58 +25,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run weekly options-universe build (DST-aware, NY time)
+      - name: Run weekly options-universe rebuild (DST-aware, NY time)
         run: |
-          python - << 'PY'
-          from __future__ import annotations
+          python .github/scripts/run_weekly_build_options_universe.py
 
-          import sys
-          import subprocess
-          from datetime import datetime, time
-          from zoneinfo import ZoneInfo
-          from pathlib import Path
+      - name: Commit updated ref universe & ETF mapping
+        if: success() && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add \
+            ref/nasdaqlisted.txt \
+            ref/otherlisted.txt \
+            ref/options_eligible.csv \
+            ref/symbol_to_etf_options_eligible.csv
+            
+          # Only commit if there are staged changes
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update options universe & ETF mapping [skip ci]"
+            git push
+          fi
 
-          TARGET_TIME = time(hour=1, minute=0)   # 01:30 America/New_York
-          TOLERANCE_MIN = 45                    # +/- 45 minutes
-
-          def minutes_since_midnight(t: time) -> int:
-              return t.hour * 60 + t.minute
-
-          def main() -> None:
-              tz = ZoneInfo("America/New_York")
-              now = datetime.now(tz)
-              now_time = now.time()
-              today = now.date()
-              weekday = now.weekday()  # Monday=0 ... Sunday=6
-
-              # Require Sunday (6)
-              if weekday != 6:
-                  print(f"[INFO] Today ({today}) is not Sunday in NY. Skipping options-universe build.")
-                  sys.exit(0)
-
-              now_min = minutes_since_midnight(now_time)
-              target_min = minutes_since_midnight(TARGET_TIME)
-              diff = abs(now_min - target_min)
-
-              if diff > TOLERANCE_MIN:
-                  print(
-                      f"[INFO] {now} local (NY) is outside +/-{TOLERANCE_MIN} minutes "
-                      f"of target {TARGET_TIME}. Skipping options-universe build."
-                  )
-                  sys.exit(0)
-
-              print(f"[INFO] Within window at {now} NY. Running tools/build_options_universe.py ...")
-
-              root = Path(__file__).resolve().parents[2]
-              cmd = [
-                  sys.executable,
-                  str(root / "jobs" / "run_build_options_universe.py"),                  
-              ]
-              print(f"[INFO] Running: {' '.join(cmd)}")
-              subprocess.run(cmd, check=True)
-              print("[OK] options universe build completed.")
-
-          if __name__ == "__main__":
-              main()
-          PY
           
