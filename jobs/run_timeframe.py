@@ -3,18 +3,17 @@ from __future__ import annotations
 # jobs/run_timeframe.py
 
 import sys
-"""
 from pathlib import Path
 
 # Ensure project root on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-    
+"""  
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 """
-from core.paths import ROOT, DATA, CFG  # NEW
+from core.paths import DATA, CFG  # no REF
 
 import pandas as pd
 import yaml
