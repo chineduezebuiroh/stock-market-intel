@@ -9,6 +9,9 @@ on:
     - cron: "15 20-22 * * 1-5"
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # 👈 important so GITHUB_TOKEN can push
+  
 jobs:
   daily-eod-stocks:
     runs-on: ubuntu-latest
@@ -29,3 +32,17 @@ jobs:
       - name: Run stocks EOD (DST-aware guarded)
         run: |
           python .github/scripts/run_stocks_eod_guarded.py
+
+      - name: Commit updated data snapshots
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/snapshot_stocks_*.parquet \
+                  data/snapshot_etf_weekly.parquet \
+                  data/combo_stocks_c_dwm_*.parquet
+
+          # Don’t commit combo_history; make sure it’s in .gitignore
+          git commit -m "Update EOD stocks snapshots [skip ci]" || echo "No changes to commit"
+          git push
