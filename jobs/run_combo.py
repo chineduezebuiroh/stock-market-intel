@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import sys
-"""
 from pathlib import Path
 
 # Ensure project root is on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
+"""
 DATA = ROOT / "data"
 CFG = ROOT / "config"
 REF = ROOT / "ref"
 """
-from core.paths import ROOT, DATA, CFG, REF  # NEW
+from core.paths import DATA, CFG, REF  # NEW
 
 import pandas as pd
 import yaml
