@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-CFG = ROOT / "config"
+from core.paths import CFG #, REF  # NEW
 
 
 def symbols_for_universe(universe: str) -> list[str]:
