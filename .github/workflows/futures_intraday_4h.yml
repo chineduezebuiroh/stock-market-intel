@@ -8,6 +8,9 @@ on:
     - cron: "5/10 * * * 0-5"   
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # 👈 important so GITHUB_TOKEN can push
+
 jobs:
   futures_intraday_4h:
     runs-on: ubuntu-latest
@@ -28,3 +31,16 @@ jobs:
       - name: Run futures 4h intraday (guarded)
         run: |
           python .github/scripts/run_futures_intraday_4h_guarded.py
+
+      - name: Commit updated data snapshots
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/snapshot_futures_*.parquet \
+                  data/combo_futures_2_4hdw_*.parquet
+
+          # Don’t commit combo_history; make sure it’s in .gitignore
+          git commit -m "Update Intraday 4-hour futures snapshots [skip ci]" || echo "No changes to commit"
+          git push
