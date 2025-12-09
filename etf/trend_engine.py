@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 # etf/trend_engine.py
-
+"""
 from pathlib import Path
-import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
+"""
+from core.paths import ROOT, DATA # CFG  # NEW
 
+import pandas as pd
 
 
 def _score_etf_row(row: pd.Series) -> tuple[float, float]:
