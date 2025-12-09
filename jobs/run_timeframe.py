@@ -3,12 +3,18 @@ from __future__ import annotations
 # jobs/run_timeframe.py
 
 import sys
+"""
 from pathlib import Path
 
 # Ensure project root on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+    
+DATA = ROOT / "data"
+CFG = ROOT / "config"
+"""
+from core.paths import ROOT, DATA, CFG  # NEW
 
 import pandas as pd
 import yaml
@@ -32,12 +38,8 @@ from indicators.core import (
     get_snapshot_base_cols,
     initialize_indicator_engine,
 )
-    
-DATA = ROOT / "data"
-CFG = ROOT / "config"
 
 DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
-
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 
