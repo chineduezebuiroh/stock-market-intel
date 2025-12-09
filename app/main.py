@@ -1,21 +1,26 @@
-import sys
 from pathlib import Path
-
+import os  # NEW
+import sys
+"""
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
+"""
 import pandas as pd
 import streamlit as st
 import numpy as np
 
-# =============================================================================
-# Paths
-# =============================================================================
-DATA = ROOT / "data"
-
 from screens.style_helpers import style_etf_scores, apply_signal_row_styles
 
+from core.paths import ROOT, DATA #, CFG, REF  # import what you need
+
+# =============================================================================
+# Paths / Constants
+# =============================================================================
+"""
+DATA_DIR = os.getenv("DATA_DIR", "data")  # default to 'data'
+DATA = ROOT / DATA_DIR
+"""
 # =============================================================================
 # Streamlit page config
 # =============================================================================
