@@ -13,8 +13,7 @@ import difflib
 
 # Project roots
 ROOT = Path(__file__).resolve().parents[1]
-CFG = ROOT / "config"
-REF = ROOT / "ref"
+from core.paths import REF, CFG  # NEW
 
 # -----------------------------------------------------------
 # Tokenization + similarity
