@@ -40,12 +40,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Always add snapshots + combo for this profile
           git add -f data/snapshot_stocks_*.parquet \
                   -f data/snapshot_etf_monthly.parquet \
-                  -f data/combo_stocks_b_wmq_*.parquet \
-                  -f data/combo_history/stocks/stocks_b_wmq_shortlist/*.parquet \
-                  -f data/combo_history/stocks/stocks_b_wmq_all/*.parquet
+                  -f data/combo_stocks_b_wmq_*.parquet
 
-          # Don’t commit combo_history; make sure it’s in .gitignore
+          # Only add combo_history if files exist (avoid fatal pathspec)
+          if compgen -G "data/combo_history/stocks/stocks_b_wmq_shortlist/*.parquet" > /dev/null; then
+            git add -f data/combo_history/stocks/stocks_b_wmq_shortlist/*.parquet
+          else
+            echo "[INFO] No combo_history files yet for stocks_b_wmq_shortlist; skipping."
+          fi
+
+          if compgen -G "data/combo_history/stocks/stocks_b_wmq_all/*.parquet" > /dev/null; then
+            git add -f data/combo_history/stocks/stocks_b_wmq_all/*.parquet
+          else
+            echo "[INFO] No combo_history files yet for stocks_b_wmq_all; skipping."
+          fi
+
           git commit -m "Update weekly stocks snapshots [skip ci]" || echo "No changes to commit"
           git push
