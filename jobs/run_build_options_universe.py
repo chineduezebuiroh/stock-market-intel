@@ -1,11 +1,23 @@
 import time
+"""
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+REF_DIR = ROOT / "ref"
+CFG = ROOT / "config"
+"""
+from core.paths import ROOT, REF, CFG  # NEW
+
 from typing import List, Dict, Any
 
 import pandas as pd
 import yfinance as yf
 
 from etf.mapping_engine import write_options_etf_mapping  # <-- NEW
+
+REF.mkdir(parents=True, exist_ok=True)
+OUT_PATH = REF / "options_eligible.csv"
+EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 # ---------- CONFIGURABLE CONSTANTS ----------
 
@@ -18,14 +30,6 @@ REQUEST_SLEEP_SECONDS = 0.15
 # Maximum symbols to process (set to None for no cap; useful while testing)
 MAX_SYMBOLS = None  # e.g., 500 for a quick run
 
-ROOT = Path(__file__).resolve().parents[1]
-REF_DIR = ROOT / "ref"
-REF_DIR.mkdir(parents=True, exist_ok=True)
-
-OUT_PATH = REF_DIR / "options_eligible.csv"
-
-CFG = ROOT / "config"
-EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 # ---------- CANDIDATE UNIVERSE HELPERS ----------
 def load_symbol_exclusions() -> set[str]:
@@ -90,7 +94,7 @@ def get_candidate_symbols() -> List[str]:
         Try to load a symbol table from URL, cache to ref/, then fall back to local file.
         Returns a list of symbols (uppercase, stripped).
         """
-        local_path = REF_DIR / local_filename
+        local_path = REF / local_filename
 
         # First try URL
         try:
