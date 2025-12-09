@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 # etf/mapping_engine.py
-
+"""
 from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+REF = ROOT / "ref"
+"""
+from core.paths import ROOT, REF #, CFG  # NEW
+
 import pandas as pd
 
 from .universe import load_etf_universe, load_options_universe
 from etl.etf_matching import build_symbol_to_etf_map  # reuse existing logic
-
-ROOT = Path(__file__).resolve().parents[1]
-REF = ROOT / "ref"
 
 
 
