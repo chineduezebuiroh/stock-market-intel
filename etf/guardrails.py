@@ -1,14 +1,19 @@
-# etf/guardrails.py
 from __future__ import annotations
 
+# etf/guardrails.py
+
+"""
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+REF = ROOT / "ref"
+"""
+from core.paths import ROOT, REF #, CFG  # NEW
+
 import pandas as pd
 import numpy as np
 
 from .trend_engine import load_etf_trend_scores
-
-ROOT = Path(__file__).resolve().parents[1]
-REF = ROOT / "ref"
 
 
 
