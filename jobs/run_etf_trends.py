@@ -1,15 +1,22 @@
 # jobs/run_etf_trends.py
 
 import sys
+
+"""
 from pathlib import Path
-
-import pandas as pd
-import yaml
-
 # Project root + sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+DATA = ROOT / "data"
+CFG = ROOT / "config"
+REF = ROOT / "ref"
+"""
+from core.paths import ROOT, DATA, CFG, REF  # NEW
+
+import pandas as pd
+import yaml
 
 from etl.sources import load_eod
 from etl.window import parquet_path, update_fixed_window
@@ -17,12 +24,6 @@ from indicators.core import (
     apply_core,
     initialize_indicator_engine,
 )
-
-DATA = ROOT / "data"
-CFG = ROOT / "config"
-REF = ROOT / "ref"
-
-DEV_MAX_ETF = None  # or a small number if you want to cap for testing
 
 
 def load_timeframe_cfg(namespace: str, timeframe: str) -> tuple[str, int]:
@@ -48,8 +49,7 @@ def load_etf_symbols() -> list[str]:
     if "symbol" not in df.columns:
         raise KeyError("shortlist_sector_etfs.csv must have a 'symbol' column")
     syms = sorted(df["symbol"].dropna().astype(str).unique())
-    if DEV_MAX_ETF is not None:
-        syms = syms[:DEV_MAX_ETF]
+
     return syms
 
 
