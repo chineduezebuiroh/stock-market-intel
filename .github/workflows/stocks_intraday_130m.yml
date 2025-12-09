@@ -6,6 +6,9 @@ on:
     - cron: "1/10 12-22 * * 1-5"   # starting at 1st minute, every 10 min; Mon–Fri 12:00 - 22:00 UTC (~07:00 - ~18:00 EST)
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # 👈 important so GITHUB_TOKEN can push
+
 jobs:
   stocks_intraday_130m:
     runs-on: ubuntu-latest
@@ -26,3 +29,16 @@ jobs:
       - name: Run stocks intraday 130m (guarded)
         run: |
           python .github/scripts/run_stocks_intraday_130m_guarded.py
+
+      - name: Commit updated data snapshots
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/snapshot_stocks_*.parquet \
+                  data/combo_stocks_d_130mdw_*.parquet
+
+          # Don’t commit combo_history; make sure it’s in .gitignore
+          git commit -m "Update intraday 130-minute stocks snapshots [skip ci]" || echo "No changes to commit"
+          git push
