@@ -325,10 +325,13 @@ if __name__ == "__main__":
     tf = sys.argv[2]
     cascade = "--cascade" in sys.argv
 
+    # Optional: --allowed-universes U1 U2 ...
     allowed_universes: set[str] | None = None
     if "--allowed-universes" in sys.argv:
         idx = sys.argv.index("--allowed-universes")
         universes: list[str] = []
+        
+        # collect args until the next flag or end of argv
         for arg in sys.argv[idx + 1 :]:
             if arg.startswith("-"):
                 break
