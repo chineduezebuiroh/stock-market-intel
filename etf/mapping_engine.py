@@ -70,7 +70,7 @@ def write_options_etf_mapping() -> Path:
     mapping = build_options_eligible_etf_map()
     out = REF / "symbol_to_etf_options_eligible.csv"
     mapping.to_csv(out, index=False)
-        print(
+    print(
         f"[OK] Wrote ETF mapping for options-eligible symbols "
         f"({len(mapping)} rows) to {out}"
     )
