@@ -36,8 +36,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add data/snapshot_stocks_*.parquet \
-                  data/combo_stocks_d_130mdw_*.parquet
+          git add -f data/snapshot_stocks_*.parquet \
+                  -f data/combo_stocks_d_130mdw_*.parquet \
+                  -f data/combo_history/stocks/stocks_d_130mdw_shortlist/*.parquet
 
           # Don’t commit combo_history; make sure it’s in .gitignore
           git commit -m "Update intraday 130-minute stocks snapshots [skip ci]" || echo "No changes to commit"
