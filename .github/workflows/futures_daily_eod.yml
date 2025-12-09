@@ -39,10 +39,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Always add snapshots + combo for this profile
           git add -f data/snapshot_futures_*.parquet \
-                  -f data/combo_futures_3_dwm_*.parquet \
-                  -f data/combo_history/futures/futures_3_dwm_shortlist/*.parquet
+                  -f data/combo_futures_3_dwm_*.parquet
 
-          # Don’t commit combo_history; make sure it’s in .gitignore
+          # Only add combo_history if files exist (avoid fatal pathspec)
+          if compgen -G "data/combo_history/futures/futures_3_dwm_shortlist/*.parquet" > /dev/null; then
+            git add -f data/combo_history/futures/futures_3_dwm_shortlist/*.parquet
+          else
+            echo "[INFO] No combo_history files yet for futures_3_dwm_shortlist; skipping."
+          fi
+
           git commit -m "Update EOD futures snapshots [skip ci]" || echo "No changes to commit"
           git push
