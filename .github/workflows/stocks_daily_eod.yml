@@ -41,6 +41,7 @@ jobs:
 
           # Always add snapshots + combo for this profile
           git add -f data/snapshot_stocks_*.parquet \
+                  -f data/snapshot_etf_daily.parquet \
                   -f data/snapshot_etf_weekly.parquet \
                   -f data/combo_stocks_c_dwm_*.parquet
 
