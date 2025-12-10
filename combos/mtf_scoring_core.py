@@ -307,7 +307,7 @@ def evaluate_stocks_options_signal(
 
     if base_signal == "short" and short_score < 5.0:
         base_signal = "none"
-    
+    """
     #ETF overlay: look at primary + secondary, but preserve "no data" as NaN
     etf_long = aggregate_etf_score(
         row,
@@ -316,6 +316,28 @@ def evaluate_stocks_options_signal(
     etf_short = aggregate_etf_score(
         row,
         ["etf_primary_short_score", "etf_secondary_short_score"],
+    )
+    """
+    # ETF overlay: combine lower + middle timeframes, but preserve "no data" as NaN
+    etf_long = _aggregate_etf_score(
+        row,
+        [
+            # Lower timeframe (if present)
+            "etf_lower_primary_long_score",
+            "etf_lower_secondary_long_score",
+            # Middle timeframe (existing weekly guardrail)
+            "etf_primary_long_score",
+            "etf_secondary_long_score",
+        ],
+    )
+    etf_short = _aggregate_etf_score(
+        row,
+        [
+            "etf_lower_primary_short_score",
+            "etf_lower_secondary_short_score",
+            "etf_primary_short_score",
+            "etf_secondary_short_score",
+        ],
     )
 
     # Apply guardrails **only when ETF data exists**
@@ -327,6 +349,7 @@ def evaluate_stocks_options_signal(
         base_signal = "watch"
 
     return base_signal, long_score, short_score
+
 
 # ========================================================================
 # FUTURES scoring functions – one per combo
