@@ -309,9 +309,19 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
     if df.empty:
         return df
 
+    time_cols = [
+        c for c in (
+            "lower_date", "middle_date", "upper_date",
+            "lower_timestamp", "middle_timestamp", "upper_timestamp",
+        )
+        if c in df.columns
+    ]
+
     base_cols = [
         "symbol",
         "signal",
+        # 🔹 insert timestamps right after signal
+        *time_cols,
         "score_summary",        # <-- NEW: right after signal
         "mtf_long_score",
         "mtf_short_score",
@@ -437,9 +447,19 @@ def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    time_cols = [
+        c for c in (
+            "lower_date", "middle_date", "upper_date",
+            "lower_timestamp", "middle_timestamp", "upper_timestamp",
+        )
+        if c in df.columns
+    ]
+
     preferred = [
         "symbol",
         "signal",
+        # 🔹 insert timestamps right after signal
+        *time_cols,
         "score_summary",        # <-- NEW
         "mtf_long_score",
         "mtf_short_score",
