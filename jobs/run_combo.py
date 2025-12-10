@@ -243,11 +243,21 @@ def run(namespace: str, combo_name: str):
 
     # 2) Apply multi-timeframe signal engine using the PER-COMBO cfg
     # NEW: attach ETF guardrail info for options-eligible combos
+    lower_tf = combo_cfg.get("lower_tf")
     middle_tf = combo_cfg.get("middle_tf", "weekly") #<--- "weekly" here is just a default
+    """
     combo_df = attach_etf_trends_for_options_combo(
         combo_df,
         combo_cfg=combo_cfg,
         timeframe_for_etf=middle_tf,  
+    )
+    """
+    # 🔹 Attach ETF scores FIRST (so scoring can see them)
+    combo_df = attach_etf_trends_for_options_combo(
+        combo_df,
+        combo_cfg=combo_cfg,
+        lower_tf=lower_tf,
+        middle_tf=middle_tf,
     )
     
     combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
