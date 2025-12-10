@@ -7,7 +7,7 @@ import pandas as pd
 
 #from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
 
-from etl.sources import load_eod, load_130m_from_5m  # adjust import paths if needed
+from etl.sources import load_eod, load_130m_from_5m, load_quarterly_from_monthly, load_yearly_from_monthly
 
 
 @lru_cache(maxsize=16)
@@ -20,6 +20,12 @@ def _spy_qqq_vol_ma_for_timeframe(timeframe: str, length: int) -> tuple[pd.Serie
     if timeframe == "intraday_130m":
         spy_df = load_130m_from_5m("SPY")
         qqq_df = load_130m_from_5m("QQQ")
+    elif timeframe == "quarterly":
+        spy_df = load_quarterly_from_monthly("SPY", window_bars=length)
+        qqq_df = load_quarterly_from_monthly("QQQ", window_bars=length)
+    elif timeframe == "yearly":
+        spy_df = load_yearly_from_monthly("SPY", window_bars=length)
+        qqq_df = load_yearly_from_monthly("QQQ", window_bars=length)
     else:
         # EOD-style for D/W/M, exactly what we've been doing
         spy_df = load_eod("SPY", timeframe=timeframe)
@@ -32,9 +38,28 @@ def _spy_qqq_vol_ma_for_timeframe(timeframe: str, length: int) -> tuple[pd.Serie
     spy_vol = spy_df["volume"].astype(float)
     qqq_vol = qqq_df["volume"].astype(float)
 
+    # Use the same adaptive window logic as the symbol side
+    L = int(length)
+    n_spy = len(spy_vol)
+    n_qqq = len(qqq_vol)
+
+    # Enough data for SPY/QQQ? they usually have tons, so this is mostly defensive
+    window_spy = min(L, n_spy)
+    window_qqq = min(L, n_qqq)
+
+    minp_spy = max(3, window_spy // 2)
+    minp_qqq = max(3, window_qqq // 2)
+    """
+    spy_ma = spy_vol.rolling(window=window_spy, min_periods=minp_spy).mean()
+    qqq_ma = qqq_vol.rolling(window=window_qqq, min_periods=minp_qqq).mean()
+    """
+    spy_ma = spy_vol.rolling(window=L, min_periods=minp_spy).mean()
+    qqq_ma = qqq_vol.rolling(window=L, min_periods=minp_qqq).mean()
+    
+    """
     spy_ma = spy_vol.rolling(length, min_periods=length).mean()
     qqq_ma = qqq_vol.rolling(length, min_periods=length).mean()
-
+    """
     return spy_ma, qqq_ma
 
 
