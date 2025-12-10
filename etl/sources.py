@@ -302,56 +302,6 @@ def load_futures_intraday(
     df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
     return df_4h
 
-"""
-def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
-"""
-"""
-    Resample 1h futures bars into 4h bars, with the day defined as:
-      - Session start: 17:00 (5pm) America/New_York
-      - 6 bars per session:
-          17:00–21:00
-          21:00–01:00
-          01:00–05:00
-          05:00–09:00
-          09:00–13:00
-          13:00–17:00
-
-    Assumes df_1h:
-      - DatetimeIndex is tz-naive America/New_York (same as load_eod/load_intraday_yf)
-      - Columns: open, high, low, close, volume (adj_close optional / ignored here)
-"""
-"""
-    if df_1h is None or df_1h.empty:
-        return pd.DataFrame()
-
-    df_1h = df_1h.sort_index()
-
-    # Shift index so that 17:00 becomes "00:00" from resample's POV
-    shifted = df_1h.copy()
-    shifted.index = shifted.index - pd.Timedelta(hours=17)
-
-    # Standard OHLCV resample on the shifted index
-    o = shifted["open"].resample("4H").first()
-    h = shifted["high"].resample("4H").max()
-    l = shifted["low"].resample("4H").min()
-    c = shifted["close"].resample("4H").last()
-    v = shifted["volume"].resample("4H").sum()
-
-    out = pd.concat([o, h, l, c, v], axis=1)
-    out.columns = ["open", "high", "low", "close", "volume"]
-
-    # Shift back so bars are labeled at the true session times
-    out.index = out.index + pd.Timedelta(hours=17)
-
-    # Drop empty / all-NaN bars
-    out = out.dropna(how="any")
-
-    # Optional: enforce no zero-volume bars
-    if "volume" in out.columns:
-        out = out[out["volume"] > 0]
-
-    return out
-"""
 
 def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
     """
@@ -548,6 +498,74 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
     return out
 
 
+def _resample_monthly_to_quarterly(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate monthly OHLCV into true quarterly bars, indexed at
+    the *beginning* of each quarter (e.g., 2025-01-01, 2025-04-01, ...).
+
+    Assumes df has:
+        open, high, low, close, adj_close, volume
+    and a DatetimeIndex already normalized.
+    """
+    if df is None or df.empty:
+        return df
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
+
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    cols = [c for c in cols if c in df.columns]
+    if not cols:
+        return df
+
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "adj_close": "last",
+        "volume": "sum",
+    }
+
+    # 🔹 QS = Quarter Start (e.g., 2025-01-01, 2025-04-01, ...)
+    out = df[cols].resample("QS").agg(agg)
+
+    out = out.dropna(how="all")
+    out.index = out.index.normalize()
+    out.columns = out.columns.astype(str)
+
+    return out
+
+
+def load_quarterly_from_monthly(
+    symbol: str,
+    window_bars: int,
+    session: str = "regular",
+) -> pd.DataFrame:
+    """
+    Build true quarterly bars by:
+      1) Loading monthly OHLCV via load_eod(..., timeframe="monthly"),
+      2) Resampling to quarterly OHLCV with _resample_monthly_to_quarterly.
+
+    We ask for more monthly bars than the target quarterly window so we
+    have enough history to aggregate.
+    """
+    monthly_window = window_bars * 4  # 4 months per quarter (very conservative)
+
+    df_monthly = load_eod(
+        symbol,
+        timeframe="monthly",
+        window_bars=monthly_window,
+        session=session,
+    )
+
+    if df_monthly is None or df_monthly.empty:
+        return df_monthly
+
+    df_quarterly = _resample_monthly_to_quarterly(df_monthly)
+    return df_quarterly
+
 
 def _resample_monthly_to_yearly(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -580,7 +598,7 @@ def _resample_monthly_to_yearly(df: pd.DataFrame) -> pd.DataFrame:
         "volume": "sum",
     }
 
-    out = df[cols].resample("YE").agg(agg)  # year-end frequency
+    out = df[cols].resample("YS").agg(agg)  # year-start frequency
     # Drop all-NaN rows (just in case)
     out = out.dropna(how="all")
 
