@@ -7,3 +7,4 @@ duckdb
 PyYAML
 streamlit
 requests
+s3fs>=2024.3.0
