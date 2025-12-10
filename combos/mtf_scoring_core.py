@@ -336,6 +336,7 @@ def evaluate_stocks_options_signal(
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
+    sig_vol_col: str,
 ) -> tuple[str, float, float]:
     """
     Options-eligible version of the equity signal.
