@@ -21,17 +21,15 @@ import yaml
 from etl.sources import (
     load_eod,
     load_130m_from_5m,
+    load_quarterly_from_monthly,
     load_yearly_from_monthly,
-    load_futures_intraday,  # NEW IMPORT
+    load_futures_intraday,
 )
-
 from etl.window import parquet_path, update_fixed_window
-
 from etl.universe import symbols_for_universe
 
 from functools import lru_cache
 
-#from indicators.core import apply_core
 from indicators.core import (
     apply_core,
     get_snapshot_base_cols,
@@ -191,6 +189,9 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
             
         elif namespace == "stocks" and timeframe == "yearly":
             df_new = load_yearly_from_monthly(sym, window_bars=window_bars, session=session)
+
+        elif namespace == "stocks" and timeframe == "quarterly":
+            df_new = load_quarterly_from_monthly(sym, window_bars=window_bars, session=session)
 
         elif namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
             df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
