@@ -319,7 +319,7 @@ def evaluate_stocks_options_signal(
     )
     """
     # ETF overlay: combine lower + middle timeframes, but preserve "no data" as NaN
-    etf_long = _aggregate_etf_score(
+    etf_long = aggregate_etf_score(
         row,
         [
             # Lower timeframe (if present)
@@ -330,7 +330,7 @@ def evaluate_stocks_options_signal(
             "etf_secondary_long_score",
         ],
     )
-    etf_short = _aggregate_etf_score(
+    etf_short = aggregate_etf_score(
         row,
         [
             "etf_lower_primary_short_score",
