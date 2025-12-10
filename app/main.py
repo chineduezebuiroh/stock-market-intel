@@ -354,6 +354,13 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
             "etf_symbol_secondary",
             "etf_secondary_long_score",
             "etf_secondary_short_score",
+            # Lower timeframe (if present)
+            "etf_lower_symbol_primary",
+            "etf_lower_primary_long_score",
+            "etf_lower_primary_short_score",
+            "etf_lower_symbol_secondary",
+            "etf_lower_secondary_long_score",
+            "etf_lower_secondary_short_score",
         ]
 
     cols = [c for c in base_cols if c in df.columns]
