@@ -72,20 +72,22 @@ def symbols_for_universe(universe: str) -> list[str]:
     # Future: add ETF shortlist universes here if needed.
     return []
 
-
+"""
 def _load_role_frame(
     namespace: str,
     timeframe: str,
     role: str,
 ) -> pd.DataFrame:
-    """
+"""
+"""
     Load the snapshot for a given namespace+timeframe and reshape it into a
     role-prefixed frame keyed by symbol.
 
     Result:
         index: symbol
         columns: f"{role}_<original_col>" for all non-symbol columns
-    """
+"""
+"""
     snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
     if not snap_path.exists():
         print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
@@ -107,6 +109,68 @@ def _load_role_frame(
 
     # Index is symbol, columns are role-prefixed
     return snap
+"""
+
+def _load_role_frame(
+    namespace: str,
+    timeframe: str,
+    role: str,
+) -> pd.DataFrame:
+    """
+    Load the snapshot for a given namespace+timeframe and reshape it into a
+    role-prefixed frame keyed by symbol.
+
+    Result:
+        index: symbol
+        columns: f"{role}_<original_col>" for all non-symbol columns
+
+    NEW:
+        - Preserve a per-role timestamp column (e.g. lower_date / middle_date)
+          derived from either the index or an explicit 'date'/'timestamp' col.
+    """
+    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+    if not snap_path.exists():
+        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
+        return pd.DataFrame()
+
+    snap = pd.read_parquet(snap_path)
+    if snap.empty:
+        return pd.DataFrame()
+
+    # -----------------------------
+    # Detect / normalize time column
+    # -----------------------------
+    time_col = None
+
+    if isinstance(snap.index, pd.DatetimeIndex):
+        # Use existing index name if present, otherwise call it 'date'
+        time_col = snap.index.name or "date"
+        snap = snap.reset_index()  # bring time into a column
+    else:
+        # Try common column names
+        for candidate in ("date", "timestamp", "datetime"):
+            if candidate in snap.columns:
+                time_col = candidate
+                break
+
+    if "symbol" not in snap.columns:
+        print(f"[WARN] Snapshot {snap_path} has no 'symbol' column; skipping.")
+        return pd.DataFrame()
+
+    # Reorder columns to: symbol, time_col (if any), then rest
+    other_cols = [c for c in snap.columns if c not in ("symbol", time_col)]
+    ordered_cols = ["symbol"] + ([time_col] if time_col else []) + other_cols
+    snap = snap[ordered_cols]
+
+    # Use symbol as key; keep ALL other columns (prices + indicators + time)
+    snap = snap.set_index("symbol")
+
+    # Prefix everything with the role (lower_, middle_, upper_)
+    snap = snap.add_prefix(f"{role}_")
+
+    # Index is symbol, columns are role-prefixed (e.g. lower_date, middle_date)
+    return snap
+
 
 
 def build_combo_df(
