@@ -255,13 +255,13 @@ def evaluate_stocks_shortlist_signal(
 # =========================================================================
 # STOCK (OPTIONS-ELIGIBLE) scoring functions
 # =========================================================================
-"""
+#"""
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
     sig_vol_col: str,
 ) -> tuple[str, float, float]:
-"""
+#"""
 """
     Options-eligible version of the equity signal.
 
@@ -274,7 +274,7 @@ def evaluate_stocks_options_signal(
     This keeps trend/PA logic identical, but enforces stronger participation
     for options trades.
 """
-"""
+#"""
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
     vol_ratio_th1 = 0.10
@@ -330,15 +330,16 @@ def evaluate_stocks_options_signal(
         base_signal = "watch"
 
     return base_signal, long_score, short_score
+#"""
+
 """
-
-
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
     sig_vol_col: str,
 ) -> tuple[str, float, float]:
-    """
+"""
+"""
     Options-eligible version of the equity signal.
 
     Strategy:
@@ -347,7 +348,8 @@ def evaluate_stocks_options_signal(
       - Finally, apply ETF trend guardrails:
           * downgrade LONG to WATCH if ETF long score < 4
           * downgrade SHORT to WATCH if ETF short score < 4
-    """
+"""
+"""
     # 1) Base equity MTF logic (no ETF guardrails yet)
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
@@ -413,7 +415,7 @@ def evaluate_stocks_options_signal(
         base_signal = "watch"
 
     return base_signal, long_score, short_score
-
+"""
 
 # ========================================================================
 # FUTURES scoring functions – one per combo
