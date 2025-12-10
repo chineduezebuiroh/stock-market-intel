@@ -37,13 +37,19 @@ def run_profile() -> None:
             "--cascade",
         ],
 
-        # ---------------------------------------------------------
-        # 2) Refresh ETF trends on weekly (middle) timeframe
-        # ---------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # 2) Refresh ETF trends on weekly (middle) and daily (lower) timeframes
+        # ----------------------------------------------------------------------
         [
             sys.executable,
             str(root / "jobs" / "run_etf_trends.py"),
             "weekly",
+        ],
+        
+        [
+            sys.executable,
+            str(root / "jobs" / "run_etf_trends.py"),
+            "daily",
         ],
 
         # ---------------------------------------------------------
