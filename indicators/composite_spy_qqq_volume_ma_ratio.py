@@ -90,13 +90,35 @@ def indicator_spy_qqq_volume_ma_ratio(
     volume = df_sorted["volume"].astype(float)
 
     L = int(length)
+    """
     if len(volume) < L:
         return pd.Series(index=df.index, dtype="float64")
+    """
 
+    n = len(volume)
+
+    # If there are *really* no bars, just return NaN
+    if n == 0:
+        return pd.Series(index=df.index, dtype="float64")
+
+    # ✅ Adaptive window:
+    # - default to L (e.g. 26)
+    # - cap at available history
+    # - require at least a small minimum to avoid nonsense (e.g. 4 bars)
+    window = min(L, n)
+    minp = max(4, window // 2)
+    
+    """
     # SMA of the symbol's own volume
     vol_ma_symbol = volume.rolling(window=L, min_periods=L).mean()
-
     spy_ma, qqq_ma = _spy_qqq_vol_ma_for_timeframe(timeframe_name, L)
+    """
+
+    # SMA of the symbol's own volume
+    vol_ma_symbol = volume.rolling(window=window, min_periods=minp).mean()
+    # SPY/QQQ MAs with same effective window
+    spy_ma, qqq_ma = _spy_qqq_vol_ma_for_timeframe(timeframe_name, window)
+    
     
     # Align SPY/QQQ to this symbol’s index without inventing future values.
     spy_aligned = spy_ma.reindex(df_sorted.index)
