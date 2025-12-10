@@ -178,22 +178,22 @@ def run(namespace: str, combo_name: str):
         return
 
     # 2) Apply multi-timeframe signal engine using the PER-COMBO cfg
-    combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
-
     # NEW: attach ETF guardrail info for options-eligible combos
     middle_tf = combo_cfg.get("middle_tf", "weekly") #<--- "weekly" here is just a default
     combo_df = attach_etf_trends_for_options_combo(
         combo_df,
         combo_cfg=combo_cfg,
-        timeframe_for_etf=middle_tf,  # for DWM, this is 'weekly'
+        timeframe_for_etf=middle_tf,  
     )
+    
+    combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
 
     # 3) Save as before
     # Old convention: "combo_" + combo_name
     out = DATA / f"combo_{combo_name}.parquet"
 
     combo_df.to_parquet(out)
-    print(f"[OK] Wrote combo snapshot to {out}")
+    print(f"[OK] Wrote combo snapshot to {out}")   
 
     # ------------------------------------------------------------------
     # Also write a dated history snapshot for this combo run.
