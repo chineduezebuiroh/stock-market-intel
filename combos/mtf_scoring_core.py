@@ -210,9 +210,9 @@ def evaluate_stocks_shortlist_signal(
     # Block 1: Trend / Regime (upper + middle)
     # ------------------------------------------------------
     # Upper regime bias: aligned bullish vs bearish
-    if (~np.isnan(up_wyckoff) and (up_wyckoff > 0 or up_exh_abs > 0)) or (np.isnan(up_wyckoff) and (md_wyckoff > 0 or md_exh_abs > 0)):
+    if (not pd.isna(up_wyckoff) and (up_wyckoff > 0 or up_exh_abs > 0)) or (pd.isna(up_wyckoff) and (md_wyckoff > 0 or md_exh_abs > 0)):
         long_score += 1.0
-    if (~np.isnan(up_wyckoff) and (up_wyckoff < 0 or up_exh_abs < 0)) or (np.isnan(up_wyckoff) and (md_wyckoff < 0 or md_exh_abs < 0)):
+    if (not pd.isna(up_wyckoff) and (up_wyckoff < 0 or up_exh_abs < 0)) or (pd.isna(up_wyckoff) and (md_wyckoff < 0 or md_exh_abs < 0)):
         short_score += 1.0
 
     # ------------------------------------------------------
@@ -255,13 +255,11 @@ def evaluate_stocks_shortlist_signal(
 # =========================================================================
 # STOCK (OPTIONS-ELIGIBLE) scoring functions
 # =========================================================================
-#"""
 def evaluate_stocks_options_signal(
     row: pd.Series,
     exh_abs_col: str,
     sig_vol_col: str,
 ) -> tuple[str, float, float]:
-#"""
     """
     Options-eligible version of the equity signal.
 
@@ -274,7 +272,6 @@ def evaluate_stocks_options_signal(
     This keeps trend/PA logic identical, but enforces stronger participation
     for options trades.
     """
-#"""
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
     vol_ratio_th1 = 0.10
@@ -294,10 +291,10 @@ def evaluate_stocks_options_signal(
     # Block 3: Volume / Participation (lower + middle)
     # ------------------------------------------------------
     # Significant volume + beating SPY/QQQ volume baseline -> strong participation
-    if ~np.isnan(up_wyckoff) and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th1) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th1)):
+    if not pd.isna(up_wyckoff) and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th1) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th1)):
         long_score += 1.0
         short_score += 1.0
-    if np.isnan(up_wyckoff) and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th2) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th2)):
+    if pd.isna(up_wyckoff) and ((md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th2) or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th2)):
         long_score += 1.0
         short_score += 1.0
 
@@ -330,92 +327,6 @@ def evaluate_stocks_options_signal(
         base_signal = "watch"
 
     return base_signal, long_score, short_score
-#"""
-
-"""
-def evaluate_stocks_options_signal(
-    row: pd.Series,
-    exh_abs_col: str,
-    sig_vol_col: str,
-) -> tuple[str, float, float]:
-"""
-"""
-    Options-eligible version of the equity signal.
-
-    Strategy:
-      - Reuse the shortlist scoring.
-      - Then require stronger volume / participation for the signal to stand.
-      - Finally, apply ETF trend guardrails:
-          * downgrade LONG to WATCH if ETF long score < 4
-          * downgrade SHORT to WATCH if ETF short score < 4
-"""
-"""
-    # 1) Base equity MTF logic (no ETF guardrails yet)
-    base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
-
-    # If there's no directional bias, nothing more to do.
-    if base_signal not in ("long", "short"):
-        return base_signal, long_score, short_score
-
-    # 2) Volume / participation overlay
-    vol_ratio_th1 = 0.10
-    vol_ratio_th2 = 0.25
-
-    up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
-    md_sigvol = row.get("middle_significant_volume", np.nan)
-    md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
-    lw_sigvol = row.get(sig_vol_col, np.nan)
-    lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
-
-    # Strong participation when weekly regime is clear (upper Wyckoff non-NaN)
-    if not pd.isna(up_wyckoff) and (
-        (md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th1)
-        or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th1)
-    ):
-        long_score += 1.0
-        short_score += 1.0
-
-    # If upper regime is ambiguous, require stronger volume beat
-    if pd.isna(up_wyckoff) and (
-        (md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th2)
-        or (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th2)
-    ):
-        long_score += 1.0
-        short_score += 1.0
-
-    # 3) Tighten thresholds for options
-    #    (this was where the == vs = bug used to live)
-    if base_signal == "long" and long_score < 5.0:
-        base_signal = "none"
-
-    if base_signal == "short" and short_score < 5.0:
-        base_signal = "none"
-
-    # If the tightened thresholds killed the signal, stop here.
-    if base_signal not in ("long", "short"):
-        return base_signal, long_score, short_score
-
-    # 4) ETF overlay: guardrails using primary + secondary scores
-    etf_long = aggregate_etf_score(
-        row,
-        ["etf_primary_long_score", "etf_secondary_long_score"],
-    )
-    etf_short = aggregate_etf_score(
-        row,
-        ["etf_primary_short_score", "etf_secondary_short_score"],
-    )
-
-    # Apply guardrails **only when ETF data exists** (etf_* is not NaN).
-    # Long side
-    if base_signal == "long" and not pd.isna(etf_long) and etf_long < 4.0:
-        base_signal = "watch"
-
-    # Short side
-    if base_signal == "short" and not pd.isna(etf_short) and etf_short < 4.0:
-        base_signal = "watch"
-
-    return base_signal, long_score, short_score
-"""
 
 # ========================================================================
 # FUTURES scoring functions – one per combo
