@@ -262,7 +262,7 @@ def evaluate_stocks_options_signal(
     sig_vol_col: str,
 ) -> tuple[str, float, float]:
 #"""
-"""
+    """
     Options-eligible version of the equity signal.
 
     Strategy:
@@ -273,7 +273,7 @@ def evaluate_stocks_options_signal(
 
     This keeps trend/PA logic identical, but enforces stronger participation
     for options trades.
-"""
+    """
 #"""
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
