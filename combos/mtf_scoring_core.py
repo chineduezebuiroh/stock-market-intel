@@ -17,9 +17,9 @@ from etf.guardrails import (
     aggregate_etf_score,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
-REF = ROOT / "ref"
+#REF = ROOT / "ref"
+from core.paths import REF #, CFG  # NEW
 
 
 @dataclass
