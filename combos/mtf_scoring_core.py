@@ -348,7 +348,7 @@ def evaluate_stocks_options_signal(
           * downgrade SHORT to WATCH if ETF short score < 4
     """
     # 1) Base equity MTF logic (no ETF guardrails yet)
-    base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col)
+    base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
     # If there's no directional bias, nothing more to do.
     if base_signal not in ("long", "short"):
@@ -361,7 +361,7 @@ def evaluate_stocks_options_signal(
     up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
     md_sigvol = row.get("middle_significant_volume", np.nan)
     md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
-    lw_sigvol = row.get("lower_significant_volume", np.nan)
+    lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
 
     # Strong participation when weekly regime is clear (upper Wyckoff non-NaN)
