@@ -7,12 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-"""
-DATA = ROOT / "data"
-CFG = ROOT / "config"
-REF = ROOT / "ref"
-"""
-from core.paths import DATA, CFG, REF  # NEW
+
+from core.paths import DATA, CFG, REF
+from core import storage
 
 import pandas as pd
 import yaml
@@ -23,16 +20,14 @@ from datetime import datetime
 #from etl.universe import symbols_for_universe
 #from screens.etf_trend_engine import compute_etf_trend_scores
 from combos.mtf_scoring_core import basic_signal_logic
-
 from etf.guardrails import attach_etf_trends_for_options_combo
 
-MTF_CFG_PATH = CFG / "multi_timeframe_combos.yaml"
 
+MTF_CFG_PATH = CFG / "multi_timeframe_combos.yaml"
 
 # Load multi-timeframe combos config
 with open(MTF_CFG_PATH, "r") as f:
     MTF_CFG = yaml.safe_load(f)
-
 
 # Columns we expect to be present after apply_core()
 BASE_COLS = [
@@ -72,50 +67,8 @@ def symbols_for_universe(universe: str) -> list[str]:
     # Future: add ETF shortlist universes here if needed.
     return []
 
-"""
-def _load_role_frame(
-    namespace: str,
-    timeframe: str,
-    role: str,
-) -> pd.DataFrame:
-"""
-"""
-    Load the snapshot for a given namespace+timeframe and reshape it into a
-    role-prefixed frame keyed by symbol.
 
-    Result:
-        index: symbol
-        columns: f"{role}_<original_col>" for all non-symbol columns
-"""
-"""
-    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-    if not snap_path.exists():
-        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
-        return pd.DataFrame()
-
-    snap = pd.read_parquet(snap_path)
-    if snap.empty:
-        return pd.DataFrame()
-
-    if "symbol" not in snap.columns:
-        print(f"[WARN] Snapshot {snap_path} has no 'symbol' column; skipping.")
-        return pd.DataFrame()
-
-    # Use symbol as key; keep ALL other columns (prices + indicators)
-    snap = snap.set_index("symbol")
-
-    # Prefix everything with the role (lower_, middle_, upper_)
-    snap = snap.add_prefix(f"{role}_")
-
-    # Index is symbol, columns are role-prefixed
-    return snap
-"""
-
-def _load_role_frame(
-    namespace: str,
-    timeframe: str,
-    role: str,
-) -> pd.DataFrame:
+def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
     """
     Load the snapshot for a given namespace+timeframe and reshape it into a
     role-prefixed frame keyed by symbol.
@@ -129,11 +82,13 @@ def _load_role_frame(
           derived from either the index or an explicit 'date'/'timestamp' col.
     """
     snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-    if not snap_path.exists():
+    """if not snap_path.exists():"""
+    if not storage.exists(snap_path):
         print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
         return pd.DataFrame()
 
-    snap = pd.read_parquet(snap_path)
+    """snap = pd.read_parquet(snap_path)"""
+    snap = storage.load_parquet(snap_path)
     if snap.empty:
         return pd.DataFrame()
 
@@ -172,12 +127,7 @@ def _load_role_frame(
     return snap
 
 
-
-def build_combo_df(
-    namespace: str,
-    combo_name: str,
-    mtf_cfg: dict,
-) -> pd.DataFrame:
+def build_combo_df(namespace: str, combo_name: str, mtf_cfg: dict) -> pd.DataFrame:
     """
     Build a multi-timeframe combo dataframe:
 
@@ -226,7 +176,6 @@ def build_combo_df(
     return combo
 
 
-
 def run(namespace: str, combo_name: str):
     # Full multi-timeframe config (all combos for all namespaces)
     global MTF_CFG
@@ -245,13 +194,7 @@ def run(namespace: str, combo_name: str):
     # NEW: attach ETF guardrail info for options-eligible combos
     lower_tf = combo_cfg.get("lower_tf")
     middle_tf = combo_cfg.get("middle_tf", "weekly") #<--- "weekly" here is just a default
-    """
-    combo_df = attach_etf_trends_for_options_combo(
-        combo_df,
-        combo_cfg=combo_cfg,
-        timeframe_for_etf=middle_tf,  
-    )
-    """
+
     # 🔹 Attach ETF scores FIRST (so scoring can see them)
     combo_df = attach_etf_trends_for_options_combo(
         combo_df,
@@ -262,11 +205,10 @@ def run(namespace: str, combo_name: str):
     
     combo_df = basic_signal_logic(namespace, combo_name, combo_cfg, combo_df)
 
-    # 3) Save as before
-    # Old convention: "combo_" + combo_name
+    # 3) Save current combo snapshot
     out = DATA / f"combo_{combo_name}.parquet"
-
-    combo_df.to_parquet(out)
+    """combo_df.to_parquet(out)"""
+    storage.save_parquet(combo_df, out)
     print(f"[OK] Wrote combo snapshot to {out}")   
 
     # ------------------------------------------------------------------
@@ -278,10 +220,13 @@ def run(namespace: str, combo_name: str):
     ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
 
     hist_dir = DATA / "combo_history" / namespace / combo_name
+    # For local backend, storage.save_parquet will handle parent dirs;
+    # but for clarity we still make the local dirs here.
     hist_dir.mkdir(parents=True, exist_ok=True)
 
     hist_path = hist_dir / f"combo_{combo_name}_asof={ts}.parquet"
-    combo_df.to_parquet(hist_path)
+    """combo_df.to_parquet(hist_path)"""
+    storage.save_parquet(combo_df, hist_path)
     print(f"[OK] Wrote combo history snapshot to {hist_path}")
 
 if __name__ == "__main__":
