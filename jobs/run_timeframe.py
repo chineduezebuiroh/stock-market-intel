@@ -9,11 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-"""  
-DATA = ROOT / "data"
-CFG = ROOT / "config"
-"""
+
 from core.paths import DATA, CFG  # no REF
+from core import storage
 
 import pandas as pd
 import yaml
@@ -48,7 +46,6 @@ with open(CFG / "timeframes.yaml", "r") as f:
 with open(CFG / "multi_timeframe_combos.yaml", "r") as f:
     MTF_CFG = yaml.safe_load(f)
 
-
 CASCADE = {
     "stocks": {
         "intraday_130m": ["daily", "weekly"],
@@ -68,7 +65,6 @@ CASCADE = {
 def _load_symbol_exclusions() -> set[str]:
     """
     Load a global list of symbols to exclude from all timeframes/universes.
-
     Expected file: config/excluded_symbols.csv with at least a 'symbol' column.
     """
     if not EXCLUSIONS_FILE.exists():
@@ -122,7 +118,6 @@ def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
             universes.add(combo_cfg["universe"])
 
     return sorted(universes)
-
 
 
 def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set[str] | None = None) -> list[str]:
@@ -205,9 +200,13 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
 
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
         parquet.parent.mkdir(parents=True, exist_ok=True)
-
+        
+        """
         if parquet.exists():
             existing = pd.read_parquet(parquet)
+        """
+        if storage.exists(parquet):
+            existing = storage.load_parquet(parquet)
             # 🔹 Drop legacy tuple-ish columns left over from old experiments
             bad_cols = [
                 c for c in existing.columns
@@ -225,7 +224,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         #merged = apply_core(merged, params={})
         merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
         
-        merged.to_parquet(parquet)
+        """merged.to_parquet(parquet)"""
+        storage.save_parquet(merged, parquet)
 
 
 def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes: set[str] | None = None):
@@ -239,6 +239,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
       - If a screen YAML exists, applies it via run_screen().
       - Otherwise, writes the raw latest-bar snapshot.
     """
+    
     # --- 1) Determine config & symbols for this timeframe ---
     cfg_tf = TF_CFG[namespace][timeframe]
     session = cfg_tf["session"]
@@ -249,15 +250,9 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
     if not symbols:
         print(f"[WARN] No symbols found for {namespace}:{timeframe} via combos.")
         return
-    
-    """
-    # Initialize indicator engine (loads YAML profiles/params/combos)
-    initialize_indicator_engine("config")
-    """
 
     # --- 2) Ingest this timeframe (per-symbol parquet with indicators) ---
     ingest_one(namespace, timeframe, symbols, session, window_bars)
-
 
     # 3) Build single-timeframe snapshot (no screening/pivoting for now)
     base_cols = get_snapshot_base_cols(namespace, timeframe)
@@ -265,10 +260,12 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
 
     for sym in symbols:
         p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        if not p.exists():
+        """if not p.exists():"""
+        if not storage.exists(p):
             continue
 
-        df = pd.read_parquet(p)
+        """df = pd.read_parquet(p)"""
+        df = storage.load_parquet(p)
         if df.empty:
             continue
 
@@ -300,7 +297,8 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
         snap.columns = snap.columns.astype(str)
 
         out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-        snap.to_parquet(out)
+        """snap.to_parquet(out)"""
+        storage.save_parquet(snap, out)
         print(f"[OK] Wrote snapshot: {out}")
 
     # --- 4) Cascade to higher timeframes (if requested) ---
@@ -314,6 +312,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
                 cascade=False, # prevent infinite recursion
                 allowed_universes=allowed_universes,  # propagate restriction
             )
+
 
 if __name__ == "__main__":
     initialize_indicator_engine(CFG)
