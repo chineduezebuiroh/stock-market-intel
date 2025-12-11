@@ -7,12 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-"""
-DATA = ROOT / "data"
-CFG = ROOT / "config"
-REF = ROOT / "ref"
-"""
-from core.paths import DATA, CFG, REF  # NEW
+
+from core.paths import DATA, CFG, REF
+from core import storage
 
 import pandas as pd
 import yaml
@@ -23,6 +20,7 @@ from indicators.core import (
     apply_core,
     initialize_indicator_engine,
 )
+
 
 
 def load_timeframe_cfg(namespace: str, timeframe: str) -> tuple[str, int]:
@@ -74,10 +72,14 @@ def ingest_etf_timeframe(timeframe: str) -> None:
             continue
 
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        parquet.parent.mkdir(parents=True, exist_ok=True)
+        #parquet.parent.mkdir(parents=True, exist_ok=True)
 
+        """
         if parquet.exists():
             existing = pd.read_parquet(parquet)
+        """
+        if storage.exists(parquet):
+            existing = storage.load_parquet(parquet)
         else:
             existing = pd.DataFrame()
 
@@ -86,7 +88,8 @@ def ingest_etf_timeframe(timeframe: str) -> None:
             continue
 
         merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
-        merged.to_parquet(parquet)
+        """merged.to_parquet(parquet)"""
+        storage.save_parquet(merged, parquet)
 
         last = merged.iloc[-1:].copy()
         last["symbol"] = sym
@@ -102,7 +105,8 @@ def ingest_etf_timeframe(timeframe: str) -> None:
     snap.columns = snap.columns.astype(str)
 
     out = DATA / f"snapshot_etf_{timeframe}.parquet"
-    snap.to_parquet(out)
+    """snap.to_parquet(out)"""
+    storage.save_parquet(snap, out)
     print(f"[OK] Wrote ETF snapshot: {out}")
 
 
