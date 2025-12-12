@@ -9,6 +9,10 @@ from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
+from core.paths import DATA
+from core import storage
+import pandas as pd
+
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
 # =======================================================
@@ -75,6 +79,23 @@ def run_profile() -> None:
     for cmd in cmds:
         print(f"[INFO] Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
+
+    # =======================================================
+    #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
+    # =======================================================
+    def assert_combo_nonempty(combo_name: str, min_rows: int = 10):
+        path = DATA / f"combo_{combo_name}.parquet"
+        if not storage.exists(path):
+            raise RuntimeError(f"[FATAL] Combo file missing: {path}")
+        df = storage.load_parquet(path)
+        if len(df) < min_rows:
+            raise RuntimeError(
+                f"[FATAL] Combo {combo_name} too small: {len(df)} rows (< {min_rows})"
+            )
+    
+    # After run_combo calls:
+    assert_combo_nonempty("stocks_c_dwm_shortlist", min_rows=5)
+    assert_combo_nonempty("stocks_c_dwm_all", min_rows=5)
 
 
 def main() -> None:
