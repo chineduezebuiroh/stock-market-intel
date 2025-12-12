@@ -8,10 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-"""
-DATA = ROOT / "data"
-"""
-from core.paths import DATA # CFG  # NEW
+
+from core.paths import DATA # CFG not needed here
+from core import storage
 
 import pandas as pd
 
@@ -49,7 +48,7 @@ def _score_etf_row(row: pd.Series) -> tuple[float, float]:
         short_score += 1.0
 
     return long_score, short_score
-  
+
 
 def compute_etf_trend_scores(timeframe: str = "weekly") -> pd.DataFrame:
     """
@@ -60,10 +59,12 @@ def compute_etf_trend_scores(timeframe: str = "weekly") -> pd.DataFrame:
         - etf_short_score
     """
     snap_path = DATA / f"snapshot_etf_{timeframe}.parquet"
-    if not snap_path.exists():
+    """if not snap_path.exists():"""
+    if not storage.exists(snap_path):
         raise FileNotFoundError(f"Missing ETF snapshot: {snap_path}")
 
-    snap = pd.read_parquet(snap_path)
+    """snap = pd.read_parquet(snap_path)"""
+    snap = storage.load_parquet(snap_path)
 
     if "symbol" not in snap.columns:
         raise KeyError(
@@ -95,8 +96,10 @@ def write_etf_trend_scores(timeframe: str) -> Path:
     """
     df = compute_etf_trend_scores(timeframe)
     out = DATA / f"etf_trend_scores_{timeframe}.parquet"
+    # For local backend, storage.save_parquet will mkdir parents; this is harmless either way
     out.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(out)
+    """df.to_parquet(out)"""
+    storage.save_parquet(df, out)
     return out
 
 
@@ -105,6 +108,11 @@ def load_etf_trend_scores(timeframe: str) -> pd.DataFrame:
     Load cached ETF scores if present, otherwise compute on the fly.
     """
     path = DATA / f"etf_trend_scores_{timeframe}.parquet"
+    """
     if path.exists():
         return pd.read_parquet(path)
+    """
+    if storage.exists(path):
+        return storage.load_parquet(path)
+        
     return compute_etf_trend_scores(timeframe)
