@@ -37,13 +37,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Debug AWS env visibility
-        run: |
-          echo "DATA_BACKEND=$DATA_BACKEND"
-          echo "S3_BUCKET_DATA=$S3_BUCKET_DATA"
-          echo "S3_PREFIX_DATA=$S3_PREFIX_DATA"
-          echo "AWS_ACCESS_KEY_ID length: ${#AWS_ACCESS_KEY_ID}"
-          echo "AWS_SECRET_ACCESS_KEY length: ${#AWS_SECRET_ACCESS_KEY}"
+      #- name: Debug AWS env visibility
+        #run: |
+          #echo "DATA_BACKEND=$DATA_BACKEND"
+          #echo "S3_BUCKET_DATA=$S3_BUCKET_DATA"
+          #echo "S3_PREFIX_DATA=$S3_PREFIX_DATA"
+          #echo "AWS_ACCESS_KEY_ID length: ${#AWS_ACCESS_KEY_ID}"
+          #echo "AWS_SECRET_ACCESS_KEY length: ${#AWS_SECRET_ACCESS_KEY}"
 
       - name: Run stocks EOD (DST-aware guarded)
         run: |
