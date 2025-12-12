@@ -41,30 +41,30 @@ jobs:
         run: |
           python .github/scripts/run_stocks_eod_guarded.py
 
-      - name: Commit updated data snapshots
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      #- name: Commit updated data snapshots
+        #if: success()
+        #run: |
+          #git config user.name "github-actions[bot]"
+          #git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Always add snapshots + combo for this profile
-          git add -f data/snapshot_stocks_*.parquet \
-                  -f data/snapshot_etf_daily.parquet \
-                  -f data/snapshot_etf_weekly.parquet \
-                  -f data/combo_stocks_c_dwm_*.parquet
+          #git add -f data/snapshot_stocks_*.parquet \
+          #        -f data/snapshot_etf_daily.parquet \
+          #        -f data/snapshot_etf_weekly.parquet \
+          #        -f data/combo_stocks_c_dwm_*.parquet
 
           # Only add combo_history if files exist (avoid fatal pathspec)
-          if compgen -G "data/combo_history/stocks/stocks_c_dwm_shortlist/*.parquet" > /dev/null; then
-            git add -f data/combo_history/stocks/stocks_c_dwm_shortlist/*.parquet
-          else
-            echo "[INFO] No combo_history files yet for stocks_c_dwm_shortlist; skipping."
-          fi
+          #if compgen -G "data/combo_history/stocks/stocks_c_dwm_shortlist/*.parquet" > /dev/null; then
+          #  git add -f data/combo_history/stocks/stocks_c_dwm_shortlist/*.parquet
+          #else
+          #  echo "[INFO] No combo_history files yet for stocks_c_dwm_shortlist; skipping."
+          #fi
 
-          if compgen -G "data/combo_history/stocks/stocks_c_dwm_all/*.parquet" > /dev/null; then
-            git add -f data/combo_history/stocks/stocks_c_dwm_all/*.parquet
-          else
-            echo "[INFO] No combo_history files yet for stocks_c_dwm_all; skipping."
-          fi
+          #if compgen -G "data/combo_history/stocks/stocks_c_dwm_all/*.parquet" > /dev/null; then
+          #  git add -f data/combo_history/stocks/stocks_c_dwm_all/*.parquet
+          #else
+          #  echo "[INFO] No combo_history files yet for stocks_c_dwm_all; skipping."
+          #fi
 
-          git commit -m "Update EOD stocks snapshots [skip ci]" || echo "No changes to commit"
-          git push
+          #git commit -m "Update EOD stocks snapshots [skip ci]" || echo "No changes to commit"
+          #git push
