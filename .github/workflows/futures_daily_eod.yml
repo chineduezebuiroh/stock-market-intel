@@ -41,22 +41,22 @@ jobs:
         run: |
           python .github/scripts/run_futures_eod_guarded.py
 
-      - name: Commit updated data snapshots
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      #- name: Commit updated data snapshots
+        #if: success()
+        #run: |
+          #git config user.name "github-actions[bot]"
+          #git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Always add snapshots + combo for this profile
-          git add -f data/snapshot_futures_*.parquet \
-                  -f data/combo_futures_3_dwm_*.parquet
+          #git add -f data/snapshot_futures_*.parquet \
+                  #-f data/combo_futures_3_dwm_*.parquet
 
           # Only add combo_history if files exist (avoid fatal pathspec)
-          if compgen -G "data/combo_history/futures/futures_3_dwm_shortlist/*.parquet" > /dev/null; then
-            git add -f data/combo_history/futures/futures_3_dwm_shortlist/*.parquet
-          else
-            echo "[INFO] No combo_history files yet for futures_3_dwm_shortlist; skipping."
-          fi
+          #if compgen -G "data/combo_history/futures/futures_3_dwm_shortlist/*.parquet" > /dev/null; then
+            #git add -f data/combo_history/futures/futures_3_dwm_shortlist/*.parquet
+          #else
+            #echo "[INFO] No combo_history files yet for futures_3_dwm_shortlist; skipping."
+          #fi
 
-          git commit -m "Update EOD futures snapshots [skip ci]" || echo "No changes to commit"
-          git push
+          #git commit -m "Update EOD futures snapshots [skip ci]" || echo "No changes to commit"
+          #git push
