@@ -6,11 +6,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-"""
-DATA_DIR = os.getenv("DATA_DIR", "data")  # default to 'data'
-DATA = ROOT / DATA_DIR
-"""
+
 from core.paths import DATA #, CFG, REF  # import what you need
+from core import storage
 
 import pandas as pd
 import streamlit as st
@@ -31,12 +29,14 @@ st.set_page_config(
 # =============================================================================
 def load_parquet_safe(path: Path) -> pd.DataFrame | None:
     """
-    Load a parquet file if it exists, otherwise return None.
+    Load a parquet file if it exists (via storage backend), otherwise return None.
     """
-    if not path.exists():
+    """if not path.exists():"""
+    if not storage.exists(path):
         return None
     try:
-        return pd.read_parquet(path)
+        """return pd.read_parquet(path)"""
+        return storage.load_parquet(path)
     except Exception as e:
         st.error(f"Failed to read {path.name}: {e}")
         return None
@@ -680,8 +680,12 @@ tab_daily, tab_weekly, tab_monthly, tab_stocks_mtf, tab_futures_mtf = st.tabs(
 with tab_daily:
     st.subheader("Stocks – Daily Snapshot")
     p = DATA / "snapshot_stocks_daily.parquet"
+    """
     if p.exists():
         df = pd.read_parquet(p)
+    """
+    df = load_parquet_safe(p)
+    if df is not None and not df.empty:
         # optional: sort by symbol
         df = df.sort_values("symbol")
         st.dataframe(df)
@@ -691,8 +695,12 @@ with tab_daily:
 with tab_weekly:
     st.subheader("Stocks – Weekly Snapshot")
     p = DATA / "snapshot_stocks_weekly.parquet"
+    """
     if p.exists():
         df = pd.read_parquet(p)
+    """
+    df = load_parquet_safe(p)
+    if df is not None and not df.empty:
         df = df.sort_values("symbol")
         st.dataframe(df)
     else:
@@ -701,8 +709,12 @@ with tab_weekly:
 with tab_monthly:
     st.subheader("Stocks – Monthly Snapshot")
     p = DATA / "snapshot_stocks_monthly.parquet"
+    """
     if p.exists():
         df = pd.read_parquet(p)
+    """
+    df = load_parquet_safe(p)
+    if df is not None and not df.empty:
         df = df.sort_values("symbol")
         st.dataframe(df)
     else:
