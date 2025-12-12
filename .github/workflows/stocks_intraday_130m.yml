@@ -12,6 +12,14 @@ permissions:
 jobs:
   stocks_intraday_130m:
     runs-on: ubuntu-latest
+    env:
+      DATA_BACKEND: s3
+      S3_BUCKET_DATA: stock-intel-data-prod
+      S3_PREFIX_DATA: data
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
