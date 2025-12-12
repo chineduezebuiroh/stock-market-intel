@@ -152,7 +152,15 @@ def build_combo_df(namespace: str, combo_name: str, mtf_cfg: dict) -> pd.DataFra
     middle = _load_role_frame(namespace, middle_tf, "middle")
     upper = _load_role_frame(namespace, upper_tf, "upper")
 
-    # Require at least lower + middle; upper can also be required if you prefer
+    # 🔍 DEBUG: see what CI is actually loading
+    print(
+        f"[DEBUG] {combo_name} frames: "
+        f"lower={lower.shape if not lower.empty else 'EMPTY'}, "
+        f"middle={middle.shape if not middle.empty else 'EMPTY'}, "
+        f"upper={upper.shape if not upper.empty else 'EMPTY'}"
+    )
+
+    # Require at least lower + middle + upper
     if lower.empty or middle.empty or upper.empty:
         print(f"[WARN] One or more role frames empty for combo '{combo_name}'.")
         return pd.DataFrame()
