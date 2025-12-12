@@ -195,8 +195,14 @@ def run(namespace: str, combo_name: str):
     combo_df = build_combo_df(namespace, combo_name, MTF_CFG)
 
     if combo_df is None or combo_df.empty:
+        """
         print(f"[INFO] No data for combo '{namespace}:{combo_name}'. Nothing to write.")
         return
+        """
+        raise RuntimeError(
+            f"[FATAL] Combo '{namespace}:{combo_name}' produced no rows. "
+            f"Check snapshots and upstream data."
+        )
 
     # 2) Apply multi-timeframe signal engine using the PER-COMBO cfg
     # NEW: attach ETF guardrail info for options-eligible combos
