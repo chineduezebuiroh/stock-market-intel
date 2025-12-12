@@ -57,10 +57,16 @@ def run_profile() -> None:
     root = Path(__file__).resolve().parents[2]
 
     cmds = [
-        # We **do not** need to re-run intraday_1h here, assuming the 1h
-        # intraday profile is keeping 4h + daily fresh via cascade.
-        # If you want this script standalone, you *could* call run_timeframe
-        # for intraday_4h directly. For now we just rebuild combos:
+        # 1) Refresh futures weekly for shortlist only
+        [
+            sys.executable,
+            str(root / "jobs" / "run_timeframe.py"),
+            "futures",
+            "weekly",
+            #"--cascade",
+            #"--allowed-universes",
+            #"shortlist_futures",
+        ],
 
         [
             sys.executable,
@@ -73,6 +79,22 @@ def run_profile() -> None:
     for cmd in cmds:
         print(f"[INFO] Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
+
+    # =======================================================
+    #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
+    # =======================================================
+    def assert_combo_nonempty(combo_name: str, min_rows: int = 10):
+        path = DATA / f"combo_{combo_name}.parquet"
+        if not storage.exists(path):
+            raise RuntimeError(f"[FATAL] Combo file missing: {path}")
+        df = storage.load_parquet(path)
+        if len(df) < min_rows:
+            raise RuntimeError(
+                f"[FATAL] Combo {combo_name} too small: {len(df)} rows (< {min_rows})"
+            )
+    
+    # After run_combo calls:
+    assert_combo_nonempty("futures_2_4hdw_shortlist", min_rows=5)
 
 
 def main() -> None:
