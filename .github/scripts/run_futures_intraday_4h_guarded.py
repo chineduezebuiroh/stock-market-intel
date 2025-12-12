@@ -63,11 +63,8 @@ def run_profile() -> None:
             str(root / "jobs" / "run_timeframe.py"),
             "futures",
             "weekly",
-            #"--cascade",
-            #"--allowed-universes",
-            #"shortlist_futures",
         ],
-
+        # 2) Rebuild 4h/D/W combo
         [
             sys.executable,
             str(root / "jobs" / "run_combo.py"),
