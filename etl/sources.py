@@ -142,7 +142,7 @@ def safe_load_eod(
     try:
         with timeout(timeout_sec, msg=f"EOD fetch timed out for {symbol}"):
             # IMPORTANT: match how you normally call load_eod
-            return load_eod(symbol, timeframe, window_bars, session)
+            return load_eod(symbol, timeframe=timeframe, window_bars=window_bars, session=session)
             
     except TimeoutException as e:
         print(f"[TIMEOUT] {e}")
