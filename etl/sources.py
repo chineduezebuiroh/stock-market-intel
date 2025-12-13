@@ -7,9 +7,34 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 
+import signal
+from contextlib import contextmanager
+
+class TimeoutException(Exception):
+    pass
+    
 ALPHA_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
 
+# ======================================================
+# --------------- Helper Function(s) ---------------
+# ======================================================
+@contextmanager
+def timeout(seconds: int, msg: str = "Timeout"):
+    def handler(signum, frame):
+        raise TimeoutException(msg)
+    old = signal.signal(signal.SIGALRM, handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# ======================================================
+# ---------------- Actual Processes ----------------
+# ======================================================
 def _sanitize_eod_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Final safety pass for load_eod:
@@ -101,6 +126,21 @@ def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tup
 
     # Fallback: treat unknown as daily
     return "1d", window_bars * 2
+
+
+def safe_load_eod(symbol: str, *args, timeout_sec: int = 30, **kwargs):
+    """
+    Wraps load_eod() with a global timeout to prevent hangs.
+    """
+    try:
+        with timeout(timeout_sec, msg=f"EOD fetch timed out for {symbol}"):
+            return load_eod(symbol, *args, **kwargs)
+    except TimeoutException as e:
+        print(f"[TIMEOUT] {e}")
+        return None
+    except Exception as e:
+        print(f"[ERROR] safe_load_eod({symbol}): {e}")
+        return None
 
 
 def load_eod(
@@ -640,3 +680,41 @@ def load_yearly_from_monthly(
 
     df_yearly = _resample_monthly_to_yearly(df_monthly)
     return df_yearly
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def load_eod(symbol: str, session, window_bars: int):
+    """
+    Your real implementation. We do *not* modify this.
+    """
+    ...
