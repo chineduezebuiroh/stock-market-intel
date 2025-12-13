@@ -254,6 +254,29 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
             continue
 
         storage.save_parquet(merged, parquet)
+        
+        # --- verify write landed where we think it did ---
+        try:
+            ok = storage.exists(parquet)
+        except Exception as e:
+            ok = False
+            print(f"[WRITE][ERR] exists-check failed for {parquet}: {e}", flush=True)
+        
+        if not ok:
+            print(f"[WRITE][MISS] {namespace}:{timeframe} {sym} -> {parquet}", flush=True)
+        else:
+            # optional: only print occasionally to avoid spam
+            if idx <= 3 or idx % 50 == 0:
+                print(f"[WRITE][OK] {namespace}:{timeframe} {sym} -> {parquet}", flush=True)
+
+
+        if idx == 1:  # only for the first symbol each timeframe
+            try:
+                df_chk = storage.load_parquet(parquet)
+                print(f"[WRITE][CHK] {namespace}:{timeframe} {sym} saved shape={df_chk.shape}", flush=True)
+            except Exception as e:
+                print(f"[WRITE][CHK][ERR] {namespace}:{timeframe} {sym}: {e}", flush=True)
+
 
         elapsed = time.perf_counter() - start_sym
         print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} OK in {elapsed:.1f}s", flush=True)
