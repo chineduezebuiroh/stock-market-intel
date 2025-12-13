@@ -13,6 +13,13 @@ from core.paths import DATA
 from core import storage
 import pandas as pd
 
+ROOT = Path(__file__).resolve().parents[2]  # repo root
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.paths import DATA
+from core import storage
+
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
 # =======================================================
@@ -26,8 +33,8 @@ def minutes_since_midnight(t: time) -> int:
 
 def run_profile() -> None:
     # repo_root: .../stock-market-intel
-    # this script lives in .github/scripts → parents[0]=scripts, [1]=.github, [2]=repo root
-    root = Path(__file__).resolve().parents[2]
+    """root = Path(__file__).resolve().parents[2]"""
+    root = ROOT  # reuse global ROOT
 
     cmds = [
         # ---------------------------------------------------------
@@ -79,7 +86,7 @@ def run_profile() -> None:
     for cmd in cmds:
         print(f"[INFO] Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
-
+    
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
@@ -88,10 +95,13 @@ def run_profile() -> None:
         if not storage.exists(path):
             raise RuntimeError(f"[FATAL] Combo file missing: {path}")
         df = storage.load_parquet(path)
-        if len(df) < min_rows:
+        if df is None or df.empty or len(df) < min_rows:
             raise RuntimeError(
-                f"[FATAL] Combo {combo_name} too small: {len(df)} rows (< {min_rows})"
+                f"[FATAL] Combo '{combo_name}' invalid: "
+                f"{0 if df is None else len(df)} rows (< {min_rows})"
             )
+
+        print(f"[HEALTH] Combo {combo_name} OK ({len(df)} rows)")
     
     # After run_combo calls:
     assert_combo_nonempty("stocks_c_dwm_shortlist", min_rows=5)
