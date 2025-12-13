@@ -1,8 +1,13 @@
 from pathlib import Path
 import pandas as pd
 
+"""
 def parquet_path(root: Path, timeframe: str, ticker: str) -> Path:
     return root / f"timeframe={timeframe}" / f"ticker={ticker}" / "data.parquet"
+"""
+
+def parquet_path(root: Path, timeframe: str, ticker: str) -> Path:
+    return root / "bars" / timeframe / f"{ticker}.parquet"
 
 
 def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
