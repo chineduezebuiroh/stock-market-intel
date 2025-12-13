@@ -130,9 +130,9 @@ def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tup
 
 def safe_load_eod(
     symbol: str,
-    timeframe: str,
-    window_bars: int,
-    session: str,
+    timeframe: str = "daily",
+    window_bars: int = 300,
+    session: str = "regular",
     timeout_sec: int = 30,
 ):
     """
@@ -142,12 +142,7 @@ def safe_load_eod(
     try:
         with timeout(timeout_sec, msg=f"EOD fetch timed out for {symbol}"):
             # IMPORTANT: match how you normally call load_eod
-            return load_eod(
-                symbol,
-                timeframe=timeframe,
-                window_bars=window_bars,
-                session=session,
-            )
+            return load_eod(symbol, timeframe, window_bars, session)
             
     except TimeoutException as e:
         print(f"[TIMEOUT] {e}")
