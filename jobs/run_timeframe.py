@@ -17,6 +17,7 @@ import pandas as pd
 import yaml
 
 from etl.sources import (
+    safe_load_eod,
     load_eod,
     load_130m_from_5m,
     load_quarterly_from_monthly,
