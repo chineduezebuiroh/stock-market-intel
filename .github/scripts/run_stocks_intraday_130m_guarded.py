@@ -8,7 +8,18 @@ import sys
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
+import pandas as pd
 
+ROOT = Path(__file__).resolve().parents[2]  # repo root
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.paths import DATA
+from core import storage
+
+# =======================================================
+# ---- Config: desired local target time + tolerance ----
+# =======================================================
 # 130m targets (local NY time)
 TARGET_TIMES = [
     time(9, 31),
@@ -46,7 +57,8 @@ def is_within_any_target(now: datetime) -> bool:
 
 def run_profile() -> None:
     # repo root (this file is .github/scripts/...)
-    root = Path(__file__).resolve().parents[2]
+    """root = Path(__file__).resolve().parents[2]"""
+    root = ROOT  # reuse global ROOT
 
     cmds = [
         # 1) Refresh intraday_130m + cascade to D/W for **shortlist only**
@@ -80,10 +92,13 @@ def run_profile() -> None:
         if not storage.exists(path):
             raise RuntimeError(f"[FATAL] Combo file missing: {path}")
         df = storage.load_parquet(path)
-        if len(df) < min_rows:
+        if df is None or df.empty or len(df) < min_rows:
             raise RuntimeError(
-                f"[FATAL] Combo {combo_name} too small: {len(df)} rows (< {min_rows})"
+                f"[FATAL] Combo '{combo_name}' invalid: "
+                f"{0 if df is None else len(df)} rows (< {min_rows})"
             )
+
+        print(f"[HEALTH] Combo {combo_name} OK ({len(df)} rows)")
     
     # After run_combo calls:
     assert_combo_nonempty("stocks_d_130mdw_shortlist", min_rows=5)
