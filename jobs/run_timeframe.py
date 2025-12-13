@@ -201,7 +201,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
                 df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
                 
             else:
-                df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+                #df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+                df_new = safe_load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
         
         except Exception as e:
             print(f"[INGEST][WARN] Failed to load {sym} ({namespace}:{timeframe}): {e}")
