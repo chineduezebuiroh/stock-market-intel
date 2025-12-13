@@ -82,7 +82,8 @@ def run_profile() -> None:
 
     for cmd in cmds:
         print(f"[INFO] Running: {' '.join(cmd)}")
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, check=True)
+        print(f"[INFO] Finished: {' '.join(cmd)} with return code {result.returncode}")
     
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
