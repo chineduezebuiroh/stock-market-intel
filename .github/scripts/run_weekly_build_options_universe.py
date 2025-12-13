@@ -29,8 +29,10 @@ def run_profile() -> None:
         # ---------------------------------------------------------
         # 1) Refresh universes
         # ---------------------------------------------------------
-        sys.executable,
-        str(root / "jobs" / "run_build_options_universe.py"),                  
+        [
+            sys.executable,
+            str(root / "jobs" / "run_build_options_universe.py"),                  
+        ],
     ]
 
     for cmd in cmds:
