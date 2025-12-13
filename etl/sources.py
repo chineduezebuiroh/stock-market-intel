@@ -128,13 +128,27 @@ def _timeframe_to_interval_and_lookback(timeframe: str, window_bars: int) -> tup
     return "1d", window_bars * 2
 
 
-def safe_load_eod(symbol: str, *args, timeout_sec: int = 30, **kwargs):
+def safe_load_eod(
+    symbol: str,
+    timeframe: str,
+    window_bars: int,
+    session: str,
+    timeout_sec: int = 30,
+):
     """
     Wraps load_eod() with a global timeout to prevent hangs.
+    Signature mirrors load_eod so we don't rely on kwargs.
     """
     try:
         with timeout(timeout_sec, msg=f"EOD fetch timed out for {symbol}"):
-            return load_eod(symbol, *args, **kwargs)
+            # IMPORTANT: match how you normally call load_eod
+            return load_eod(
+                symbol,
+                timeframe=timeframe,
+                window_bars=window_bars,
+                session=session,
+            )
+            
     except TimeoutException as e:
         print(f"[TIMEOUT] {e}")
         return None
