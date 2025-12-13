@@ -17,12 +17,12 @@ import pandas as pd
 import yaml
 
 from etl.sources import (
-    #safe_load_eod,
     load_eod,
     load_130m_from_5m,
     load_quarterly_from_monthly,
     load_yearly_from_monthly,
     load_futures_intraday,
+    #safe_load_eod,
 )
 from etl.window import parquet_path, update_fixed_window
 from etl.universe import symbols_for_universe
