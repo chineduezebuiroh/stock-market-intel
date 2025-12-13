@@ -37,6 +37,10 @@ from indicators.core import (
 
 import time
 
+import inspect
+print("[DEBUG] load_eod signature:", inspect.signature(load_eod))
+
+
 DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
@@ -202,7 +206,14 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
                 df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
                 
             else:
-                df_new = safe_load_eod(sym, timeframe, window_bars, session)
+                # TEMP: revert to direct call so ingest is stable
+                df_new = load_eod(
+                    sym,
+                    timeframe=timeframe,
+                    window_bars=window_bars,
+                    session=session,
+                )
+                #df_new = safe_load_eod(sym, timeframe, window_bars, session)
         
         except Exception as e:
             print(f"[INGEST][WARN] Failed to load {sym} ({namespace}:{timeframe}): {e}")
