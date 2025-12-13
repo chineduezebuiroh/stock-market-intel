@@ -8,7 +8,14 @@ import sys
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
+import pandas as pd
 
+ROOT = Path(__file__).resolve().parents[2]  # repo root
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.paths import DATA
+from core import storage
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
@@ -24,7 +31,8 @@ def minutes_since_midnight(t: time) -> int:
 
 def run_profile() -> None:
     # repo_root: .../stock-market-intel
-    root = Path(__file__).resolve().parents[2]
+    """root = Path(__file__).resolve().parents[2]"""
+    root = ROOT  # reuse global ROOT
 
     cmds = [
         # ---------------------------------------------------------
@@ -62,14 +70,16 @@ def run_profile() -> None:
         if not storage.exists(path):
             raise RuntimeError(f"[FATAL] Combo file missing: {path}")
         df = storage.load_parquet(path)
-        if len(df) < min_rows:
+        if df is None or df.empty or len(df) < min_rows:
             raise RuntimeError(
-                f"[FATAL] Combo {combo_name} too small: {len(df)} rows (< {min_rows})"
+                f"[FATAL] Combo '{combo_name}' invalid: "
+                f"{0 if df is None else len(df)} rows (< {min_rows})"
             )
+
+        print(f"[HEALTH] Combo {combo_name} OK ({len(df)} rows)")
     
     # After run_combo calls:
     assert_combo_nonempty("futures_3_dwm_shortlist", min_rows=5)
-
 
 
 def main() -> None:
