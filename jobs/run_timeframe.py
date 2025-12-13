@@ -17,7 +17,7 @@ import pandas as pd
 import yaml
 
 from etl.sources import (
-    safe_load_eod,
+    #safe_load_eod,
     load_eod,
     load_130m_from_5m,
     load_quarterly_from_monthly,
@@ -35,13 +35,13 @@ from indicators.core import (
     initialize_indicator_engine,
 )
 
-import time
+#import time
 
 import inspect
 print("[DEBUG] load_eod signature:", inspect.signature(load_eod))
 
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
+DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 
