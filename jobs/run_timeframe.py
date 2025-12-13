@@ -147,6 +147,18 @@ def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set
         else:
             other_syms.update(syms)
 
+    # ---- normalize everything once (match exclusions normalization) ----
+    def norm(x) -> str:
+        return str(x).strip().upper()
+
+    shortlist_syms = {norm(s) for s in shortlist_syms if s is not None and str(s).strip()}
+    other_syms     = {norm(s) for s in other_syms if s is not None and str(s).strip()}
+
+    excluded = _load_symbol_exclusions() or set()
+
+    # ✅ apply exclusions ONLY to non-shortlist set
+    other_syms = {s for s in other_syms if s not in excluded}
+
     # Base set: always include all shortlist symbols
     if namespace == "stocks" and DEV_MAX_STOCK_SYMBOLS_PER_TF is not None:
         # Remaining slots after we include all shortlist symbols
@@ -162,30 +174,6 @@ def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set
     else:
         # futures or no dev cap: everything
         symbols = sorted(shortlist_syms.union(other_syms))
-
-    """
-    # 🔹 Global exclusions guardrail
-    excluded = _load_symbol_exclusions()
-    if excluded:
-        symbols = [
-            s for s in symbols
-            if s is not None and str(s).strip().upper() not in excluded
-        ]
-    """
-
-    # 🔹 Global exclusions guardrail (but NEVER exclude shortlist symbols)
-    excluded = _load_symbol_exclusions()
-    if excluded:
-        excluded = {str(x).strip().upper() for x in excluded if x is not None}
-
-        # allow shortlist to override exclusions
-        shortlist_upper = {str(s).strip().upper() for s in shortlist_syms if s is not None}
-
-        symbols = [
-            s for s in symbols
-            if s is not None and str(s).strip().upper() not in (excluded - shortlist_upper)
-        ]
-
 
     return symbols
 
