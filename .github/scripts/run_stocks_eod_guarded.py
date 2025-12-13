@@ -8,9 +8,6 @@ import sys
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from pathlib import Path
-
-from core.paths import DATA
-from core import storage
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
