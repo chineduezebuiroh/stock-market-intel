@@ -10,6 +10,8 @@ import pandas as pd
 
 from core.paths import DATA
 
+import s3fs
+
 _DATA_BACKEND = os.getenv("DATA_BACKEND", "local").lower()
 
 
@@ -74,6 +76,14 @@ def _s3_uri_for_data_path(path: Path) -> str:
     return f"s3://{bucket}/{key}"
 
 
+def _s3_fs() -> s3fs.S3FileSystem:
+    return s3fs.S3FileSystem(
+        key=os.getenv("AWS_ACCESS_KEY_ID"),
+        secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        client_kwargs={"region_name": os.getenv("AWS_DEFAULT_REGION", "us-east-1")},
+    )
+
+
 def load_parquet(path: str | Path, **kwargs: Any) -> pd.DataFrame:
     """
     Load a Parquet file from either local disk or S3, depending on DATA_BACKEND.
@@ -116,12 +126,14 @@ def save_parquet(df: pd.DataFrame, path: str | Path, **kwargs: Any) -> None:
 
     raise ValueError(f"Unsupported DATA_BACKEND: {_DATA_BACKEND!r}")
 
-
+"""
 def exists(path: str | Path) -> bool:
-    """
+"""
+"""
     Minimal existence check. For S3 this uses a cheap read attempt.
     Useful if you have any 'if file exists then...' logic.
-    """
+"""
+"""
     p = _ensure_path(path)
     if _DATA_BACKEND == "local":
         return p.exists()
@@ -139,3 +151,20 @@ def exists(path: str | Path) -> bool:
             return False
 
     raise ValueError(f"Unsupported DATA_BACKEND: {_DATA_BACKEND!r}")
+"""
+
+
+def exists(path: str | Path) -> bool:
+    p = _ensure_path(path)
+    if _DATA_BACKEND == "local":
+        return p.exists()
+
+    if _DATA_BACKEND == "s3":
+        uri = _s3_uri_for_data_path(p)          # s3://bucket/prefix/...
+        fs = _s3_fs()
+        # s3fs expects bucket/key style without scheme:
+        key = uri.replace("s3://", "", 1)
+        return fs.exists(key)
+
+    #raise ValueError(f"Unsupported DATA_BACKEND: {_DATA_BACKEND!r}")
+    raise RuntimeError("Unreachable: DATA_BACKEND validation failed")
