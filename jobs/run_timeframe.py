@@ -163,6 +163,7 @@ def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set
         # futures or no dev cap: everything
         symbols = sorted(shortlist_syms.union(other_syms))
 
+    """
     # 🔹 Global exclusions guardrail
     excluded = _load_symbol_exclusions()
     if excluded:
@@ -170,6 +171,21 @@ def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set
             s for s in symbols
             if s is not None and str(s).strip().upper() not in excluded
         ]
+    """
+
+    # 🔹 Global exclusions guardrail (but NEVER exclude shortlist symbols)
+    excluded = _load_symbol_exclusions()
+    if excluded:
+        excluded = {str(x).strip().upper() for x in excluded if x is not None}
+
+        # allow shortlist to override exclusions
+        shortlist_upper = {str(s).strip().upper() for s in shortlist_syms if s is not None}
+
+        symbols = [
+            s for s in symbols
+            if s is not None and str(s).strip().upper() not in (excluded - shortlist_upper)
+        ]
+
 
     return symbols
 
