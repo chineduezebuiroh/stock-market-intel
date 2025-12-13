@@ -22,7 +22,7 @@ from etl.sources import (
     load_quarterly_from_monthly,
     load_yearly_from_monthly,
     load_futures_intraday,
-    #safe_load_eod,
+    safe_load_eod,
 )
 from etl.window import parquet_path, update_fixed_window
 from etl.universe import symbols_for_universe
@@ -35,13 +35,13 @@ from indicators.core import (
     initialize_indicator_engine,
 )
 
-#import time
+import time
 
 import inspect
 print("[DEBUG] load_eod signature:", inspect.signature(load_eod))
 
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
+DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 
@@ -207,13 +207,15 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
                 
             else:
                 # TEMP: revert to direct call so ingest is stable
+                """
                 df_new = load_eod(
                     sym,
                     timeframe=timeframe,
                     window_bars=window_bars,
                     session=session,
                 )
-                #df_new = safe_load_eod(sym, timeframe, window_bars, session)
+                """
+                df_new = safe_load_eod(sym, timeframe, window_bars, session)
         
         except Exception as e:
             print(f"[INGEST][WARN] Failed to load {sym} ({namespace}:{timeframe}): {e}")
