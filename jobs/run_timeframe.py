@@ -34,7 +34,9 @@ from indicators.core import (
     initialize_indicator_engine,
 )
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
+import time
+
+DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 
@@ -178,26 +180,40 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
       - drops any legacy pivot-style columns (e.g. "('open', 'aapl')")
         from existing data before merging.
     """
-    for sym in symbols:
-        if namespace == "stocks" and timeframe == "intraday_130m":
-            df_new = load_130m_from_5m(sym, session=session)
-            
-        elif namespace == "stocks" and timeframe == "yearly":
-            df_new = load_yearly_from_monthly(sym, window_bars=window_bars, session=session)
+    total = len(symbols)
+    print(f"[INGEST] {namespace}:{timeframe} starting ingest for {total} symbols")
 
-        elif namespace == "stocks" and timeframe == "quarterly":
-            df_new = load_quarterly_from_monthly(sym, window_bars=window_bars, session=session)
+    for idx, sym in enumerate(symbols, start=1):
+        start_sym = time.perf_counter()
+        print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} ...")
 
-        elif namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
-            df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
-            
-        else:
-            df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+        try:
+            if namespace == "stocks" and timeframe == "intraday_130m":
+                df_new = load_130m_from_5m(sym, session=session)
+                
+            elif namespace == "stocks" and timeframe == "yearly":
+                df_new = load_yearly_from_monthly(sym, window_bars=window_bars, session=session)
+    
+            elif namespace == "stocks" and timeframe == "quarterly":
+                df_new = load_quarterly_from_monthly(sym, window_bars=window_bars, session=session)
+    
+            elif namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
+                df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+                
+            else:
+                df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+        
+        except Exception as e:
+            print(f"[INGEST][WARN] Failed to load {sym} ({namespace}:{timeframe}): {e}")
+            continue
+
+        elapsed = time.perf_counter() - start_sym
+        print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} done in {elapsed:.1f}s")
 
         if df_new is None or df_new.empty:
             # skip symbols that fail to load
             continue
-
+        
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
         parquet.parent.mkdir(parents=True, exist_ok=True)
         
