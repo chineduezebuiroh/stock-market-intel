@@ -186,7 +186,9 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         from existing data before merging.
     """
     total = len(symbols)
-    print(f"[INGEST] {namespace}:{timeframe} starting ingest for {total} symbols")
+    print(f"[INGEST] {namespace}:{timeframe} starting ingest for {total} symbols", flush=True)
+
+    
 
     for idx, sym in enumerate(symbols, start=1):
         start_sym = time.perf_counter()
@@ -206,35 +208,22 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
                 df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
                 
             else:
-                # TEMP: revert to direct call so ingest is stable
-                """
-                df_new = load_eod(
-                    sym,
-                    timeframe=timeframe,
-                    window_bars=window_bars,
-                    session=session,
-                )
-                """
                 df_new = safe_load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
         
         except Exception as e:
-            print(f"[INGEST][WARN] Failed to load {sym} ({namespace}:{timeframe}): {e}")
+            elapsed = time.perf_counter() - start_sym
+            print(f"[INGEST][WARN] {namespace}:{timeframe} {sym} load exception after {elapsed:.1f}s: {e}", flush=True)
             continue
 
-        elapsed = time.perf_counter() - start_sym
-        print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} done in {elapsed:.1f}s")
-
+        # 🔹 NEW: explicitly log empty df_new
         if df_new is None or df_new.empty:
-            # skip symbols that fail to load
+            elapsed = time.perf_counter() - start_sym
+            print(f"[INGEST][SKIP] {namespace}:{timeframe} {sym} df_new empty/None after {elapsed:.1f}s", flush=True)
             continue
         
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
         parquet.parent.mkdir(parents=True, exist_ok=True)
         
-        """
-        if parquet.exists():
-            existing = pd.read_parquet(parquet)
-        """
         if storage.exists(parquet):
             existing = storage.load_parquet(parquet)
             # 🔹 Drop legacy tuple-ish columns left over from old experiments
@@ -248,14 +237,26 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
             existing = pd.DataFrame()
 
         merged = update_fixed_window(df_new, existing, window_bars)
+        
+        # 🔹 NEW: log if merged goes empty
         if merged is None or merged.empty:
+            elapsed = time.perf_counter() - start_sym
+            print(f"[INGEST][SKIP] {namespace}:{timeframe} {sym} merged empty after {elapsed:.1f}s", flush=True)
             continue
 
         #merged = apply_core(merged, params={})
         merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
-        
-        """merged.to_parquet(parquet)"""
+
+        # 🔹 NEW: log if indicators somehow wipe it out
+        if merged is None or merged.empty:
+            elapsed = time.perf_counter() - start_sym
+            print(f"[INGEST][SKIP] {namespace}:{timeframe} {sym} post-indicators empty after {elapsed:.1f}s", flush=True)
+            continue
+
         storage.save_parquet(merged, parquet)
+
+        elapsed = time.perf_counter() - start_sym
+        print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} OK in {elapsed:.1f}s", flush=True)
 
 
 def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes: set[str] | None = None):
