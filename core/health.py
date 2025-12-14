@@ -140,7 +140,7 @@ def run_combo_health(
 
     return results
 
-
+"""
 def print_results(results: Iterable[HealthResult]) -> None:
     failed = False
     for r in results:
@@ -152,4 +152,19 @@ def print_results(results: Iterable[HealthResult]) -> None:
 
     if failed:
         print("[HEALTH] One or more checks failed.")
-        
+"""
+
+def print_results(results: Iterable[HealthResult], fail_on_error: bool = True) -> None:
+    failed = False
+    for r in results:
+        if r.ok:
+            print(f"[HEALTH] ✅ {r.name} — {r.details}")
+        else:
+            failed = True
+            print(f"[HEALTH] ⚠️  {r.name} — {r.details}")
+
+    if failed:
+        msg = "[HEALTH] One or more checks failed."
+        print(msg)
+        if fail_on_error:
+            raise RuntimeError(msg)
