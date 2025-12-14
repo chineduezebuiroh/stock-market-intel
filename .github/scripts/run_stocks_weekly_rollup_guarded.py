@@ -101,7 +101,7 @@ def run_profile() -> None:
 
     results = []
     results += run_combo_health(combos=["stocks_b_wmq_shortlist"], universe_csv="shortlist_stocks.csv")
-    results += run_combo_health(combos=["stocks_b_wmq_all"], universe_csv="options_eligible.csv")
+    results += run_combo_health(combos=["stocks_b_wmq_all"], universe_csv=None)
     print_results(results)
 
 
