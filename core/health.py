@@ -8,7 +8,7 @@ from typing import Iterable, Optional
 
 import pandas as pd
 
-from core.paths import DATA, CFG
+from core.paths import DATA, CFG, REF
 from core import storage
 
 
@@ -40,11 +40,20 @@ def _norm_syms(values: Iterable[object]) -> set[str]:
 
 def load_universe_symbols(universe_csv: str) -> set[str]:
     """
-    universe_csv: e.g. "shortlist_stocks.csv"
+    universe_csv: e.g. "shortlist_stocks.csv" or "options_eligible.csv"
+    Searches config/ first, then ref/.
     """
-    path = CFG / universe_csv
-    if not path.exists():
-        raise FileNotFoundError(f"Universe file not found: {path}")
+    candidates = [
+        CFG / universe_csv,
+        REF / universe_csv,
+    ]
+    
+    path = next((p for p in candidates if p.exists()), None)
+    if path is None:
+        raise FileNotFoundError(
+            "Universe file not found in config/ or ref/: "
+            + ", ".join(str(p) for p in candidates)
+        )
 
     df = pd.read_csv(path)
     for col in ("symbol", "Symbol", "ticker", "Ticker"):
