@@ -35,7 +35,7 @@ jobs:
           python .github/scripts/run_weekly_build_options_universe.py
 
       - name: Commit updated ref universe & ETF mapping
-        if: success() && github.ref == 'refs/heads/main'
+        if: success() && github.ref_name == 'main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
