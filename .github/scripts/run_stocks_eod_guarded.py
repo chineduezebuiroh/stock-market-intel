@@ -37,50 +37,22 @@ def run_profile() -> None:
     root = ROOT  # reuse global ROOT
 
     cmds = [
-        # ---------------------------------------------------------
         # 1) Refresh stocks daily/weekly/monthly (no Q/Y)
         # ---------------------------------------------------------
-        [
-            sys.executable,
-            str(root / "jobs" / "run_timeframe.py"),
-            "stocks",
-            "daily",
-            "--cascade",
-        ],
+        [sys.executable, str(root / "jobs" / "run_timeframe.py"), "stocks", "daily", "--cascade"],
 
-        # ----------------------------------------------------------------------
         # 2) Refresh ETF trends on weekly (middle) and daily (lower) timeframes
         # ----------------------------------------------------------------------
-        [
-            sys.executable,
-            str(root / "jobs" / "run_etf_trends.py"),
-            "weekly",
-        ],
-        
-        [
-            sys.executable,
-            str(root / "jobs" / "run_etf_trends.py"),
-            "daily",
-        ],
+        [sys.executable, str(root / "jobs" / "run_etf_trends.py"), "weekly"],
+        [sys.executable, str(root / "jobs" / "run_etf_trends.py"), "daily"],
 
-        # ---------------------------------------------------------
         # 3) Rebuild daily-lower combos that depend on fresh D/W/M
         # ---------------------------------------------------------
         #   - DWM Shortlist
-        [
-            sys.executable,
-            str(root / "jobs" / "run_combo.py"),
-            "stocks",
-            "stocks_c_dwm_shortlist",
-        ],
+        [sys.executable, str(root / "jobs" / "run_combo.py"), "stocks", "stocks_c_dwm_shortlist"],
 
         #   - DWM Options-eligible
-        [
-            sys.executable,
-            str(root / "jobs" / "run_combo.py"),
-            "stocks",
-            "stocks_c_dwm_all",
-        ],
+        [sys.executable, str(root / "jobs" / "run_combo.py"), "stocks", "stocks_c_dwm_all"],
     ]
 
     for cmd in cmds:
