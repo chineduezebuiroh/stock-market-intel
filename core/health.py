@@ -68,7 +68,9 @@ def check_combo_nonempty(combo_name: str) -> HealthResult:
     if df is None or df.empty:
         return HealthResult(False, combo_name, "combo parquet is empty")
 
-    return HealthResult(True, combo_name, f"ok rows={len(df)}")
+    #return HealthResult(True, combo_name, f"ok rows={len(df)}")
+    return HealthResult(True, f"{combo_name}:nonempty", f"ok rows={len(df)}")
+
 
 
 def check_combo_symbol_coverage(
@@ -76,6 +78,8 @@ def check_combo_symbol_coverage(
     expected_symbols: set[str],
     symbol_col: str = "symbol",
 ) -> HealthResult:
+    expected_symbols = {str(s).strip().upper() for s in expected_symbols if s is not None}
+    
     path = DATA / f"combo_{combo_name}.parquet"
 
     if not storage.exists(path):
@@ -87,6 +91,12 @@ def check_combo_symbol_coverage(
 
     if symbol_col not in df.columns:
         df = df.reset_index()
+        if symbol_col not in df.columns:
+            # common fallback if index got reset into "index"
+            if "index" in df.columns:
+                df = df.rename(columns={"index": symbol_col})
+            else:
+                return HealthResult(False, f"{combo_name}:{symbol_col}", "no symbol column after reset_index()")
 
     actual = _norm_syms(df[symbol_col])
     missing = sorted(expected_symbols - actual)
@@ -98,11 +108,8 @@ def check_combo_symbol_coverage(
             f"missing {len(missing)} symbols: {missing}",
         )
 
-    return HealthResult(
-        True,
-        combo_name,
-        f"ok coverage ({len(expected_symbols)} symbols)",
-    )
+    #return HealthResult(True, combo_name, f"ok coverage ({len(expected_symbols)} symbols)")
+    return HealthResult(True, f"{combo_name}:coverage", f"ok coverage ({len(expected_symbols)} symbols)")
 
 
 # -------------------------
