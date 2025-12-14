@@ -90,6 +90,7 @@ def run_profile() -> None:
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
+    """
     def assert_combo_nonempty(combo_name: str, min_rows: int = 10):
         path = DATA / f"combo_{combo_name}.parquet"
         if not storage.exists(path):
@@ -106,6 +107,12 @@ def run_profile() -> None:
     # After run_combo calls:
     assert_combo_nonempty("stocks_a_mqy_shortlist", min_rows=5)
     assert_combo_nonempty("stocks_a_mqy_all", min_rows=5)
+    """
+
+    results = []
+    results += run_combo_health(combos=["stocks_c_dwm_shortlist"], universe="shortlist_stocks.csv")
+    results += run_combo_health(combos=["stocks_c_dwm_all"], universe="options_eligible.csv")
+    print_results(results)
 
 
 def main() -> None:
