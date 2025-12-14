@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from core.paths import DATA
 from core import storage
+from core.health import run_combo_health, print_results
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
@@ -88,6 +89,7 @@ def run_profile() -> None:
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
+    """
     def assert_combo_nonempty(combo_name: str, min_rows: int = 10):
         path = DATA / f"combo_{combo_name}.parquet"
         if not storage.exists(path):
@@ -104,6 +106,12 @@ def run_profile() -> None:
     # After run_combo calls:
     assert_combo_nonempty("stocks_c_dwm_shortlist", min_rows=5)
     assert_combo_nonempty("stocks_c_dwm_all", min_rows=5)
+    """
+
+    results = []
+    results += run_combo_health(combos=["stocks_c_dwm_shortlist"], universe="shortlist_stocks.csv")
+    results += run_combo_health(combos=["stocks_c_dwm_all"], universe="options_eligible.csv")
+    print_results(results)
 
 
 def main() -> None:
