@@ -15,7 +15,7 @@ permissions:
 jobs:
   daily-eod-stocks:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # or 90, etc.
+    #timeout-minutes: 120  # or 90, etc.
     env:
       DATA_BACKEND: s3
       S3_BUCKET_DATA: stock-intel-data-prod
