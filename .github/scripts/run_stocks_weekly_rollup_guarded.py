@@ -100,8 +100,8 @@ def run_profile() -> None:
     """
 
     results = []
-    results += run_combo_health(combos=["stocks_c_dwm_shortlist"], universe="shortlist_stocks.csv")
-    results += run_combo_health(combos=["stocks_c_dwm_all"], universe="options_eligible.csv")
+    results += run_combo_health(combos=["stocks_b_wmq_shortlist"], universe="shortlist_stocks.csv")
+    results += run_combo_health(combos=["stocks_b_wmq_all"], universe="options_eligible.csv")
     print_results(results)
 
 
