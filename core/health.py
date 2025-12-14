@@ -12,12 +12,20 @@ from core.paths import DATA, CFG
 from core import storage
 
 
+# -------------------------
+# models
+# -------------------------
+
 @dataclass(frozen=True)
 class HealthResult:
     ok: bool
     name: str
     details: str
 
+
+# -------------------------
+# helpers
+# -------------------------
 
 def _norm_syms(values: Iterable[object]) -> set[str]:
     return set(
@@ -30,109 +38,118 @@ def _norm_syms(values: Iterable[object]) -> set[str]:
     )
 
 
-def load_universe_symbols(universe: str) -> set[str]:
+def load_universe_symbols(universe_csv: str) -> set[str]:
     """
-    Supports config CSVs like:
-      config/shortlist_stocks.csv  (symbol col)
-      config/options_eligible_stocks.csv, etc.
-    Convention: <universe>.csv
+    universe_csv: e.g. "shortlist_stocks.csv"
     """
-    path = CFG / f"{universe}.csv"
+    path = CFG / universe_csv
     if not path.exists():
         raise FileNotFoundError(f"Universe file not found: {path}")
 
     df = pd.read_csv(path)
-    # flexible column naming
     for col in ("symbol", "Symbol", "ticker", "Ticker"):
         if col in df.columns:
             return _norm_syms(df[col])
-    raise ValueError(f"{path} must have a symbol/ticker column")
+
+    raise ValueError(f"{path} must contain a symbol/ticker column")
 
 
-def check_parquet_nonempty(path: Path, name: str) -> HealthResult:
+# -------------------------
+# checks
+# -------------------------
+
+def check_combo_nonempty(combo_name: str) -> HealthResult:
+    path = DATA / f"combo_{combo_name}.parquet"
+
     if not storage.exists(path):
-        return HealthResult(False, name, f"missing: {path}")
+        return HealthResult(False, combo_name, f"missing file: {path}")
+
     df = storage.load_parquet(path)
     if df is None or df.empty:
-        return HealthResult(False, name, f"empty: {path}")
-    return HealthResult(True, name, f"ok rows={len(df)} -> {path}")
+        return HealthResult(False, combo_name, "combo parquet is empty")
+
+    return HealthResult(True, combo_name, f"ok rows={len(df)}")
 
 
 def check_combo_symbol_coverage(
-    combo_path: Path,
-    expected: set[str],
-    name: str,
+    combo_name: str,
+    expected_symbols: set[str],
     symbol_col: str = "symbol",
 ) -> HealthResult:
-    if not storage.exists(combo_path):
-        return HealthResult(False, name, f"missing: {combo_path}")
+    path = DATA / f"combo_{combo_name}.parquet"
 
-    df = storage.load_parquet(combo_path)
+    if not storage.exists(path):
+        return HealthResult(False, combo_name, "missing file")
+
+    df = storage.load_parquet(path)
     if df is None or df.empty:
-        return HealthResult(False, name, f"empty: {combo_path}")
+        return HealthResult(False, combo_name, "empty combo")
 
     if symbol_col not in df.columns:
         df = df.reset_index()
 
     actual = _norm_syms(df[symbol_col])
-    missing = sorted(expected - actual)
-    extra = sorted(actual - expected)
+    missing = sorted(expected_symbols - actual)
 
     if missing:
-        return HealthResult(False, name, f"missing {len(missing)} symbols: {missing}")
-    if extra:
-        # not always bad, but useful to see if you expected exact equality
-        return HealthResult(True, name, f"ok (has extras {len(extra)}): {extra}")
+        return HealthResult(
+            False,
+            combo_name,
+            f"missing {len(missing)} symbols: {missing}",
+        )
 
-    return HealthResult(True, name, f"ok coverage: {len(expected)} symbols")
+    return HealthResult(
+        True,
+        combo_name,
+        f"ok coverage ({len(expected_symbols)} symbols)",
+    )
 
+
+# -------------------------
+# runner
+# -------------------------
 
 def run_combo_health(
     combos: list[str],
-    universe: Optional[str] = None,
+    universe_csv: Optional[str] = None,
     require_nonempty: bool = True,
 ) -> list[HealthResult]:
     """
-    combos: e.g. ["stocks_c_dwm_shortlist", "stocks_c_dwm_all"]
-    universe: if provided, verify symbol coverage against config/<universe>.csv
-              e.g. universe="shortlist_stocks"
+    combos:
+        [
+          "stocks_c_dwm_shortlist",
+          "futures_3_dwm_shortlist",
+          ...
+        ]
+
+    universe_csv:
+        "shortlist_stocks.csv" (optional)
     """
     results: list[HealthResult] = []
 
     expected: Optional[set[str]] = None
-    if universe is not None:
-        expected = load_universe_symbols(universe)
+    if universe_csv:
+        expected = load_universe_symbols(universe_csv)
 
     for combo in combos:
-        combo_path = DATA / f"combo_stocks_{combo}.parquet" if combo.startswith("c_") else DATA / f"combo_{combo}.parquet"
-        # ^ if your combo filenames are always combo_stocks_<combo>.parquet, simplify to that.
-
-        # If your naming is strictly:
-        # combo_stocks_<combo>.parquet
-        combo_path = DATA / f"combo_stocks_{combo}.parquet"
-
         if require_nonempty:
-            results.append(check_parquet_nonempty(combo_path, name=f"{combo}:nonempty"))
+            results.append(check_combo_nonempty(combo))
 
         if expected is not None:
-            results.append(
-                check_combo_symbol_coverage(
-                    combo_path,
-                    expected=expected,
-                    name=f"{combo}:coverage:{universe}",
-                )
-            )
+            results.append(check_combo_symbol_coverage(combo, expected))
 
     return results
 
 
 def print_results(results: Iterable[HealthResult]) -> None:
-    any_fail = False
+    failed = False
     for r in results:
         if r.ok:
             print(f"[HEALTH] ✅ {r.name} — {r.details}")
         else:
-            any_fail = True
+            failed = True
             print(f"[HEALTH] ⚠️  {r.name} — {r.details}")
-    if any_fail:
+
+    if failed:
         print("[HEALTH] One or more checks failed.")
+        
