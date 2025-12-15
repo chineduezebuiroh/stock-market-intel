@@ -68,6 +68,13 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_c_dwm_all"], universe_csv=None)
     print_results(results)
 
+    notify_on_signals(
+        combos=["stocks_c_dwm_shortlist", "stocks_c_dwm_all"],
+        title="Stocks EOD Signals",
+        changed_only=False,
+        changed_group="stocks_eod",
+    )
+
 
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
