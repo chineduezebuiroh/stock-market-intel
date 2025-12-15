@@ -6,19 +6,26 @@ import pandas as pd
 
 from etl.session import add_trade_date, ensure_ny_index, drop_maintenance_break_1h
 
-_OHLCV = ("open", "high", "low", "close", "volume")
+from core.paths import DATA
+from core import storage
+
+
+_OHLCV = ("open", "high", "low", "close", "adj_close", "volume")
 
 
 def _agg_ohlcv(g: pd.DataFrame) -> pd.Series:
+    close = g["close"].iloc[-1]
     return pd.Series(
         {
             "open": g["open"].iloc[0],
             "high": g["high"].max(),
             "low": g["low"].min(),
-            "close": g["close"].iloc[-1],
+            "close": close,
+            "adj_close": close,          # ✅ add this
             "volume": g["volume"].sum(),
         }
     )
+
 
 
 def resample_1h_to_daily(df_1h: pd.DataFrame) -> pd.DataFrame:
@@ -125,3 +132,37 @@ def resample_daily_to_monthly(df_daily: pd.DataFrame) -> pd.DataFrame:
     monthly.index = pd.to_datetime(first_dates.values)
     monthly.index.name = "Date"
     return monthly
+
+
+def load_futures_eod_from_1h(
+    symbol: str,
+    timeframe: str,  # "daily" | "weekly" | "monthly"
+    window_bars: int = 300,
+) -> pd.DataFrame:
+    """
+    Build futures daily/weekly/monthly bars from canonical 1h bars.
+    Returns only the last `window_bars` rows (like other loaders).
+    """
+    p1h = DATA / "bars" / "futures_intraday_1h" / f"{symbol}.parquet"
+    if not storage.exists(p1h):
+        return pd.DataFrame()
+
+    df1h = storage.load_parquet(p1h)
+    if df1h is None or df1h.empty:
+        return pd.DataFrame()
+
+    daily = resample_1h_to_daily(df1h)
+
+    if timeframe == "daily":
+        out = daily
+    elif timeframe == "weekly":
+        out = resample_daily_to_weekly(daily)
+    elif timeframe == "monthly":
+        out = resample_daily_to_monthly(daily)
+    else:
+        raise ValueError(f"Unsupported timeframe for futures EOD-from-1h: {timeframe}")
+
+    if out is None or out.empty:
+        return pd.DataFrame()
+
+    return out.tail(window_bars)
