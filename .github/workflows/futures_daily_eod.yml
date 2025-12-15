@@ -5,13 +5,13 @@ on:
   schedule:
     # Sun–Thu at 22:15 and 23:15 UTC
     #  - Covers ~6:15 pm ET in both Standard and DST
-    - cron: "15/20 22,23 * * 0-4"
+    - cron: "15 22,23 * * 0-4"
   # Manual trigger for one-off runs
   workflow_dispatch: {}
 
 concurrency:
   group: futures-eod
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write   # 👈 important so GITHUB_TOKEN can push
