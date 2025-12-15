@@ -6,30 +6,25 @@ import os
 import subprocess
 import sys
 from datetime import datetime, time
-from zoneinfo import ZoneInfo
 from pathlib import Path
-import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.paths import DATA
-from core import storage
+from core.guard import now_ny  # ✅ central TZ-aware NY now
 from core.health import run_combo_health, print_results
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ---- Config: 130m targets (NY time) + tolerance ----
 # =======================================================
-# 130m targets (local NY time)
 TARGET_TIMES = [
     time(9, 31),
     time(11, 41),
     time(13, 51),
     time(16, 1),
 ]
-TOLERANCE_MIN = 5  # +/- 5 minutes
-TZ = ZoneInfo("America/New_York")
+TOLERANCE_MIN = 30  # + 30 minutes
 
 
 def minutes_since_midnight(t: time) -> int:
@@ -49,36 +44,24 @@ def is_within_any_target(now: datetime) -> bool:
     now_min = minutes_since_midnight(now_t)
 
     for target in TARGET_TIMES:
-        diff = abs(now_min - minutes_since_midnight(target))
+        #diff = abs(now_min - minutes_since_midnight(target))
+        diff = now_min - minutes_since_midnight(target)
         if diff <= TOLERANCE_MIN:
             return True
 
     return False
 
 
+
 def run_profile() -> None:
-    # repo root (this file is .github/scripts/...)
-    """root = Path(__file__).resolve().parents[2]"""
-    root = ROOT  # reuse global ROOT
+    root = ROOT
 
     cmds = [
         # 1) Refresh intraday_130m + cascade to D/W for **shortlist only**
-        [
-            sys.executable,
-            str(root / "jobs" / "run_timeframe.py"),
-            "stocks",
-            "intraday_130m",
-            "--cascade",
-            "--allowed-universes",
-            "shortlist_stocks",
-        ],
+        [sys.executable, str(root / "jobs" / "run_timeframe.py"), "stocks", "intraday_130m", "--cascade", "--allowed-universes", "shortlist_stocks"],
+        
         # 2) Rebuild 130m/D/W shortlist combo
-        [
-            sys.executable,
-            str(root / "jobs" / "run_combo.py"),
-            "stocks",
-            "stocks_d_130mdw_shortlist",
-        ],
+        [sys.executable, str(root / "jobs" / "run_combo.py"), "stocks", "stocks_d_130mdw_shortlist"],
     ]
 
     for cmd in cmds:
@@ -88,26 +71,9 @@ def run_profile() -> None:
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
-    """
-    def assert_combo_nonempty(combo_name: str, min_rows: int = 10):
-        path = DATA / f"combo_{combo_name}.parquet"
-        if not storage.exists(path):
-            raise RuntimeError(f"[FATAL] Combo file missing: {path}")
-        df = storage.load_parquet(path)
-        if df is None or df.empty or len(df) < min_rows:
-            raise RuntimeError(
-                f"[FATAL] Combo '{combo_name}' invalid: "
-                f"{0 if df is None else len(df)} rows (< {min_rows})"
-            )
-
-        print(f"[HEALTH] Combo {combo_name} OK ({len(df)} rows)")
-    
-    # After run_combo calls:
-    assert_combo_nonempty("stocks_d_130mdw_shortlist", min_rows=5)
-    """
-
     results = []
-    results += run_combo_health(combos=["stocks_d_130dw_shortlist"], universe_csv="shortlist_stocks.csv")
+    # ✅ fix: health-check the same combo name you just built ("130mdw", not "130dw")
+    results += run_combo_health(combos=["stocks_d_130mdw_shortlist"], universe_csv="shortlist_stocks.csv")
     print_results(results)
 
 
@@ -120,9 +86,11 @@ def main() -> None:
         run_profile()
         return
 
-    now = datetime.now(TZ)
+    now = now_ny()
     if not is_within_any_target(now):
-        print(f"[INFO] {now} NY is not within +/-{TOLERANCE_MIN} min of 130m targets. Skipping.")
+        print(
+            f"[INFO] {now} NY is not within +/-{TOLERANCE_MIN} min of 130m targets. Skipping."
+        )
         sys.exit(0)
 
     print(f"[INFO] {now} NY is within intraday 130m window. Running profile...")
