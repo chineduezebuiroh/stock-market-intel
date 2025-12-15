@@ -6,6 +6,10 @@ on:
     - cron: "1/10 12-22 * * 1-5"   # starting at 1st minute, every 10 min; Mon–Fri 12:00 - 22:00 UTC (~07:00 - ~18:00 EST)
   workflow_dispatch: {}
 
+concurrency:
+  group: stocks-intraday
+  cancel-in-progress: true
+
 permissions:
   contents: write   # 👈 important so GITHUB_TOKEN can push
 
