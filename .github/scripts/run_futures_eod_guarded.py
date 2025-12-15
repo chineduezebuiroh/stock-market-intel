@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from core.health import run_combo_health, print_results
 from core.guard import run_guarded  # ✅ central guard logic
+from core.signal_alerts import notify_on_signals
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
@@ -51,6 +52,13 @@ def run_profile() -> None:
     results = []
     results += run_combo_health(combos=["futures_3_dwm_shortlist"], universe_csv="shortlist_futures.csv")
     print_results(results)
+
+    notify_on_signals(
+        combos=["futures_3_dwm_shortlist"],
+        title="Futures EOD Signals",
+        changed_only=True,
+        changed_group="futures_eod",
+    )
 
 
 def main() -> None:
