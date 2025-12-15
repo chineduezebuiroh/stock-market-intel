@@ -9,19 +9,27 @@ from etl.session import add_trade_date, ensure_ny_index, drop_maintenance_break_
 from core.paths import DATA
 from core import storage
 
+import math
+from typing import Callable
+
 
 _OHLCV = ("open", "high", "low", "close", "adj_close", "volume")
 
 
 def _agg_ohlcv(g: pd.DataFrame) -> pd.Series:
-    close = g["close"].iloc[-1]
+    last_close = g["close"].iloc[-1]
+    if "adj_close" in g.columns:
+        last_adj = g["adj_close"].iloc[-1]
+    else:
+        last_adj = last_close
+
     return pd.Series(
         {
             "open": g["open"].iloc[0],
             "high": g["high"].max(),
             "low": g["low"].min(),
-            "close": close,
-            "adj_close": close,          # ✅ add this
+            "close": last_close,
+            "adj_close": last_adj,
             "volume": g["volume"].sum(),
         }
     )
@@ -166,3 +174,53 @@ def load_futures_eod_from_1h(
         return pd.DataFrame()
 
     return out.tail(window_bars)
+
+
+
+def _dedupe_sort(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    out.index = pd.to_datetime(out.index)
+    out = out[~out.index.duplicated(keep="last")]
+    return out.sort_index()
+
+
+def load_futures_eod_hybrid(
+    symbol: str,
+    timeframe: str,  # "daily" | "weekly" | "monthly"
+    window_bars: int = 300,
+    *,
+    session: str = "extended",
+    vendor_loader: Callable[..., pd.DataFrame],
+    pad: float = 1.25,
+) -> pd.DataFrame:
+    """
+    Hybrid:
+      1) derive EOD bars from canonical 1h parquet (session-aware)
+      2) if derived history < window_bars, top-off with vendor EOD (safe_load_eod)
+      3) prefer derived bars on overlap (keep='last')
+
+    Returns last window_bars rows.
+    """
+    # 1) derived from 1h
+    derived = load_futures_eod_from_1h(symbol, timeframe=timeframe, window_bars=10**9)
+    derived = _dedupe_sort(derived)
+
+    if len(derived) >= window_bars:
+        return derived.tail(window_bars)
+
+    missing = window_bars - len(derived)
+
+    # 2) vendor top-off (request a bit extra for holes)
+    vendor_bars = max(window_bars, int(math.ceil(missing * pad)))
+    vendor = vendor_loader(symbol, timeframe=timeframe, window_bars=vendor_bars, session=session)
+    vendor = _dedupe_sort(vendor)
+
+    if vendor.empty and derived.empty:
+        return pd.DataFrame()
+
+    # 3) stitch (vendor first, then derived overwrites overlaps)
+    stitched = pd.concat([vendor, derived], axis=0)
+    stitched = _dedupe_sort(stitched)
+    return stitched.tail(window_bars)
