@@ -214,7 +214,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
             
             # ✅ NEW: futures higher TFs derived from canonical 1h
             elif namespace == "futures" and timeframe in ("daily", "weekly", "monthly"):
-                df_new = load_futures_eod_from_1h(sym, timeframe=timeframe, window_bars=window_bars)
+                #df_new = load_futures_eod_from_1h(sym, timeframe=timeframe, window_bars=window_bars)
+                df_new = load_futures_eod_hybrid(sym, timeframe=timeframe, window_bars=window_bars, session=session, vendor_loader=safe_load_eod)
                 
             else:
                 df_new = safe_load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
