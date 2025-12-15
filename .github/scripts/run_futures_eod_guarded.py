@@ -56,7 +56,7 @@ def run_profile() -> None:
     notify_on_signals(
         combos=["futures_3_dwm_shortlist"],
         title="Futures EOD Signals",
-        changed_only=True,
+        changed_only=False,
         changed_group="futures_eod",
     )
 
