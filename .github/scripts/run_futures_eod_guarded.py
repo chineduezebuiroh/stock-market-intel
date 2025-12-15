@@ -75,7 +75,7 @@ def main() -> None:
             mode="after_only",          # ✅ do not run before target
             fn=run_profile,
             bypass_time_window=True,
-            respect_idempotency=False,   # prevents accidental double-run same day
+            respect_idempotency=False,   # you can rerun same day, manually
         )
         return
 
