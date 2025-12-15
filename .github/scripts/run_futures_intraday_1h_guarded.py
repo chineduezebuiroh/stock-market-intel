@@ -6,26 +6,28 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from pathlib import Path
-import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.paths import DATA
-from core import storage
+from core.guard import NY_TZ, now_ny  # ✅ central TZ + now helper
 from core.health import run_combo_health, print_results
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ---- Config: desired cadence tolerance ----
 # =======================================================
-TZ = ZoneInfo("America/New_York")
-MINUTE_TOLERANCE = 5  # around HH:01
+MINUTE_TOLERANCE = 20  # around HH:01
 
 
 def in_futures_session(now: datetime) -> bool:
+    """
+    CME futures week:
+      - Closed Sat all day
+      - Opens Sun 6:00pm ET (you’re using 18:01)
+      - Closes Fri ~5:00pm ET (you’re using 16:01)
+    """
     dow = now.weekday()  # Mon=0 .. Sun=6
     t = now.time()
 
@@ -38,42 +40,27 @@ def in_futures_session(now: datetime) -> bool:
     if dow in (0, 1, 2, 3):  # Mon–Thu
         return True
 
-    if dow == 4:  # Friday
-        # up to 16:01
+    if dow == 4:  # Friday (stop around 16:01)
         return (t.hour < 16) or (t.hour == 16 and t.minute <= 1)
 
     return False
 
 
 def near_hour_plus_one(now: datetime) -> bool:
-    # We want ~HH:01; if we run every 10 minutes this will fire near 00/10/20/etc.
-    # We'll allow ±5 minutes around minute=1.
-    minute = now.minute
-    return abs(minute - 1) <= MINUTE_TOLERANCE
+    # We want ~HH:01; allow ±5 minutes around minute=1.
+    #return abs(now.minute - 1) <= MINUTE_TOLERANCE
+    return now.minute - 1 <= MINUTE_TOLERANCE
 
 
 def run_profile() -> None:
-    """root = Path(__file__).resolve().parents[2]"""
-    root = ROOT  # reuse global ROOT
+    root = ROOT
 
     cmds = [
         # 1) Refresh futures intraday_1h + cascade (4h, daily) for shortlist only
-        [
-            sys.executable,
-            str(root / "jobs" / "run_timeframe.py"),
-            "futures",
-            "intraday_1h",
-            "--cascade",
-            #"--allowed-universes",
-            #"shortlist_futures",
-        ],
+        [sys.executable, str(root / "jobs" / "run_timeframe.py"), "futures", "intraday_1h", "--cascade"],
+        
         # 2) Rebuild 1h/4h/D combo
-        [
-            sys.executable,
-            str(root / "jobs" / "run_combo.py"),
-            "futures",
-            "futures_1_1h4hd_shortlist",
-        ],
+        [sys.executable, str(root / "jobs" / "run_combo.py"), "futures", "futures_1_1h4hd_shortlist"],
     ]
 
     for cmd in cmds:
@@ -83,24 +70,6 @@ def run_profile() -> None:
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
-    """
-    def assert_combo_nonempty(combo_name: str, min_rows: int = 10):
-        path = DATA / f"combo_{combo_name}.parquet"
-        if not storage.exists(path):
-            raise RuntimeError(f"[FATAL] Combo file missing: {path}")
-        df = storage.load_parquet(path)
-        if df is None or df.empty or len(df) < min_rows:
-            raise RuntimeError(
-                f"[FATAL] Combo '{combo_name}' invalid: "
-                f"{0 if df is None else len(df)} rows (< {min_rows})"
-            )
-
-        print(f"[HEALTH] Combo {combo_name} OK ({len(df)} rows)")
-    
-    # After run_combo calls:
-    assert_combo_nonempty("futures_1_1h4hd_shortlist", min_rows=5)
-    """
-
     results = []
     results += run_combo_health(combos=["futures_1_1h4hd_shortlist"], universe_csv="shortlist_futures.csv")
     print_results(results)
@@ -115,7 +84,7 @@ def main() -> None:
         run_profile()
         return
 
-    now = datetime.now(TZ)
+    now = now_ny()  # ✅ tz-aware NY now
 
     if not in_futures_session(now):
         print(f"[INFO] {now} NY outside futures weekly session. Skipping.")
