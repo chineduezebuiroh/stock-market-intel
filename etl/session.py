@@ -68,3 +68,21 @@ def add_trade_date(df: pd.DataFrame, ts_col: str | None = None) -> pd.DataFrame:
         out["trade_date"] = s.map(trade_date_from_ts)
 
     return out
+
+
+def drop_maintenance_break_1h(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    CME Globex maintenance break is ~17:00–18:00 NY.
+    If your 1h bars are bar-start indexed, the 17:00 bar typically represents that break.
+    Drop it to avoid contaminating daily aggregates.
+    """
+    if df.empty:
+        return df
+
+    out = df.copy()
+    idx = ensure_ny_index(pd.to_datetime(out.index))
+    out.index = idx
+
+    # drop bars that start at 17:00 NY
+    mask = ~((idx.hour == 17) & (idx.minute == 0))
+    return out.loc[mask]
