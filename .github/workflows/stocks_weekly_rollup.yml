@@ -3,12 +3,14 @@ name: Stocks Weekly Rollup (WMQ)
 
 on:
   schedule:
-    # Weekly rollup: Sat 06:00 UTC ≈ 01:00 ET Sat
-    - cron: "0 6 * * 6"
     # Weekly on Saturdays at 10:30, 11:30, and 12:30 UTC
     # Guard script will decide whether to actually run.
-    - cron: "30 10-12 * * 6"
+    - cron: "30/30 10-12 * * 6"
   workflow_dispatch: {}
+
+concurrency:
+  group: stocks-weekly
+  cancel-in-progress: true
 
 permissions:
   contents: write   # 👈 important so GITHUB_TOKEN can push
