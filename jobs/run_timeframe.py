@@ -26,6 +26,7 @@ from etl.sources import (
 )
 from etl.window import parquet_path, update_fixed_window
 from etl.universe import symbols_for_universe
+from etl.futures_resample import load_futures_eod_from_1h 
 
 from functools import lru_cache
 
@@ -210,6 +211,10 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
     
             elif namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
                 df_new = load_futures_intraday(sym, timeframe=timeframe, window_bars=window_bars, session=session)
+            
+            # ✅ NEW: futures higher TFs derived from canonical 1h
+            elif namespace == "futures" and timeframe in ("daily", "weekly", "monthly"):
+                df_new = load_futures_eod_from_1h(sym, timeframe=timeframe, window_bars=window_bars)
                 
             else:
                 df_new = safe_load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
