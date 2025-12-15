@@ -27,11 +27,15 @@ def run_profile() -> None:
     root = ROOT
 
     cmds = [
-        # 1) Refresh futures daily/weekly/monthly (no Q/Y)
+        # 1) Refresh futures 1h so it's canonically ready
+        # ---------------------------------------------------------
+        [sys.executable, str(root / "jobs" / "run_timeframe.py"), "futures", "intraday_1h"],
+        
+        # 2) Refresh futures daily/weekly/monthly (no Q/Y)
         # ---------------------------------------------------------
         [sys.executable, str(root / "jobs" / "run_timeframe.py"), "futures", "daily", "--cascade"],
 
-        # 2) Rebuild futures MTF combo
+        # 3) Rebuild futures MTF combo
         # ---------------------------------------------------------
         #   - D/W/M
         [sys.executable, str(root / "jobs" / "run_combo.py"), "futures", "futures_3_dwm_shortlist"],
