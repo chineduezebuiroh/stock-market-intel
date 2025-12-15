@@ -5,9 +5,13 @@ on:
   schedule:
     # Weekly on Sundays at 10:30, 11:30, and 12:30 UTC
     # Guard script will check "first Sunday" and time window.
-    - cron: "30 10-12 * * 0"
+    - cron: "30/30 10-12 * * 0"
   workflow_dispatch: {}
 
+concurrency:
+  group: stocks-monthly
+  cancel-in-progress: true
+  
 permissions:
   contents: write   # 👈 important so GITHUB_TOKEN can push
 
