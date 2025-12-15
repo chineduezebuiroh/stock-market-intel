@@ -272,6 +272,7 @@ def load_intraday_yf(
 ) -> pd.DataFrame:
     prepost = (session == 'extended')
 
+    print(f"[YF] {ticker} interval={interval} period={period} prepost={prepost}", flush=True)
     df = yf.download(
         ticker,
         period=period,
@@ -281,7 +282,8 @@ def load_intraday_yf(
         auto_adjust=False,   # keep raw OHLCV, like load_eod
     )
     if df is None or df.empty:
-        return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+        #return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+        return pd.DataFrame(columns=["open", "high", "low", "close", "adj_close", "volume"])
 
     # Normalize index to America/New_York tz-naive (same as load_eod)
     if getattr(df.index, "tz", None) is not None:
@@ -323,16 +325,24 @@ def load_futures_intraday(
         raise ValueError(f"Unsupported futures intraday timeframe: {timeframe}")
 
     # Rough bars/day for futures 1h:
-    bars_per_day_1h = 24  # 24h futures session
+    bars_per_day_1h = 23  # 23h futures session accounting for 1 hour maintenance break
     if tf == "intraday_1h":
         bars_per_day = bars_per_day_1h
     else:  # intraday_4h
-        bars_per_day = bars_per_day_1h / 4.0  # ~6 bars per day
+        bars_per_day = (bars_per_day_1h + 1) / 4.0  # ~6 bars per day
 
     # Over-fetch by 2x
     approx_days = max(5, int((window_bars / max(bars_per_day, 1)) * 2))
+    
+    # Yahoo intraday (60m) history limit is ~730 days — clamp requests
+    MAX_YF_60M_DAYS = 729  # safer than 730
+    if approx_days > MAX_YF_60M_DAYS:
+        approx_days = MAX_YF_60M_DAYS
+    
     period = f"{approx_days}d"
 
+    print(f"[YF] {symbol} {timeframe} requesting 60m period={period}", flush=True)
+    
     # 1) Load 60m bars
     df_1h = load_intraday_yf(
         symbol,
