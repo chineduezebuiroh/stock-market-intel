@@ -4,8 +4,12 @@ name: Weekly – Build Options Universe
 on:
   schedule:
     # Every Sunday at 06:00 UTC (~01:30 est DST-aware)
-    - cron: "30 5-7 * * 0"
+    - cron: "30/30 5-7 * * 0"
   workflow_dispatch: {}
+
+concurrency:
+  group: options-universe
+  cancel-in-progress: true
 
 permissions:
   contents: write
