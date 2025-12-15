@@ -20,7 +20,7 @@ def indicator_exh_abs_price_action(
     lookback_period: int = 126,
     pinbar_scan_period: int = 2,
     pinbar_bar_check_count: int = 1,
-    wick_adj_factor: float = 0.25,
+    wick_adj_factor: float = 0.33,
     strict_candlebody_check: bool = False,
     z: int = 0,
     **_,
