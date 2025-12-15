@@ -26,7 +26,8 @@ from etl.sources import (
 )
 from etl.window import parquet_path, update_fixed_window
 from etl.universe import symbols_for_universe
-from etl.futures_resample import load_futures_eod_from_1h 
+#from etl.futures_resample import load_futures_eod_from_1h 
+from etl.futures_resample import load_futures_eod_hybrid
 
 from functools import lru_cache
 
