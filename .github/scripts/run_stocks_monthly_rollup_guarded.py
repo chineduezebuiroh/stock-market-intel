@@ -66,6 +66,13 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_a_mqy_all"], universe_csv=None)
     print_results(results)
 
+    notify_on_signals(
+        combos=["stocks_a_mqy_shortlist", "stocks_a_mqy_all"],
+        title="Futures Monthly Signals",
+        changed_only=False,
+        changed_group="stocks_monthly",
+    )
+
 
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
