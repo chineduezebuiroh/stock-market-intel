@@ -53,7 +53,8 @@ def resample_1h_to_daily(df_1h: pd.DataFrame) -> pd.DataFrame:
     # add trade_date and group
     df = add_trade_date(df)
 
-    daily = df.groupby("trade_date", sort=True, as_index=True).apply(_agg_ohlcv)
+    #daily = df.groupby("trade_date", sort=True, as_index=True).apply(_agg_ohlcv)
+    daily = df.groupby("trade_date", sort=True, as_index=True).apply(_agg_ohlcv, include_groups=False)
 
     daily.index.name = "Date"
     # match your existing convention: tz-naive midnight timestamps
@@ -79,7 +80,8 @@ def resample_daily_to_weekly(df_daily: pd.DataFrame) -> pd.DataFrame:
 
     tmp = d.copy()
     tmp["_wk"] = wk_key.values
-
+    
+    """
     weekly = tmp.groupby("_wk", sort=True, as_index=True).apply(
         lambda g: pd.Series(
             {
@@ -91,6 +93,19 @@ def resample_daily_to_weekly(df_daily: pd.DataFrame) -> pd.DataFrame:
             }
         )
     )
+    """
+    weekly = tmp.groupby("_wk", sort=True, as_index=True).apply(
+           lambda g: pd.Series(
+               {
+                   "open": g["open"].iloc[0],
+                   "high": g["high"].max(),
+                   "low": g["low"].min(),
+                   "close": g["close"].iloc[-1],
+                   "volume": g["volume"].sum(),
+               }
+           ),
+           include_groups=False,
+       )
 
     # choose a left-index that is stable: first trade_date in that ISO week
     first_dates = (
@@ -118,6 +133,7 @@ def resample_daily_to_monthly(df_daily: pd.DataFrame) -> pd.DataFrame:
     tmp = d.copy()
     tmp["_m"] = month_key
 
+    """
     monthly = tmp.groupby("_m", sort=True, as_index=True).apply(
         lambda g: pd.Series(
             {
@@ -129,6 +145,19 @@ def resample_daily_to_monthly(df_daily: pd.DataFrame) -> pd.DataFrame:
             }
         )
     )
+    """
+    monthly = tmp.groupby("_m", sort=True, as_index=True).apply(
+           lambda g: pd.Series(
+               {
+                   "open": g["open"].iloc[0],
+                   "high": g["high"].max(),
+                   "low": g["low"].min(),
+                   "close": g["close"].iloc[-1],
+                   "volume": g["volume"].sum(),
+               }
+           ),
+           include_groups=False,
+       )
 
     # left-index = first trade_date of month
     first_dates = (
