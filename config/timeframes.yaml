@@ -21,7 +21,7 @@ stocks:
 futures:
   intraday_1h:
     session: extended
-    window_bars: 16500
+    window_bars: 16000
   intraday_4h:
     session: extended
     window_bars: 250
