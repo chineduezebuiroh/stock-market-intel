@@ -67,12 +67,8 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_a_mqy_all"], universe_csv=None)
     print_results(results)
 
-    notify_on_signals(
-        combos=["stocks_a_mqy_shortlist", "stocks_a_mqy_all"],
-        title="Futures Monthly Signals",
-        changed_only=False,
-        changed_group="stocks_monthly",
-    )
+    notify_combo_signals("stocks_a_mqy_shortlist", only_if_changed=False)
+    notify_combo_signals("stocks_a_mqy_all", only_if_changed=False)
 
 
 def main() -> None:
