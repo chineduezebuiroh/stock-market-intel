@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: futures-intraday # futures-intraday-4h
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write   # 👈 important so GITHUB_TOKEN can push
