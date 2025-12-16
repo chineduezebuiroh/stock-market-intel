@@ -78,7 +78,7 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_d_130mdw_shortlist"], universe_csv="shortlist_stocks.csv")
     print_results(results)
 
-    notify_combo_signals("stocks_d_130dw_shortlist", only_if_changed=True)
+    notify_combo_signals("stocks_d_130mdw_shortlist", only_if_changed=True)
 
 
 def main() -> None:
