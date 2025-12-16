@@ -5,7 +5,7 @@ on:
   schedule:
     # starting at 5th minute, every 10 min
     # all days (UTC)
-    - cron: "1/20 * * * 0-5"   
+    - cron: "5/20 * * * 0-5"   
   workflow_dispatch: {}
 
 concurrency:
