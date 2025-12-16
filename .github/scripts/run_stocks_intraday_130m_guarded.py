@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 
 from core.guard import now_ny  # ✅ central TZ-aware NY now
 from core.health import run_combo_health, print_results
-from core.signal_alerts import notify_on_signals
+#from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
 # =======================================================
