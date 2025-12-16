@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from core.health import run_combo_health, print_results
 from core.guard import run_guarded  # ✅ central guard logic
 from core.signal_alerts import notify_on_signals
+from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
