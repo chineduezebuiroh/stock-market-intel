@@ -49,9 +49,8 @@ def in_futures_session(now: datetime) -> bool:
 
 
 def near_hour_plus_one(now: datetime) -> bool:
-    # We want ~HH:01; allow ±5 minutes around minute=1.
-    #return abs(now.minute - 1) <= MINUTE_TOLERANCE
-    return now.minute - 1 <= MINUTE_TOLERANCE
+    diff = now.minute - 1
+    return 0 <= diff <= MINUTE_TOLERANCE
 
 
 def run_profile() -> None:
