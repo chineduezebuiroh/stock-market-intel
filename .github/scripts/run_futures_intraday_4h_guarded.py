@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from core.guard import now_ny  # ✅ central TZ-aware NY now
 from core.health import run_combo_health, print_results
 from core.signal_alerts import notify_on_signals
+from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: cadence window ----
@@ -86,13 +87,8 @@ def run_profile() -> None:
     results = []
     results += run_combo_health(combos=["futures_2_4hdw_shortlist"], universe_csv="shortlist_futures.csv")
     print_results(results)
-
-    notify_on_signals(
-        combos=["futures_2_4hdw_shortlist"],
-        title="Futures 4h Signals",
-        changed_only=True,
-        changed_group="futures_intraday_4h",
-    )
+    
+    notify_combo_signals("futures_2_4hdw_shortlist", only_if_changed=True)
 
 
 def main() -> None:
