@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from core.guard import now_ny  # ✅ central TZ-aware NY now
 from core.health import run_combo_health, print_results
 from core.signal_alerts import notify_on_signals
+from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: 130m targets (NY time) + tolerance ----
@@ -77,12 +78,7 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_d_130mdw_shortlist"], universe_csv="shortlist_stocks.csv")
     print_results(results)
 
-    notify_on_signals(
-        combos=["stocks_d_130dw_shortlist"],
-        title="Stocks 130m Signals",
-        changed_only=True,
-        changed_group="stocks_intraday_130m",
-    )
+    notify_combo_signals("stocks_d_130dw_shortlist", only_if_changed=True)
 
 
 def main() -> None:
