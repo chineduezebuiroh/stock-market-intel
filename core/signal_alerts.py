@@ -12,7 +12,7 @@ import pandas as pd
 
 from core.paths import DATA
 from core import storage
-from core.notify import send_slack
+#from core.notify import send_slack
 
 
 @dataclass(frozen=True)
