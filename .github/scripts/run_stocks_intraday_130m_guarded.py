@@ -48,7 +48,7 @@ def is_within_any_target(now: datetime) -> bool:
     for target in TARGET_TIMES:
         #diff = abs(now_min - minutes_since_midnight(target))
         diff = now_min - minutes_since_midnight(target)
-        if diff <= TOLERANCE_MIN:
+        if 0 <= diff <= TOLERANCE_MIN:
             return True
 
     return False
