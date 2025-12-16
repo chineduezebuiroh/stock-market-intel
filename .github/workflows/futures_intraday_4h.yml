@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: futures-intraday-4h
+  group: futures-intraday # futures-intraday-4h
   cancel-in-progress: true
 
 permissions:
