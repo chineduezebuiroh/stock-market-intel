@@ -19,6 +19,7 @@ from core import storage
 from core.health import run_combo_health, print_results
 from core.guard import run_guarded
 from core.signal_alerts import notify_on_signals
+from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
@@ -68,12 +69,8 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_c_dwm_all"], universe_csv=None)
     print_results(results)
 
-    notify_on_signals(
-        combos=["stocks_c_dwm_shortlist", "stocks_c_dwm_all"],
-        title="Stocks EOD Signals",
-        changed_only=False,
-        changed_group="stocks_eod",
-    )
+    notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False)
+    notify_combo_signals("stocks_c_dwm_all", only_if_changed=False)
 
 
 def main() -> None:
