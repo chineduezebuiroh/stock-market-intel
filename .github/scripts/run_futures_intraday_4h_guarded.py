@@ -48,7 +48,8 @@ def near_4h_grid(now: datetime) -> bool:
 
     # allow around HH:01
     #if abs(t.minute - 1) > MINUTE_TOLERANCE:
-    if t.minute - 1 > MINUTE_TOLERANCE:
+    diff = t.minute - 1
+    if not (0 <= diff <= MINUTE_TOLERANCE):
         return False
 
     dow = now.weekday()
