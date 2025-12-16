@@ -18,7 +18,7 @@ from core.paths import DATA
 from core import storage
 from core.health import run_combo_health, print_results
 from core.guard import run_guarded
-from core.signal_alerts import notify_on_signals
+#from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
 # =======================================================
