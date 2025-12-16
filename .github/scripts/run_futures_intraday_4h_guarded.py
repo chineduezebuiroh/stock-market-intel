@@ -17,30 +17,13 @@ from core.health import run_combo_health, print_results
 #from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
+from scripts.run_futures_intraday_1h_guarded import in_futures_session
+
 # =======================================================
 # ---- Config: cadence window ----
 # =======================================================
 MINUTE_TOLERANCE = 60
 FOUR_HOUR_HOURS = {1, 5, 9, 13, 17, 21}
-
-
-def in_futures_4h_session(now: datetime) -> bool:
-    dow = now.weekday()  # Mon=0..Sun=6
-    t = now.time()
-
-    if dow == 5:  # Saturday
-        return False
-
-    if dow == 6:  # Sunday: from 17:01 onwards
-        return (t.hour > 17) or (t.hour == 17 and t.minute >= 1)
-
-    if dow in (0, 1, 2, 3):  # Mon–Thu: all day
-        return True
-
-    if dow == 4:  # Friday: up to 13:01
-        return (t.hour < 13) or (t.hour == 13 and t.minute <= 1)
-
-    return False
 
 
 def near_4h_grid(now: datetime) -> bool:
@@ -55,8 +38,8 @@ def near_4h_grid(now: datetime) -> bool:
     dow = now.weekday()
     h = t.hour
 
-    if dow == 6:  # Sunday: only 17:01 and 21:01
-        return h in {17, 21}
+    if dow == 6:  # Sunday: only 21:01 if you’re using 18:01 open gate; 17:01 is gone
+        return h in {21}  # or {21} only; include 17 only if you re-allow it
 
     if dow in (0, 1, 2, 3):  # Mon–Thu: all
         return h in FOUR_HOUR_HOURS
@@ -103,7 +86,8 @@ def main() -> None:
 
     now = now_ny()
 
-    if not in_futures_4h_session(now):
+    #if not in_futures_4h_session(now):
+    if not in_futures_session(now):
         print(f"[INFO] {now} NY outside 4h futures session. Skipping.")
         sys.exit(0)
 
