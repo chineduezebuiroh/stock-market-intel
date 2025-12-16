@@ -17,7 +17,7 @@ from core.health import run_combo_health, print_results
 #from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
-from scripts.run_futures_intraday_1h_guarded import in_futures_session
+from run_futures_intraday_1h_guarded import in_futures_session
 
 # =======================================================
 # ---- Config: cadence window ----
