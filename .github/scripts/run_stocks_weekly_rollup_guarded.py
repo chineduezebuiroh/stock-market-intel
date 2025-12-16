@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from core.health import run_combo_health, print_results
 from core.guard import run_guarded  # ✅ your existing core/guard.py
 from core.signal_alerts import notify_on_signals
+from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
@@ -57,12 +58,8 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_b_wmq_all"], universe_csv=None)
     print_results(results)
 
-    notify_on_signals(
-        combos=["stocks_b_wmq_shortlist", "stocks_b_wmq_all"],
-        title="Futures Weekly Signals",
-        changed_only=False,
-        changed_group="stocks_weekly",
-    )
+    notify_combo_signals("stocks_b_wmq_shortlist", only_if_changed=False)
+    notify_combo_signals("stocks_b_wmq_all", only_if_changed=False)
 
 
 def main() -> None:
