@@ -242,6 +242,7 @@ def indicator_exh_abs_price_action(
 
 def indicator_significant_volume(
     df: pd.DataFrame,
+    percentile_floor: float = 33.0,
     percentile_ceiling: float = 67.0,
     lookback_period: int = 126,
     z: int = 0,
@@ -252,8 +253,9 @@ def indicator_significant_volume(
     Significant_Volume (Thinkorswim port).
 
     Numeric encoding (matches the TOS 'scan' output):
-        1 = current or prior volume percentile >= percentile_ceiling
-        0 = both current and prior volume percentile < percentile_ceiling
+        2 = current or prior volume percentile >= percentile_ceiling
+        1 = current or prior volume percentile >= percentile_floor
+        0 = both current and prior volume percentile < percentile_floor
 
     Returns a float Series with values in {0, 1}.
     """
@@ -282,14 +284,20 @@ def indicator_significant_volume(
     # Final scan values
     # ------------------------------------------------------------------
     pc = float(percentile_ceiling)
+    pf = float(percentile_floor)
     scan = pd.Series(0.0, index=df_sorted.index)
 
     z_int = int(z)
     vol_pct_ceil_z = vol_pct_ceil.shift(z_int)
     vol_pct_ceil_z1 = vol_pct_ceil.shift(z_int+1)
 
-    cond = (vol_pct_ceil_z >= pc) | (vol_pct_ceil_z1 >= pc)
-    scan[cond] = 1.0
+    cond1 = (vol_pct_ceil_z >= pf) | (vol_pct_ceil_z1 >= pf)
+    cond2 = (vol_pct_ceil_z >= pc) | (vol_pct_ceil_z1 >= pc)
+    
+    # Apply lower threshold condition first...
+    scan[cond1] = 1.0
+    # ...then overwrite with higher threshold condition where applicable
+    scan[cond2] = 2.0
 
     # Reindex back to original df index (preserves caller's index order)
     return scan.reindex(df.index)
