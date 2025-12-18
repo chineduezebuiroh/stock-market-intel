@@ -384,7 +384,7 @@ def render_stocks_mtf_tab():
     with col_right:
         signal_filter = st.selectbox(
             "Signal filter",
-            options=["all", "long", "short", "watch"],
+            options=["all", "long", "short", "watch", "anti"],
             index=0,
             key="stocks_signal_filter",
         )
@@ -513,7 +513,7 @@ def render_futures_mtf_tab():
     with col_right:
         signal_filter = st.selectbox(
             "Signal filter",
-            options=["all", "long", "short", "watch", "none"],
+            options=["all", "long", "short", "watch", "anti", "none"],
             index=0,
             key="futures_signal_filter",
         )
@@ -613,7 +613,7 @@ def render_combo_tab_stocks_c_dwm_shortlist():
     if "signal" in df.columns:
         signal_choice = st.radio(
             "Filter by signal:",
-            options=["all", "long", "short", "watch"],
+            options=["all", "long", "short", "watch", "anti"],
             horizontal=True,
         )
         if signal_choice != "all":
