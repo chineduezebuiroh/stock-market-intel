@@ -190,7 +190,8 @@ def evaluate_stocks_shortlist_signal(
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
     lw_ma_trend_bull = row.get("lower_ma_trend_bullish", np.nan)
     lw_ma_trend_bear = row.get("lower_ma_trend_bearish", np.nan)
-    lw_macdv = row.get("lower_macdv_core", np.nan)
+    lw_macdv_bull = row.get("lower_macdv_core_bull", np.nan)
+    lw_macdv_bear = row.get("lower_macdv_core_bear", np.nan)
     lw_sqz = row.get("lower_ttm_squeeze_pro", np.nan)
 
     # Middle: context / confirmation (e.g., weekly)
@@ -231,11 +232,12 @@ def evaluate_stocks_shortlist_signal(
         short_score += 1.0
 
     # MACDV Momentum with potential TTM Squeeze Pro Confirmation
-    if lw_macdv == 2 or (lw_macdv == 1 and ~np.isnan(lw_sqz) and lw_sqz >= 0):
+    if lw_macdv_bull == 2 or (lw_macdv_bull == 1 and ~np.isnan(lw_sqz) and lw_sqz >= 0):
         long_score += 1.0
-    if lw_macdv == -2 or (lw_macdv == -1 and ~np.isnan(lw_sqz) and lw_sqz <= 0):
+    
+    if lw_macdv_bear == -2 or (lw_macdv_bear == -1 and ~np.isnan(lw_sqz) and lw_sqz <= 0):
         short_score += 1.0
-
+    
     # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
     # ------------------------------------------------------
@@ -379,7 +381,8 @@ def score_futures_base_signal(
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
     lw_ma_trend_bull = row.get("lower_ma_trend_bullish", np.nan)
     lw_ma_trend_bear = row.get("lower_ma_trend_bearish", np.nan)
-    lw_macdv = row.get("lower_macdv_core", np.nan)
+    lw_macdv_bull = row.get("lower_macdv_core_bull", np.nan)
+    lw_macdv_bear = row.get("lower_macdv_core_bear", np.nan)
     lw_sqz = row.get("lower_ttm_squeeze_pro", np.nan)
 
     # Middle: context / confirmation (e.g., weekly)
@@ -420,9 +423,10 @@ def score_futures_base_signal(
         short_score += 1.0
 
     # MACDV Momentum with potential TTM Squeeze Pro Confirmation
-    if lw_macdv == 2 or (lw_macdv == 1 and ~np.isnan(lw_sqz) and lw_sqz >= 0):
+    if lw_macdv_bull == 2 or (lw_macdv_bull == 1 and ~np.isnan(lw_sqz) and lw_sqz >= 0):
         long_score += 1.0
-    if lw_macdv == -2 or (lw_macdv == -1 and ~np.isnan(lw_sqz) and lw_sqz <= 0):
+        
+    if lw_macdv_bear == -2 or (lw_macdv_bear == -1 and ~np.isnan(lw_sqz) and lw_sqz <= 0):
         short_score += 1.0
 
     # ------------------------------------------------------
