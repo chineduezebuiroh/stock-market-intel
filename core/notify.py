@@ -16,7 +16,7 @@ from core.paths import DATA
 from core import storage
 
 
-SIGNALS_OF_INTEREST = {"long", "short", "watch"}
+SIGNALS_OF_INTEREST = {"long", "short", "watch", "anti"}
 
 
 @dataclass(frozen=True)
@@ -195,7 +195,7 @@ def format_signal_message(
         return ""
 
     # bucket by signal
-    buckets: dict[str, list[SignalRow]] = {"long": [], "short": [], "watch": []}
+    buckets: dict[str, list[SignalRow]] = {"long": [], "short": [], "watch": [], "anti": []}
     for r in rows:
         buckets[r.signal].append(r)
 
@@ -215,12 +215,12 @@ def format_signal_message(
     lines.append(f"As-of: `{asof}`")
     lines.append("")
 
-    for sig in ("long", "short", "watch"):
+    for sig in ("long", "short", "watch", "anti"):
         rs = sorted(buckets[sig], key=lambda x: x.symbol.upper())
         if not rs:
             continue
 
-        emoji = {"long": "🟢", "short": "🔴", "watch": "🟡"}[sig]
+        emoji = {"long": "🟢", "short": "🔴", "watch": "🟡", "anti": "🔘"}[sig]
         lines.append(f"{emoji} *{sig.upper()}* ({len(rs)})")
 
         show = rs[:max_lines_per_bucket]
@@ -243,7 +243,7 @@ def notify_combo_signals(
 ) -> None:
     """
     Reads data/combo_<combo_name>.parquet and sends a Telegram message
-    if any symbols have signal in {long,short,watch}.
+    if any symbols have signal in {long,short,watch,anti}.
 
     If only_if_changed=True, suppress if the signal set is unchanged vs last alert.
     """
