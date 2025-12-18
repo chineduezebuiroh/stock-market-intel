@@ -8,7 +8,8 @@ profiles:
     - spy_qqq_vol_ma_ratio
     - ma_trend_bullish
     - ma_trend_bearish
-    - macdv_core
+    - macdv_core_bullish
+    - macdv_core_bearish
     - ttm_squeeze_pro
 
   middle_core_v1:
