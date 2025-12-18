@@ -186,13 +186,14 @@ def _render_tf_block(col_container, row: pd.Series, prefix: str, title: str):
         ("spy_qqq_vol_ma_ratio", "SPY/QQQ Vol Ratio"),
         ("ma_trend_bullish", "MA Trend Bull"),
         ("ma_trend_bearish", "MA Trend Bear"),
-        ("macdv_core", "MACDV Core"),
+        ("macdv_core_bull", "MACDV Core Bull"),
+        ("macdv_core_bear", "MACDV Core Bear"),
         ("ttm_squeeze_pro", "TTM Squeeze Pro"),
         ("ema_8", "EMA 8"),
         ("ema_21", "EMA 21"),
         ("atr_14", "ATR 14"),
     ]
-
+    
     col_container.markdown(f"### {title}")
 
     lines = []
@@ -334,7 +335,8 @@ def select_display_cols_stocks(df: pd.DataFrame, universe_type: str) -> pd.DataF
         "lower_spy_qqq_vol_ma_ratio",
         "lower_ma_trend_bullish",
         "lower_ma_trend_bearish",
-        "lower_macdv_core",
+        "lower_macdv_core_bull",
+        "lower_macdv_core_bear",
         "lower_ttm_squeeze_pro",
         # middle
         "middle_wyckoff_stage",
@@ -479,7 +481,8 @@ def select_display_cols_futures(df: pd.DataFrame) -> pd.DataFrame:
         "lower_spy_qqq_vol_ma_ratio",
         "lower_ma_trend_bullish",
         "lower_ma_trend_bearish",
-        "lower_macdv_core",
+        "lower_macdv_core_bull",
+        "lower_macdv_core_bear",
         "lower_ttm_squeeze_pro",
         # middle
         "middle_wyckoff_stage",
