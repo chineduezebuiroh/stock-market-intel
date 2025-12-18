@@ -348,6 +348,13 @@ def evaluate_stocks_options_signal(
     elif base_signal == "short" and not pd.isna(etf_short) and etf_short < 4:
         base_signal = "watch"
 
+    # Anit-ETF
+    if base_signal == "long" and not pd.isna(etf_short) and etf_short >= 4:
+        base_signal = "anti"
+    # Short side
+    elif base_signal == "short" and not pd.isna(etf_long) and etf_long >= 4:
+        base_signal = "anti"
+
     return base_signal, long_score, short_score
 
 
