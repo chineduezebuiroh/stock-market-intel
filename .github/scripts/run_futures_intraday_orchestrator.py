@@ -22,8 +22,12 @@ def main() -> None:
 
     # Manual dispatch: run both checks, run what qualifies
     if event_name == "workflow_dispatch":
-        print("[INFO] Manual dispatch; evaluating 1h + 4h gates.")
-        _run_if_ready()
+        print("[INFO] Manual dispatch; Running 1h + 4h profiles.")
+        print(f"[INFO] Running 1h profile...")
+        g1h.run_profile()
+        print("[ORCH] Running 4h profile...")
+        g4h.run_profile()
+        #_run_if_ready()
         return
 
     # Scheduled dispatch
