@@ -20,7 +20,7 @@ from core.notify import notify_combo_signals
 # =======================================================
 # ---- Config: desired cadence tolerance ----
 # =======================================================
-MINUTE_TOLERANCE = 35  # around HH:01
+MINUTE_TOLERANCE = 45  # around HH:01
 
 
 def in_futures_session(now: datetime) -> bool:
