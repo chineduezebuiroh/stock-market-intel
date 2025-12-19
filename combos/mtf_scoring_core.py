@@ -482,7 +482,7 @@ def score_futures_4hdw_signal(
     # Block 3: Volume / Participation (lower + middle)
     # ------------------------------------------------------
     # Significant volume -> strong participation
-    if ~np.isnan(up_wyckoff) and md_sigvol == 2.0:
+    if ~np.isnan(up_wyckoff) and md_sigvol >= 1.0:
         long_score += 1.0
         short_score += 1.0
 
