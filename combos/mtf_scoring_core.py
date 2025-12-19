@@ -276,9 +276,9 @@ def evaluate_stocks_options_signal(
     """
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
 
-    vol_ratio_th1 = 0.05 #<-- 5%
-    vol_ratio_th2 = 0.10 #<-- 10%
-    vol_ratio_th3 = 0.25 #<-- 25%
+    vol_ratio_th1 = 0.05 # <-- 5%
+    vol_ratio_th2 = 0.10 # <-- 10%
+    vol_ratio_th3 = 0.25 # <-- 25%
 
     # If there is no directional signal, nothing to add.
     if base_signal not in ("long", "short"):
@@ -296,7 +296,7 @@ def evaluate_stocks_options_signal(
     # Significant volume + beating SPY/QQQ volume baseline -> strong participation
     if not pd.isna(up_wyckoff) and ((md_sigvol == 2.0 and md_vol_ratio > vol_ratio_th1) or
                                     (lw_sigvol == 2.0 and lw_vol_ratio > vol_ratio_th1) or
-                                    (md_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th3) or
+                                    (md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th3) or
                                     (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th3)):
         long_score += 1.0
         short_score += 1.0
@@ -482,7 +482,7 @@ def score_futures_4hdw_signal(
     # Block 3: Volume / Participation (lower + middle)
     # ------------------------------------------------------
     # Significant volume -> strong participation
-    if ~np.isnan(up_wyckoff) and md_sigvol == 1.0:
+    if ~np.isnan(up_wyckoff) and md_sigvol == 2.0:
         long_score += 1.0
         short_score += 1.0
 
@@ -530,7 +530,7 @@ def score_futures_dwm_signal(
     # Block 3: Volume / Participation (lower + middle)
     # ------------------------------------------------------
     # Significant volume -> strong participation
-    if ~np.isnan(up_wyckoff) and (md_sigvol == 1.0 or lw_sigvol == 1.0):
+    if ~np.isnan(up_wyckoff) and (md_sigvol == 2.0 or lw_sigvol == 2.0):
         long_score += 1.0
         short_score += 1.0
 
