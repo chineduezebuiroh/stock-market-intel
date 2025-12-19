@@ -24,7 +24,7 @@ from core.notify import notify_combo_signals
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
 # =======================================================
-TARGET_TIME = time(hour=16, minute=15)  # 4:15 pm America/New_York
+TARGET_TIME = time(hour=17, minute=30)  # 5:30 pm America/New_York
 TOLERANCE_MIN = 45                      # + 45 minutes window
 
 
