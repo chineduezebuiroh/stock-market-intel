@@ -3,10 +3,10 @@ name: Stocks Daily EOD
 
 on:
   schedule:
-    # Weekdays Mon–Fri at 20:15, 21:15, and 22:15 UTC
-    # - In Standard, 21:15 UTC ≈ 16:15 ET
-    # - In DST, 20:15 UTC or 22:15 ≈ 16:15 ET (don't remember)
-    - cron: "15 20-22 * * 1-5"
+    # Weekdays Mon–Fri at 21:30, 22:30, and 23:30 UTC
+    # - In Standard, 22:30 UTC ≈ 17:30 ET
+    # - In DST, 21:30 UTC or 23:30 ≈ 17:30 ET (don't remember)
+    - cron: "30 21-23 * * 1-5"
   workflow_dispatch: {}
 
 concurrency:
