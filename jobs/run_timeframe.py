@@ -43,7 +43,7 @@ import inspect
 print("[DEBUG] load_eod signature:", inspect.signature(load_eod))
 
 
-DEV_MAX_STOCK_SYMBOLS_PER_TF = 50  # set to None to disable the cap
+DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
 
 
