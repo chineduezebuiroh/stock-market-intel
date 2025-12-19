@@ -216,6 +216,11 @@ def indicator_macdv_bearish(
     # ------------------------------------------------------------------
     # Weaker bearish conditions (value -1)
     # ------------------------------------------------------------------
+    # d = macdv - signal, approximating "spread" behavior
+    d_z  = macdv_z - signal_z
+    d_z1 = macdv_z1 - signal_z1
+    d_z2 = macdv_z2 - signal_z2
+    
     # Bearish:
     #   min(macdv[z], macdv[z+1]) < -threshold
     #   OR (macdv[z] < signal[z] < signal[z+1])
