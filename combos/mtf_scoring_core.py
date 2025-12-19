@@ -341,19 +341,18 @@ def evaluate_stocks_options_signal(
     )
 
     # Apply guardrails **only when ETF data exists**
+    # Anit-ETF
+    if base_signal == "long" and not pd.isna(etf_short) and etf_short >= 4:
+        base_signal = "anti"
+    elif base_signal == "short" and not pd.isna(etf_long) and etf_long >= 4:
+        base_signal = "anti"
+    
     # Long side
     if base_signal == "long" and not pd.isna(etf_long) and etf_long < 4:
         base_signal = "watch"
     # Short side
     elif base_signal == "short" and not pd.isna(etf_short) and etf_short < 4:
         base_signal = "watch"
-
-    # Anit-ETF
-    if base_signal == "long" and not pd.isna(etf_short) and etf_short >= 4:
-        base_signal = "anti"
-    # Short side
-    elif base_signal == "short" and not pd.isna(etf_long) and etf_long >= 4:
-        base_signal = "anti"
 
     return base_signal, long_score, short_score
 
@@ -486,6 +485,10 @@ def score_futures_4hdw_signal(
         long_score += 1.0
         short_score += 1.0
 
+    if ~np.isnan(up_wyckoff) and md_sigvol == 2.0:
+        long_score += 1.0
+        short_score += 1.0
+
     # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
     # ------------------------------------------------------
@@ -530,6 +533,10 @@ def score_futures_dwm_signal(
     # Block 3: Volume / Participation (lower + middle)
     # ------------------------------------------------------
     # Significant volume -> strong participation
+    if ~np.isnan(up_wyckoff) and (md_sigvol >= 1.0 or lw_sigvol >= 1.0):
+        long_score += 1.0
+        short_score += 1.0
+
     if ~np.isnan(up_wyckoff) and (md_sigvol == 2.0 or lw_sigvol == 2.0):
         long_score += 1.0
         short_score += 1.0
