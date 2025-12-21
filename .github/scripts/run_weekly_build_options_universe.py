@@ -150,7 +150,7 @@ def main() -> None:
     tz = ZoneInfo("America/New_York")
     now = datetime.now(tz)
     """
-    now_time = now_ny
+    now_time = now_ny()
     weekday = now.weekday()  # Monday=0 ... Sunday=6
 
     # Require Sunday (6)
