@@ -6,12 +6,17 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import datetime, time
-from zoneinfo import ZoneInfo
+from datetime import time
 from pathlib import Path
 
-import pandas as pd
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
+from core.health import run_combo_health, print_results
+from core.guard import minutes_since_midnight, now_ny #run_guarded  # ✅ your existing core/guard.py
+#from core.signal_alerts import notify_on_signals
+from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: desired local target time + tolerance ----
@@ -26,10 +31,10 @@ TOLERANCE_MIN = 45                      # +/- 45 minutes
 # If previous file is missing (first run), this check is skipped.
 MIN_PCT_OF_PREV = float(os.getenv("OPTIONS_UNIVERSE_MIN_PCT_OF_PREV", "0.75"))
 
-
+"""
 def minutes_since_midnight(t: time) -> int:
     return t.hour * 60 + t.minute
-
+"""
 
 def _count_symbols(csv_path: Path) -> int:
     df = pd.read_csv(csv_path)
@@ -141,8 +146,11 @@ def main() -> None:
         return
 
     # ✅ Scheduled runs: enforce DST-aware time window
+    """
     tz = ZoneInfo("America/New_York")
     now = datetime.now(tz)
+    """
+    now_time = now_ny
     weekday = now.weekday()  # Monday=0 ... Sunday=6
 
     # Require Sunday (6)
