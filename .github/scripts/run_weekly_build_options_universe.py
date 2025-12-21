@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import time
 from pathlib import Path
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -31,10 +32,6 @@ TOLERANCE_MIN = 45                      # +/- 45 minutes
 # If previous file is missing (first run), this check is skipped.
 MIN_PCT_OF_PREV = float(os.getenv("OPTIONS_UNIVERSE_MIN_PCT_OF_PREV", "0.75"))
 
-"""
-def minutes_since_midnight(t: time) -> int:
-    return t.hour * 60 + t.minute
-"""
 
 def _count_symbols(csv_path: Path) -> int:
     df = pd.read_csv(csv_path)
@@ -146,10 +143,6 @@ def main() -> None:
         return
 
     # ✅ Scheduled runs: enforce DST-aware time window
-    """
-    tz = ZoneInfo("America/New_York")
-    now = datetime.now(tz)
-    """
     now_time = now_ny()
     weekday = now.weekday()  # Monday=0 ... Sunday=6
 
