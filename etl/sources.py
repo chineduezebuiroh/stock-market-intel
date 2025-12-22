@@ -35,6 +35,42 @@ def timeout(seconds: int, msg: str = "Timeout"):
 # ======================================================
 # ---------------- Actual Processes ----------------
 # ======================================================
+def _agg_ohlcv_intraday(g: pd.DataFrame) -> pd.Series:
+    # g is all rows that floor to the same hour
+    out = {
+        "open": g["open"].iloc[0],
+        "high": g["high"].max(),
+        "low": g["low"].min(),
+        "close": g["close"].iloc[-1],
+        "volume": g["volume"].sum(),
+    }
+    if "adj_close" in g.columns:
+        out["adj_close"] = g["adj_close"].iloc[-1]
+    return pd.Series(out)
+
+
+def normalize_futures_1h_index(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+
+    out = df.copy()
+    out.index = pd.to_datetime(out.index)
+
+    # 1) Force to hour-start grid
+    out.index = out.index.floor("H")
+
+    # 2) Merge duplicates that now share the same hour
+    if out.index.has_duplicates:
+        out = (
+            out.sort_index()
+               .groupby(level=0, sort=True)
+               .apply(_agg_ohlcv_intraday)
+        )
+        out.index.name = "Datetime"
+
+    return out
+
+
 def _sanitize_eod_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Final safety pass for load_eod:
@@ -350,6 +386,10 @@ def load_futures_intraday(
         period=period,
         session=session,
     )
+
+    #collapse multiple / random minute bars into a singular 1-hour bar
+    df_1h = normalize_futures_1h_index(df_1h)
+
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
 
