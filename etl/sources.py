@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 import signal
 from contextlib import contextmanager
 
+from etl.session import ensure_current_hour_stub_1h
+
 class TimeoutException(Exception):
     pass
     
@@ -395,6 +397,7 @@ def load_futures_intraday(
 
     if tf == "intraday_1h":
         # Let update_fixed_window trim to window_bars later
+        df_1h = ensure_current_hour_stub_1h(df_1h)
         return df_1h
 
     # 2) For intraday_4h: resample 1h → 4h
