@@ -86,3 +86,28 @@ def drop_maintenance_break_1h(df: pd.DataFrame) -> pd.DataFrame:
     # Drop any bar that starts in the 17:00 NY hour
     mask = idx.hour != 17
     return out.loc[mask]
+
+
+def ensure_current_hour_stub_1h(df_1h: pd.DataFrame, *, now: pd.Timestamp | None = None) -> pd.DataFrame:
+    if df_1h is None or df_1h.empty:
+        return df_1h
+
+    out = df_1h.sort_index().copy()
+    if "adj_close" not in out.columns and "close" in out.columns:
+        out["adj_close"] = out["close"]
+
+    if now is None:
+        now = pd.Timestamp.now(tz="America/New_York").tz_localize(None)
+    else:
+        now = pd.Timestamp(now)
+        if getattr(now, "tzinfo", None) is not None:
+            now = now.tz_convert("America/New_York").tz_localize(None)
+
+    cur = now.floor("h")
+
+    if cur not in out.index:
+        stub = {c: pd.NA for c in ["open","high","low","close","adj_close","volume"] if c in out.columns}
+        out.loc[cur] = stub
+        out = out.sort_index()
+
+    return out
