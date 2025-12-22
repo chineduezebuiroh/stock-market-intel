@@ -57,7 +57,7 @@ def normalize_futures_1h_index(df: pd.DataFrame) -> pd.DataFrame:
     out.index = pd.to_datetime(out.index)
 
     # 1) Force to hour-start grid
-    out.index = out.index.floor("H")
+    out.index = out.index.floor("h")
 
     # 2) Merge duplicates that now share the same hour
     if out.index.has_duplicates:
