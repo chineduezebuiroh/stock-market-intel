@@ -401,9 +401,10 @@ def load_futures_intraday(
     df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
     return df_4h
 
-
+"""
 def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
-    """
+"""
+"""
     Resample 1h futures bars into 4h bars, with the day defined as:
       - Session start: 17:00 (5pm) America/New_York
       - 6 bars per session:
@@ -417,7 +418,8 @@ def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
     Assumes df_1h:
       - DatetimeIndex tz-naive America/New_York
       - Columns: open, high, low, close, volume (+ adj_close optional)
-    """
+"""
+"""
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
 
@@ -454,6 +456,77 @@ def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
         out = out[out["volume"] > 0]
 
     # Final column order & types
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    out = out[[c for c in cols if c in out.columns]]
+    out.columns = out.columns.astype(str)
+
+    return out
+"""
+
+def resample_futures_1h_to_4h_5pm_anchor(
+    df_1h: pd.DataFrame,
+    *,
+    now: pd.Timestamp | None = None,
+    add_current_stub: bool = True,
+) -> pd.DataFrame:
+    """
+    Resample 1h futures bars into 4h bars, anchored to 5pm NY session start.
+
+    - Produces partial 4h bars as soon as there is >=1 underlying 1h bar in that bucket.
+    - Optionally adds a "current bucket" stub (NaNs) if the current 4h bucket is missing entirely.
+    """
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame()
+
+    df_1h = df_1h.sort_index().copy()
+
+    # Ensure adj_close exists
+    if "adj_close" not in df_1h.columns:
+        df_1h["adj_close"] = df_1h["close"]
+
+    # Use caller-provided 'now' or current time (assumes df is NY tz-naive)
+    if now is None:
+        now = pd.Timestamp.now(tz="America/New_York").tz_localize(None)
+    else:
+        now = pd.Timestamp(now)
+        if getattr(now, "tzinfo", None) is not None:
+            now = now.tz_convert("America/New_York").tz_localize(None)
+
+    # Shift index so that 17:00 becomes "00:00" from resample POV
+    shifted = df_1h.copy()
+    shifted.index = pd.to_datetime(shifted.index) - pd.Timedelta(hours=17)
+
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "adj_close": "last",
+        "volume": "sum",
+    }
+
+    out = shifted.resample("4h").agg(agg)
+
+    # Shift back so bars are labeled at true session times
+    out.index = out.index + pd.Timedelta(hours=17)
+
+    # Drop rows that are entirely empty (no underlying 1h data)
+    out = out.dropna(how="all")
+
+    # ✅ DO NOT drop volume==0 here (it can hide legit/partial bars)
+
+    # Add current-bucket stub only if missing
+    if add_current_stub:
+        # current 4h bucket start under the same 17h anchor:
+        bucket_start = (now - pd.Timedelta(hours=17)).floor("4h") + pd.Timedelta(hours=17)
+        if bucket_start not in out.index:
+            stub = pd.DataFrame(
+                [{"open": pd.NA, "high": pd.NA, "low": pd.NA, "close": pd.NA, "adj_close": pd.NA, "volume": pd.NA}],
+                index=pd.DatetimeIndex([bucket_start], name=out.index.name or "Datetime"),
+            )
+            out = pd.concat([out, stub], axis=0).sort_index()
+
+    # Final column order
     cols = ["open", "high", "low", "close", "adj_close", "volume"]
     out = out[[c for c in cols if c in out.columns]]
     out.columns = out.columns.astype(str)
