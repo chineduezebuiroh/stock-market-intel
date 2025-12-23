@@ -394,11 +394,11 @@ def load_futures_intraday(
         session=session,
     )
 
-    #collapse multiple / random minute bars into a singular 1-hour bar
-    df_1h = normalize_futures_1h_index(df_1h)
-
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
+        
+    #collapse multiple / random minute bars into a singular 1-hour bar
+    df_1h = normalize_futures_1h_index(df_1h)
 
     # NEW: patch in partial current hour from recent 5m/15m
     df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
