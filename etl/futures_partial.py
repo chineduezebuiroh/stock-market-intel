@@ -112,7 +112,7 @@ def patch_partial_1h_from_5m(
     bar = _agg_ohlcv(chunk)
     return _upsert_bar(base, hour_start, bar)
 
-
+"""
 def patch_partial_4h_from_5m(
     *,
     df_4h: pd.DataFrame,
@@ -141,3 +141,74 @@ def patch_partial_4h_from_5m(
 
     bar = _agg_ohlcv(chunk)
     return _upsert_bar(base, bucket_start, bar)
+"""
+
+
+def patch_partial_4h_from_5m(
+    *,
+    df_4h: pd.DataFrame,
+    df_5m: pd.DataFrame,
+    now: Optional[datetime] = None,
+) -> pd.DataFrame:
+    if df_4h is None or df_4h.empty:
+        base = pd.DataFrame()
+    else:
+        base = df_4h.copy()
+
+    if df_5m is None or df_5m.empty:
+        return base
+
+    # normalize indexes (you’re using NY tz-naive convention)
+    base.index = pd.to_datetime(base.index)
+
+    df_5m = df_5m.copy()
+    df_5m.index = pd.to_datetime(df_5m.index).tz_localize(None)
+    df_5m = df_5m.sort_index()
+
+    bucket_start = current_4h_bucket_start_5pm_anchor(now)
+    bucket_end = bucket_start + pd.Timedelta(hours=4)
+
+    # 1) If we DO have 5m prints inside the current 4h bucket, aggregate them
+    chunk = df_5m.loc[(df_5m.index >= bucket_start) & (df_5m.index < bucket_end)]
+    if not chunk.empty:
+        bar = _agg_ohlcv(chunk.sort_index())
+        return _upsert_bar(base, bucket_start, bar)
+
+    # 2) Otherwise, create a carry-forward stub row at bucket_start
+    #    Prefer last close from existing 4h base; fallback to last 5m close before bucket_start.
+    last_close = None
+
+    if not base.empty and "close" in base.columns:
+        try:
+            # last known 4h close
+            last_close = float(base.sort_index()["close"].dropna().iloc[-1])
+        except Exception:
+            last_close = None
+
+    if last_close is None and "close" in df_5m.columns:
+        prev_5m = df_5m.loc[df_5m.index < bucket_start]
+        if not prev_5m.empty:
+            try:
+                last_close = float(prev_5m["close"].dropna().iloc[-1])
+            except Exception:
+                last_close = None
+
+    # If we still can’t determine a price, we can’t sensibly stub — return base unchanged.
+    if last_close is None:
+        return base
+
+    stub = pd.Series(
+        {
+            "open": last_close,
+            "high": last_close,
+            "low": last_close,
+            "close": last_close,
+            "volume": 0.0,
+        }
+    )
+
+    # keep adj_close consistent if you use it elsewhere
+    if "adj_close" in base.columns:
+        stub["adj_close"] = last_close
+
+    return _upsert_bar(base, bucket_start, stub)
