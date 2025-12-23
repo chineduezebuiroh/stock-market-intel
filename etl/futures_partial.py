@@ -9,7 +9,8 @@ from typing import Iterable, Optional
 import pandas as pd
 
 from core.guard import now_ny
-from etl.session import ensure_ny_index
+
+from etl.session import ensure_ny_index, NY
 
 
 _OHLCV = ["open", "high", "low", "close", "adj_close", "volume"]
@@ -59,9 +60,10 @@ def _try_load_recent_intraday(load_intraday_fn, symbol: str, session: str) -> pd
 
 def current_hour_start(now: Optional[datetime] = None) -> pd.Timestamp:
     if now is None:
-        now = now_ny()
-    # floor to hour
-    return pd.Timestamp(now.replace(minute=0, second=0, microsecond=0))
+        now = now_ny()  # tz-aware NY
+    # Convert to NY, floor to hour, then drop tz to match your parquet convention
+    n = pd.Timestamp(now.astimezone(NY)).replace(minute=0, second=0, microsecond=0)
+    return n.tz_localize(None)
 
 
 def current_4h_bucket_start_5pm_anchor(now: Optional[datetime] = None) -> pd.Timestamp:
@@ -71,9 +73,9 @@ def current_4h_bucket_start_5pm_anchor(now: Optional[datetime] = None) -> pd.Tim
     """
     if now is None:
         now = now_ny()
-
+    
     # Work in naive NY timestamps (matches your parquet convention)
-    n = pd.Timestamp(now.replace(tzinfo=None))
+    n = pd.Timestamp(now.astimezone(NY)).tz_localize(None)
 
     # Shift so 17:00 becomes 00:00, then floor to 4h, then shift back
     shifted = n - pd.Timedelta(hours=17)
