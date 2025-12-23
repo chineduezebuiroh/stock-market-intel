@@ -10,7 +10,12 @@ from datetime import datetime, timedelta
 import signal
 from contextlib import contextmanager
 
-from etl.session import ensure_current_hour_stub_1h
+#from etl.session import ensure_current_hour_stub_1h
+from etl.futures_partial import (
+    _try_load_recent_intraday,
+    patch_partial_1h_from_5m,
+    patch_partial_4h_from_5m,
+)
 
 class TimeoutException(Exception):
     pass
@@ -395,76 +400,21 @@ def load_futures_intraday(
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
 
+    # NEW: patch in partial current hour from recent 5m/15m
+    df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
+    df_1h = patch_partial_1h_from_5m(df_1h=df_1h, df_5m=df_recent)
+
     if tf == "intraday_1h":
-        # Let update_fixed_window trim to window_bars later
-        df_1h = ensure_current_hour_stub_1h(df_1h)
         return df_1h
 
     # 2) For intraday_4h: resample 1h → 4h
     df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
+    
+    # NEW: patch in partial current 4h bucket from recent 5m/15m
+    df_4h = patch_partial_4h_from_5m(df_4h=df_4h, df_5m=df_recent)
+
     return df_4h
 
-"""
-def resample_futures_1h_to_4h_5pm_anchor(df_1h: pd.DataFrame) -> pd.DataFrame:
-"""
-"""
-    Resample 1h futures bars into 4h bars, with the day defined as:
-      - Session start: 17:00 (5pm) America/New_York
-      - 6 bars per session:
-          17:00–21:00
-          21:00–01:00
-          01:00–05:00
-          05:00–09:00
-          09:00–13:00
-          13:00–17:00
-
-    Assumes df_1h:
-      - DatetimeIndex tz-naive America/New_York
-      - Columns: open, high, low, close, volume (+ adj_close optional)
-"""
-"""
-    if df_1h is None or df_1h.empty:
-        return pd.DataFrame()
-
-    df_1h = df_1h.sort_index().copy()
-
-    # Ensure adj_close exists (mirrors load_intraday_yf / load_eod behavior)
-    if "adj_close" not in df_1h.columns:
-        df_1h["adj_close"] = df_1h["close"]
-
-    # Shift index so that 17:00 becomes "00:00" from resample's POV
-    shifted = df_1h.copy()
-    shifted.index = shifted.index - pd.Timedelta(hours=17)
-
-    agg = {
-        "open": "first",
-        "high": "max",
-        "low": "min",
-        "close": "last",
-        "adj_close": "last",
-        "volume": "sum",
-    }
-
-    # Use '4h' instead of '4H' to avoid FutureWarning
-    out = shifted.resample("4h").agg(agg)
-
-    # Shift back so bars are labeled at the true session times
-    out.index = out.index + pd.Timedelta(hours=17)
-
-    # Drop all-NaN rows
-    out = out.dropna(how="all")
-
-    # Optional: enforce no zero-volume bars
-    if "volume" in out.columns:
-        out = out[out["volume"] > 0]
-
-    # Final column order & types
-    cols = ["open", "high", "low", "close", "adj_close", "volume"]
-    out = out[[c for c in cols if c in out.columns]]
-    out.columns = out.columns.astype(str)
-
-    return out
-"""
 
 def resample_futures_1h_to_4h_5pm_anchor(
     df_1h: pd.DataFrame,
