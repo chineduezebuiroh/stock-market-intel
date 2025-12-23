@@ -99,7 +99,8 @@ def patch_partial_1h_from_5m(
 
     base.index = pd.to_datetime(base.index)
     df_5m = df_5m.copy()
-    df_5m.index = pd.to_datetime(df_5m.index)
+    #df_5m.index = pd.to_datetime(df_5m.index)
+    df_5m.index = pd.to_datetime(df_5m.index).tz_localize(None)
 
     hour_start = current_hour_start(now)
     hour_end = hour_start + pd.Timedelta(hours=1)
@@ -128,7 +129,8 @@ def patch_partial_4h_from_5m(
 
     base.index = pd.to_datetime(base.index)
     df_5m = df_5m.copy()
-    df_5m.index = pd.to_datetime(df_5m.index)
+    #df_5m.index = pd.to_datetime(df_5m.index)
+    df_5m.index = pd.to_datetime(df_5m.index).tz_localize(None)
 
     bucket_start = current_4h_bucket_start_5pm_anchor(now)
     bucket_end = bucket_start + pd.Timedelta(hours=4)
