@@ -36,14 +36,12 @@ def _upsert_bar(df: pd.DataFrame, ts: pd.Timestamp, bar: pd.Series) -> pd.DataFr
     out = df.copy()
     ts = pd.to_datetime(ts)
 
-    # Ensure same index type/naivety as out
-    out_idx = pd.to_datetime(out.index)
-    out.index = out_idx
+    out.index = pd.to_datetime(out.index)  # ok even if empty
 
-    # If row exists: overwrite; else append
-    out.loc[ts, bar.index] = bar.values
-    out = out.sort_index()
-    return out
+    # Align by column name (safer than .values)
+    out.loc[ts, bar.index] = bar
+
+    return out.sort_index()
 
 
 def _try_load_recent_intraday(load_intraday_fn, symbol: str, session: str) -> pd.DataFrame:
