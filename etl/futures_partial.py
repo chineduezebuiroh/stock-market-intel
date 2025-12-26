@@ -80,7 +80,7 @@ def current_4h_bucket_start_5pm_anchor(now: Optional[datetime] = None) -> pd.Tim
     bucket = shifted.floor("4h") + pd.Timedelta(hours=17)
     return bucket
 
-
+"""
 def patch_partial_1h_from_5m(
     *,
     df_1h: pd.DataFrame,
@@ -109,39 +109,86 @@ def patch_partial_1h_from_5m(
 
     bar = _agg_ohlcv(chunk)
     return _upsert_bar(base, hour_start, bar)
-
 """
-def patch_partial_4h_from_5m(
+
+def patch_partial_1h_from_5m(
     *,
-    df_4h: pd.DataFrame,
+    df_1h: pd.DataFrame,
     df_5m: pd.DataFrame,
     now: Optional[datetime] = None,
 ) -> pd.DataFrame:
-    if df_4h is None or df_4h.empty:
-        base = pd.DataFrame()
-    else:
-        base = df_4h.copy()
+    base = df_1h.copy() if df_1h is not None and not df_1h.empty else pd.DataFrame()
 
     if df_5m is None or df_5m.empty:
         return base
 
-    base.index = pd.to_datetime(base.index)
+    # Normalize indexes (NY tz-naive convention)
+    if not base.empty:
+        base.index = pd.to_datetime(base.index)
+
     df_5m = df_5m.copy()
-    #df_5m.index = pd.to_datetime(df_5m.index)
-    df_5m.index = pd.to_datetime(df_5m.index).tz_localize(None)
+    idx5 = pd.to_datetime(df_5m.index)
+    # robust tz stripping
+    if getattr(idx5, "tz", None) is not None:
+        idx5 = idx5.tz_convert("America/New_York").tz_localize(None)
+    df_5m.index = idx5
+    df_5m = df_5m.sort_index()
 
-    bucket_start = current_4h_bucket_start_5pm_anchor(now)
-    bucket_end = bucket_start + pd.Timedelta(hours=4)
+    hour_start = pd.to_datetime(current_hour_start(now))
+    hour_end = hour_start + pd.Timedelta(hours=1)
 
-    chunk = df_5m.loc[(df_5m.index >= bucket_start) & (df_5m.index < bucket_end)].sort_index()
-    if chunk.empty:
+    # If a real 1h row already exists at hour_start (with nonzero vol), don't stomp it.
+    if not base.empty and hour_start in pd.to_datetime(base.index):
+        try:
+            v = base.loc[hour_start, "volume"] if "volume" in base.columns else None
+            if v is not None and float(v) > 0:
+                return base
+        except Exception:
+            pass
+
+    # 1) If we have 5m prints inside the current hour, aggregate them
+    chunk = df_5m.loc[(df_5m.index >= hour_start) & (df_5m.index < hour_end)]
+    if not chunk.empty:
+        bar = _agg_ohlcv(chunk.sort_index())
+        # ensure adj_close exists
+        if "adj_close" not in bar.index:
+            bar["adj_close"] = bar.get("close", float("nan"))
+        return _upsert_bar(base, hour_start, bar)
+
+    # 2) Otherwise create carry-forward stub
+    last_close = None
+
+    if not base.empty and "close" in base.columns:
+        s = base.sort_index()["close"].dropna()
+        if not s.empty:
+            last_close = float(s.iloc[-1])
+
+    if last_close is None and "close" in df_5m.columns:
+        prev_5m = df_5m.loc[df_5m.index < hour_start]
+        s = prev_5m["close"].dropna()
+        if not s.empty:
+            last_close = float(s.iloc[-1])
+
+    if last_close is None:
         return base
 
-    bar = _agg_ohlcv(chunk)
-    return _upsert_bar(base, bucket_start, bar)
+    stub = pd.Series(
+        {
+            "open": last_close,
+            "high": last_close,
+            "low": last_close,
+            "close": last_close,
+            "adj_close": last_close,
+            "volume": 0.0,
+        },
+        dtype="float64",
+    )
+
+    return _upsert_bar(base, hour_start, stub)
+
+
+
 """
-
-
 def patch_partial_4h_from_5m(
     *,
     df_4h: pd.DataFrame,
@@ -208,5 +255,83 @@ def patch_partial_4h_from_5m(
     # keep adj_close consistent if you use it elsewhere
     if "adj_close" in base.columns:
         stub["adj_close"] = last_close
+
+    return _upsert_bar(base, bucket_start, stub)
+"""
+
+
+def patch_partial_4h_from_5m(
+    *,
+    df_4h: pd.DataFrame,
+    df_5m: pd.DataFrame,
+    now: Optional[datetime] = None,
+) -> pd.DataFrame:
+    base = df_4h.copy() if df_4h is not None and not df_4h.empty else pd.DataFrame()
+
+    if df_5m is None or df_5m.empty:
+        return base
+
+    # Normalize indexes (NY tz-naive convention)
+    if not base.empty:
+        base.index = pd.to_datetime(base.index)
+
+    df_5m = df_5m.copy()
+    idx5 = pd.to_datetime(df_5m.index)
+    # robust tz stripping
+    if getattr(idx5, "tz", None) is not None:
+        idx5 = idx5.tz_convert("America/New_York").tz_localize(None)
+    df_5m.index = idx5
+    df_5m = df_5m.sort_index()
+
+    bucket_start = current_4h_bucket_start_5pm_anchor(now)
+    bucket_start = pd.to_datetime(bucket_start)
+    bucket_end = bucket_start + pd.Timedelta(hours=4)
+
+    # If a real 4h row already exists at bucket_start (with nonzero vol), don't stomp it.
+    if not base.empty and bucket_start in pd.to_datetime(base.index):
+        try:
+            v = base.loc[bucket_start, "volume"] if "volume" in base.columns else None
+            if v is not None and float(v) > 0:
+                return base
+        except Exception:
+            pass
+
+    # 1) If we have 5m prints inside the current bucket, aggregate them
+    chunk = df_5m.loc[(df_5m.index >= bucket_start) & (df_5m.index < bucket_end)]
+    if not chunk.empty:
+        bar = _agg_ohlcv(chunk.sort_index())
+        # ensure adj_close exists
+        if "adj_close" not in bar.index:
+            bar["adj_close"] = bar.get("close", float("nan"))
+        return _upsert_bar(base, bucket_start, bar)
+
+    # 2) Otherwise create carry-forward stub
+    last_close = None
+
+    if not base.empty and "close" in base.columns:
+        s = base.sort_index()["close"].dropna()
+        if not s.empty:
+            last_close = float(s.iloc[-1])
+
+    if last_close is None and "close" in df_5m.columns:
+        prev_5m = df_5m.loc[df_5m.index < bucket_start]
+        s = prev_5m["close"].dropna()
+        if not s.empty:
+            last_close = float(s.iloc[-1])
+
+    if last_close is None:
+        return base
+
+    stub = pd.Series(
+        {
+            "open": last_close,
+            "high": last_close,
+            "low": last_close,
+            "close": last_close,
+            "adj_close": last_close,
+            "volume": 0.0,
+        },
+        dtype="float64",
+    )
 
     return _upsert_bar(base, bucket_start, stub)
