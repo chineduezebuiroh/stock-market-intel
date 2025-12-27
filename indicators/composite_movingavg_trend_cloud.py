@@ -7,6 +7,44 @@ import pandas as pd
 from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
 
 
+def _movingavg_trend_cloud_core(
+    df: pd.DataFrame,
+    *,
+    fast_length: int = 11,
+    displace: int = 0,
+) -> tuple[pd.DatetimeIndex, pd.Series, pd.Series, pd.Series]:
+    """
+    Shared foundation:
+      - validates 'close'
+      - sorts chronologically
+      - applies displace (TOS-style: price[-displace] => shift(-displace))
+      - computes: fast_ema, fast_sma, fast_wilders
+
+    Returns (sorted_index, fast_ema, fast_sma, fast_wilders).
+    If invalid/insufficient history: returns empty float series aligned to sorted index.
+    """
+    if df is None or df.empty or "close" not in df.columns:
+        idx = df.index if df is not None else pd.DatetimeIndex([])
+        empty = pd.Series(index=idx, dtype="float64")
+        return idx, empty, empty, empty
+
+    df_sorted = df.sort_index()
+    close = df_sorted["close"].astype(float)
+
+    price = close.shift(-displace) if displace != 0 else close
+
+    fl = int(fast_length)
+    if len(price) < fl:
+        empty = pd.Series(index=df_sorted.index, dtype="float64")
+        return df_sorted.index, empty, empty, empty
+
+    fast_ema = _ema(price, fl)
+    fast_sma = _sma(price, fl)
+    fast_wilders = _wema(price, fl)
+
+    return df_sorted.index, fast_ema, fast_sma, fast_wilders
+
+
 def indicator_movingavg_trend_bullish(
     df: pd.DataFrame,
     fast_length: int = 11,
@@ -14,59 +52,27 @@ def indicator_movingavg_trend_bullish(
     **_,
 ) -> pd.Series:
     """
-    MovingAvg_Trend_Cloud (Thinkorswim port).
-
-    Uses fast EMA / SMA / Wilder's MA of (optionally displaced) close:
-
-      - BullishTrend  = fast_EMA > fast_Wilders and fast_SMA > fast_Wilders
-      - BullishTurn   = fast_EMA > fast_SMA
-
-    Encoding (matches TOS scan priority):
-        2   = BullishTrend
-        1   = BullishTurn (no trend)
-        0   = otherwise
+    Encoding:
+        2 = BullishTrend
+        1 = BullishTurn (no trend)
+        0 = otherwise
     """
-    if "close" not in df.columns:
-        return pd.Series(index=df.index, dtype="float64")
+    idx_sorted, fast_ema, fast_sma, fast_wilders = _movingavg_trend_cloud_core(
+        df, fast_length=fast_length, displace=displace
+    )
 
-    # Ensure chronological order
-    df_sorted = df.sort_index()
-    close = df_sorted["close"].astype(float)
-
-    # Handle displace similar to price[-displace] in TOS:
-    # positive displace => peek forward; negative => lag.
-    if displace != 0:
-        price = close.shift(-displace)
-    else:
-        price = close
-
-    # Need at least fast_length bars
-    if len(price) < fast_length:
-        return pd.Series(index=df.index, dtype="float64")
-
-    # Fast EMA / SMA / Wilder's MA (we already have _ema and _wema helpers)
-    fast_ema = _ema(price, fast_length)
-    fast_sma = _sma(price, fast_length)
-    fast_wilders = _wema(price, fast_length)
+    # If we returned empties, just return zeros on df.index
+    if fast_ema.empty:
+        return pd.Series(0.0, index=df.index, dtype="float64")
 
     bullish_trend = (fast_ema > fast_wilders) & (fast_sma > fast_wilders)
-    bearish_trend = (fast_ema < fast_wilders) & (fast_sma < fast_wilders)
-
     bullish_turn = fast_ema > fast_sma
-    bearish_turn = fast_ema < fast_sma
 
-    # Start from 0, then apply conditions in order of *increasing* priority,
-    # so that later assignments (trend) override earlier ones (turn).
-    scan = pd.Series(0.0, index=df_sorted.index)
-
-    #scan[bearish_turn] = -1.0
+    scan = pd.Series(0.0, index=idx_sorted)
     scan[bullish_turn] = 1.0
-    #scan[bearish_trend] = -2.0
     scan[bullish_trend] = 2.0
 
-    # Reindex to original df index (usually already sorted)
     return scan.reindex(df.index)
-  
 
 
 def indicator_movingavg_trend_bearish(
@@ -76,55 +82,23 @@ def indicator_movingavg_trend_bearish(
     **_,
 ) -> pd.Series:
     """
-    MovingAvg_Trend_Cloud (Thinkorswim port).
-
-    Uses fast EMA / SMA / Wilder's MA of (optionally displaced) close:
-
-      - BearishTrend  = fast_EMA < fast_Wilders and fast_SMA < fast_Wilders
-      - BearishTurn   = fast_EMA < fast_SMA
-
-    Encoding (matches TOS scan priority):
-       -2   = BearishTrend
-       -1   = BearishTurn (no trend)
-        0   = otherwise
+    Encoding:
+       -2 = BearishTrend
+       -1 = BearishTurn (no trend)
+        0 = otherwise
     """
-    if "close" not in df.columns:
-        return pd.Series(index=df.index, dtype="float64")
+    idx_sorted, fast_ema, fast_sma, fast_wilders = _movingavg_trend_cloud_core(
+        df, fast_length=fast_length, displace=displace
+    )
 
-    # Ensure chronological order
-    df_sorted = df.sort_index()
-    close = df_sorted["close"].astype(float)
+    if fast_ema.empty:
+        return pd.Series(0.0, index=df.index, dtype="float64")
 
-    # Handle displace similar to price[-displace] in TOS:
-    # positive displace => peek forward; negative => lag.
-    if displace != 0:
-        price = close.shift(-displace)
-    else:
-        price = close
-
-    # Need at least fast_length bars
-    if len(price) < fast_length:
-        return pd.Series(index=df.index, dtype="float64")
-
-    # Fast EMA / SMA / Wilder's MA (we already have _ema and _wema helpers)
-    fast_ema = _ema(price, fast_length)
-    fast_sma = _sma(price, fast_length)
-    fast_wilders = _wema(price, fast_length)
-
-    bullish_trend = (fast_ema > fast_wilders) & (fast_sma > fast_wilders)
     bearish_trend = (fast_ema < fast_wilders) & (fast_sma < fast_wilders)
-
-    bullish_turn = fast_ema > fast_sma
     bearish_turn = fast_ema < fast_sma
 
-    # Start from 0, then apply conditions in order of *increasing* priority,
-    # so that later assignments (trend) override earlier ones (turn).
-    scan = pd.Series(0.0, index=df_sorted.index)
-
+    scan = pd.Series(0.0, index=idx_sorted)
     scan[bearish_turn] = -1.0
-    #scan[bullish_turn] = 1.0
     scan[bearish_trend] = -2.0
-    #scan[bullish_trend] = 2.0
 
-    # Reindex to original df index (usually already sorted)
     return scan.reindex(df.index)
