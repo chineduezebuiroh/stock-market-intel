@@ -63,7 +63,8 @@ def indicator_movingavg_trend_bullish(
 
     # If we returned empties, just return zeros on df.index
     if fast_ema.empty:
-        return pd.Series(0.0, index=df.index, dtype="float64")
+        #return pd.Series(0.0, index=df.index, dtype="float64")
+        return pd.Series(index=df.index, dtype="float64")
 
     bullish_trend = (fast_ema > fast_wilders) & (fast_sma > fast_wilders)
     bullish_turn = fast_ema > fast_sma
@@ -92,7 +93,8 @@ def indicator_movingavg_trend_bearish(
     )
 
     if fast_ema.empty:
-        return pd.Series(0.0, index=df.index, dtype="float64")
+        #return pd.Series(0.0, index=df.index, dtype="float64")
+        return pd.Series(index=df.index, dtype="float64")
 
     bearish_trend = (fast_ema < fast_wilders) & (fast_sma < fast_wilders)
     bearish_turn = fast_ema < fast_sma
