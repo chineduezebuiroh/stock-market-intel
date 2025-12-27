@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
+from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve, _macdv
 
 
 def indicator_macdv_bullish(
@@ -30,29 +30,19 @@ def indicator_macdv_bullish(
 
     Uses bar offsets like macdv[z], macdv[z+1], macdv[z+2] where z is bars ago.
     """
-    required = {"high", "low", "close"}
-    if not required.issubset(df.columns):
+    macdv, signal = _macdv(
+        df,
+        fast_length=fast_length,
+        slow_length=slow_length,
+        signal_length=signal_length,
+        atr_length=atr_length,
+    )
+    if macdv.empty or signal.empty:
         return pd.Series(index=df.index, dtype="float64")
 
-    # Ensure chronological order
     df_sorted = df.sort_index()
-    price = df_sorted["close"].astype(float)
-
-    # ------------------------------------------------------------------
-    # MACD-V core: fast/slow EMAs and ATR-normalized difference
-    # ------------------------------------------------------------------
-    fast_ema = _ema(price, fast_length)
-    slow_ema = _ema(price, slow_length)
-
-    # ATR over atr_length bars
-    atr = _atr(df_sorted, atr_length)
-    atr_safe = atr.replace(0, np.nan)
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        macdv = (fast_ema - slow_ema) / atr_safe * 100.0
-
-    # Signal line: EMA of MACD-V
-    signal = _ema(macdv, signal_length)
+    macdv = macdv.reindex(df_sorted.index)
+    signal = signal.reindex(df_sorted.index)
 
     # ------------------------------------------------------------------
     # Shifted versions to emulate macdv[z], macdv[z+1], macdv[z+2], etc.
@@ -149,30 +139,21 @@ def indicator_macdv_bearish(
 
     Uses bar offsets like macdv[z], macdv[z+1], macdv[z+2] where z is bars ago.
     """
-    required = {"high", "low", "close"}
-    if not required.issubset(df.columns):
+    
+    macdv, signal = _macdv(
+        df,
+        fast_length=fast_length,
+        slow_length=slow_length,
+        signal_length=signal_length,
+        atr_length=atr_length,
+    )
+    if macdv.empty or signal.empty:
         return pd.Series(index=df.index, dtype="float64")
 
-    # Ensure chronological order
     df_sorted = df.sort_index()
-    price = df_sorted["close"].astype(float)
-
-    # ------------------------------------------------------------------
-    # MACD-V core: fast/slow EMAs and ATR-normalized difference
-    # ------------------------------------------------------------------
-    fast_ema = _ema(price, fast_length)
-    slow_ema = _ema(price, slow_length)
-
-    # ATR over atr_length bars
-    atr = _atr(df_sorted, atr_length)
-    atr_safe = atr.replace(0, np.nan)
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        macdv = (fast_ema - slow_ema) / atr_safe * 100.0
-
-    # Signal line: EMA of MACD-V
-    signal = _ema(macdv, signal_length)
-
+    macdv = macdv.reindex(df_sorted.index)
+    signal = signal.reindex(df_sorted.index)
+    
     # ------------------------------------------------------------------
     # Shifted versions to emulate macdv[z], macdv[z+1], macdv[z+2], etc.
     # In TOS, x[1] = one bar ago, so we use Series.shift(1).
@@ -268,29 +249,20 @@ def indicator_macdv_guardrail(
 
     Uses bar offsets like macdv[z], macdv[z+1], macdv[z+2] where z is bars ago.
     """
-    required = {"high", "low", "close"}
-    if not required.issubset(df.columns):
+    
+    macdv, signal = _macdv(
+        df,
+        fast_length=fast_length,
+        slow_length=slow_length,
+        signal_length=signal_length,
+        atr_length=atr_length,
+    )
+    if macdv.empty or signal.empty:
         return pd.Series(index=df.index, dtype="float64")
 
-    # Ensure chronological order
     df_sorted = df.sort_index()
-    price = df_sorted["close"].astype(float)
-
-    # ------------------------------------------------------------------
-    # MACD-V core: fast/slow EMAs and ATR-normalized difference
-    # ------------------------------------------------------------------
-    fast_ema = _ema(price, fast_length)
-    slow_ema = _ema(price, slow_length)
-
-    # ATR over atr_length bars
-    atr = _atr(df_sorted, atr_length)
-    atr_safe = atr.replace(0, np.nan)
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        macdv = (fast_ema - slow_ema) / atr_safe * 100.0
-
-    # Signal line: EMA of MACD-V
-    signal = _ema(macdv, signal_length)
+    macdv = macdv.reindex(df_sorted.index)
+    signal = signal.reindex(df_sorted.index)
 
     # ------------------------------------------------------------------
     # Shifted versions to emulate macdv[z], macdv[z+1], macdv[z+2], etc.
