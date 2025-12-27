@@ -31,7 +31,7 @@ def _movingavg_trend_cloud_core(
     df_sorted = df.sort_index()
     close = df_sorted["close"].astype(float)
 
-    price = close.shift(-displace) if displace != 0 else close
+    price = close.shift(displace) if displace != 0 else close
 
     fl = int(fast_length)
     if len(price) < fl:
