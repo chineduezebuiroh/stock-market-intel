@@ -36,10 +36,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 15
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 15
+        displace: 1
 
       macdv_core_bull:
         id: macdv_core_bullish
@@ -93,10 +95,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 10
+        displace: 0
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 10
+        displace: 0
 
       macdv_core_bull:
         id: macdv_core_bullish
@@ -150,10 +154,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 13
+        displace: 0
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 13
+        displace: 0
 
       macdv_core_bull:
         id: macdv_core_bullish
@@ -207,10 +213,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 12
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 12
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -264,10 +272,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 10
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 10
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -321,10 +331,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 10
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 10
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -379,10 +391,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 10
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 10
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -436,10 +450,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 12
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 12
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -493,10 +509,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 10
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 10
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -550,10 +568,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 13
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 13
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
@@ -607,10 +627,12 @@ indicators:
       ma_trend_bullish:
         id: movingavg_trend_bullish
         fast_length: 12
+        displace: 1
 
       ma_trend_bearish:
         id: movingavg_trend_bearish
         fast_length: 12
+        displace: 1
         
       macdv_core_bull:
         id: macdv_core_bullish
