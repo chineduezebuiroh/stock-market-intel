@@ -125,6 +125,45 @@ def _atr(df: pd.DataFrame, length: int) -> pd.Series:
     return _wema(tr, length)
 
 
+def _macdv(
+    df: pd.DataFrame,
+    *,
+    fast_length: int = 12,
+    slow_length: int = 26,
+    signal_length: int = 9,
+    atr_length: int = 26,
+) -> tuple[pd.Series, pd.Series]:
+    """
+    MACD-V core (Thinkorswim-style):
+
+      macdv = (EMA(close, fast) - EMA(close, slow)) / ATR(atr_length) * 100
+      signal = EMA(macdv, signal_length)
+
+    Returns (macdv, signal) as Series aligned to df.index.
+    """
+    required = {"high", "low", "close"}
+    if df is None or df.empty or not required.issubset(df.columns):
+        empty = pd.Series(index=(df.index if df is not None else None), dtype="float64")
+        return empty, empty
+
+    df_sorted = df.sort_index()
+    price = df_sorted["close"].astype(float)
+
+    fast_ema = _ema(price, int(fast_length))
+    slow_ema = _ema(price, int(slow_length))
+
+    atr = _atr(df_sorted, int(atr_length))
+    atr_safe = atr.replace(0, np.nan)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        macdv = (fast_ema - slow_ema) / atr_safe * 100.0
+
+    signal = _ema(macdv, int(signal_length))
+
+    # Return aligned to original df.index (not sorted index)
+    return macdv.reindex(df.index), signal.reindex(df.index)
+
+
 # Define a function to calculate percentile rank of the last element
 def _pctrank(x):
     # x is a Series representing the current window
