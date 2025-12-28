@@ -241,18 +241,43 @@ def evaluate_stocks_shortlist_signal(
     # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
     # ------------------------------------------------------
-    if long_score <= 0 and short_score <= 0:
-        return "none", long_score, short_score
+    if 0 <= long_score < 4 and 0 <= short_score < 4:
+        #return "none", long_score, short_score
+        base_signal = "none"
 
     if long_score >= 4.0:
-        return "long", long_score, short_score
+        #return "long", long_score, short_score
+        base_signal = "long"
 
     if short_score >= 4.0:
-        return "short", long_score, short_score
+        #return "short", long_score, short_score
+        base_signal = "short"
 
-    return "none", long_score, short_score
+    # ----------------------------------------------------------
+    # Block 3: Volume / Participation (lower + middle)
+    # ----------------------------------------------------------
+    vol_ratio_th1 = 0.05 # <-- 5%
+    vol_ratio_th2 = 0.10 # <-- 10%
+    vol_ratio_th3 = 0.25 # <-- 25%
 
+    # Significant volume + beating SPY/QQQ volume baseline -> strong participation
+    if not pd.isna(up_wyckoff) and ((md_sigvol == 2.0 and md_vol_ratio > vol_ratio_th1) or
+                                    (lw_sigvol == 2.0 and lw_vol_ratio > vol_ratio_th1) or
+                                    (md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th3) or
+                                    (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th3)):
+        long_score += 1.0
+        short_score += 1.0
+    
+    if pd.isna(up_wyckoff) and ((md_sigvol == 2.0 and md_vol_ratio > vol_ratio_th2) or 
+                                (lw_sigvol == 2.0 and lw_vol_ratio > vol_ratio_th2) or 
+                                (md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th3) or 
+                                (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th3)):
+        long_score += 1.0
+        short_score += 1.0
 
+    #return "none", long_score, short_score
+    return base_signal, long_score, short_score
+    
 
 # =========================================================================
 # STOCK (OPTIONS-ELIGIBLE) scoring functions
@@ -275,25 +300,27 @@ def evaluate_stocks_options_signal(
     for options trades.
     """
     base_signal, long_score, short_score = evaluate_stocks_shortlist_signal(row, exh_abs_col, sig_vol_col)
-
+    """
     vol_ratio_th1 = 0.05 # <-- 5%
     vol_ratio_th2 = 0.10 # <-- 10%
     vol_ratio_th3 = 0.25 # <-- 25%
-
+    """
     # If there is no directional signal, nothing to add.
     if base_signal not in ("long", "short"):
         return base_signal, long_score, short_score
 
+    """
     up_wyckoff = row.get("upper_wyckoff_stage", np.nan)
     md_sigvol = row.get("middle_sig_vol_current_bar", np.nan)
     md_vol_ratio = row.get("middle_spy_qqq_vol_ma_ratio", np.nan)
     lw_sigvol = row.get(sig_vol_col, np.nan)
     lw_vol_ratio = row.get("lower_spy_qqq_vol_ma_ratio", np.nan)
-
+    """
     # ------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
     # ------------------------------------------------------
     # Significant volume + beating SPY/QQQ volume baseline -> strong participation
+    """
     if not pd.isna(up_wyckoff) and ((md_sigvol == 2.0 and md_vol_ratio > vol_ratio_th1) or
                                     (lw_sigvol == 2.0 and lw_vol_ratio > vol_ratio_th1) or
                                     (md_sigvol == 1.0 and md_vol_ratio > vol_ratio_th3) or
@@ -307,6 +334,7 @@ def evaluate_stocks_options_signal(
                                 (lw_sigvol == 1.0 and lw_vol_ratio > vol_ratio_th3)):
         long_score += 1.0
         short_score += 1.0
+    """
 
     # ------------------------------------------------------
     # Decision mapping (v1 thresholds, easy to tune)
