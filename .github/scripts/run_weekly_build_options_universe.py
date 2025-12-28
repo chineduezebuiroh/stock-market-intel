@@ -144,7 +144,8 @@ def main() -> None:
 
     # ✅ Scheduled runs: enforce DST-aware time window
     now_time = now_ny()
-    weekday = now.weekday()  # Monday=0 ... Sunday=6
+    #weekday = now.weekday()  # Monday=0 ... Sunday=6
+    weekday = now_time.weekday()  # Monday=0 ... Sunday=6
 
     # Require Sunday (6)
     if weekday != 6:
