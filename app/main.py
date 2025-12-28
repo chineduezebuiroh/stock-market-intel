@@ -654,19 +654,6 @@ def render_combo_tab_stocks_c_dwm_shortlist():
 # Layout / Tabs
 # =============================================================================
 st.title("Stock Market Intel – Multi-Timeframe Dashboard")
-"""
-tab_daily, tab_weekly, tab_monthly, tab_130mdw, tab_dwm, tab_wmq, tab_mqy = st.tabs(
-    [
-        "Stocks – Daily",
-        "Stocks – Weekly",
-        "Stocks – Monthly",
-        "Stocks – 130m/D/W (Combos)",
-        "Stocks – D/W/M (Combos)",
-        "Stocks – W/M/Q (Combos)",
-        "Stocks – M/Q/Y (Combos)",
-    ]
-)
-"""
 
 tab_daily, tab_weekly, tab_monthly, tab_stocks_mtf, tab_futures_mtf = st.tabs(
     [
@@ -679,14 +666,10 @@ tab_daily, tab_weekly, tab_monthly, tab_stocks_mtf, tab_futures_mtf = st.tabs(
 )
 
 
-
 with tab_daily:
     st.subheader("Stocks – Daily Snapshot")
     p = DATA / "snapshot_stocks_daily.parquet"
-    """
-    if p.exists():
-        df = pd.read_parquet(p)
-    """
+
     df = load_parquet_safe(p)
     if df is not None and not df.empty:
         # optional: sort by symbol
@@ -698,10 +681,7 @@ with tab_daily:
 with tab_weekly:
     st.subheader("Stocks – Weekly Snapshot")
     p = DATA / "snapshot_stocks_weekly.parquet"
-    """
-    if p.exists():
-        df = pd.read_parquet(p)
-    """
+
     df = load_parquet_safe(p)
     if df is not None and not df.empty:
         df = df.sort_values("symbol")
@@ -712,10 +692,7 @@ with tab_weekly:
 with tab_monthly:
     st.subheader("Stocks – Monthly Snapshot")
     p = DATA / "snapshot_stocks_monthly.parquet"
-    """
-    if p.exists():
-        df = pd.read_parquet(p)
-    """
+
     df = load_parquet_safe(p)
     if df is not None and not df.empty:
         df = df.sort_values("symbol")
