@@ -31,7 +31,7 @@ def near_4h_grid(now: datetime) -> bool:
 
     # allow around HH:01
     #if abs(t.minute - 1) > MINUTE_TOLERANCE:
-    diff = t.minute - 1
+    diff = t.minute
     if not (0 <= diff <= MINUTE_TOLERANCE):
         return False
 
