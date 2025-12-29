@@ -35,7 +35,6 @@ def _agg_ohlcv(g: pd.DataFrame) -> pd.Series:
     )
 
 
-
 def resample_1h_to_daily(df_1h: pd.DataFrame) -> pd.DataFrame:
     """
     Build futures daily bars from 1h bars using session trade_date.
@@ -81,19 +80,6 @@ def resample_daily_to_weekly(df_daily: pd.DataFrame) -> pd.DataFrame:
     tmp = d.copy()
     tmp["_wk"] = wk_key.values
     
-    """
-    weekly = tmp.groupby("_wk", sort=True, as_index=True).apply(
-        lambda g: pd.Series(
-            {
-                "open": g["open"].iloc[0],
-                "high": g["high"].max(),
-                "low": g["low"].min(),
-                "close": g["close"].iloc[-1],
-                "volume": g["volume"].sum(),
-            }
-        )
-    )
-    """
     weekly = tmp.groupby("_wk", sort=True, as_index=True).apply(
            lambda g: pd.Series(
                {
@@ -133,19 +119,6 @@ def resample_daily_to_monthly(df_daily: pd.DataFrame) -> pd.DataFrame:
     tmp = d.copy()
     tmp["_m"] = month_key
 
-    """
-    monthly = tmp.groupby("_m", sort=True, as_index=True).apply(
-        lambda g: pd.Series(
-            {
-                "open": g["open"].iloc[0],
-                "high": g["high"].max(),
-                "low": g["low"].min(),
-                "close": g["close"].iloc[-1],
-                "volume": g["volume"].sum(),
-            }
-        )
-    )
-    """
     monthly = tmp.groupby("_m", sort=True, as_index=True).apply(
            lambda g: pd.Series(
                {
