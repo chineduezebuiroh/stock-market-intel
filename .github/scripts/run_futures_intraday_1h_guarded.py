@@ -49,7 +49,7 @@ def in_futures_session(now: datetime) -> bool:
 
 
 def near_hour_plus_one(now: datetime) -> bool:
-    diff = now.minute - 1
+    diff = now.minute
     return 0 <= diff <= MINUTE_TOLERANCE
 
 
