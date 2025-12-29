@@ -12,12 +12,10 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import now_ny  # ✅ central TZ-aware NY now
+from core.guard import now_ny, in_futures_session  # ✅ central TZ-aware NY now
 from core.health import run_combo_health, print_results
 #from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
-
-from run_futures_intraday_1h_guarded import in_futures_session
 
 # =======================================================
 # ---- Config: cadence window ----
