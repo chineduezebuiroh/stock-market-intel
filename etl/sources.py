@@ -455,7 +455,8 @@ def resample_futures_1h_to_4h_5pm_anchor(
         "low": "min",
         "close": "last",
         "adj_close": "last",
-        "volume": "sum",
+        # critical: empty buckets must remain NaN, not 0
+        "volume": lambda x: x.sum(min_count=1),
     }
 
     out = shifted.resample("4h").agg(agg)
@@ -463,11 +464,13 @@ def resample_futures_1h_to_4h_5pm_anchor(
     # Shift back so bars are labeled at true session times
     out.index = out.index + pd.Timedelta(hours=17)
 
-    # Drop rows that are entirely empty (no underlying 1h data)
-    out = out.dropna(how="all")
+    # drop buckets with no price data
+    out = out.dropna(subset=["open", "high", "low", "close"], how="all")
+    
+    # optional: if you want to ensure "close" exists for indicators
+    #out = out.dropna(subset=["close"])
 
-    # ✅ DO NOT drop volume==0 here (it can hide legit/partial bars)
-
+    """
     # Add current-bucket stub only if missing
     if add_current_stub:
         # current 4h bucket start under the same 17h anchor:
@@ -484,6 +487,13 @@ def resample_futures_1h_to_4h_5pm_anchor(
     out = out[[c for c in cols if c in out.columns]]
     out.columns = out.columns.astype(str)
 
+    return out
+    """
+
+    # column order
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    out = out[[c for c in cols if c in out.columns]]
+    out.columns = out.columns.astype(str)
     return out
 
 
