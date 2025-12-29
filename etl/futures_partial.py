@@ -8,7 +8,9 @@ from typing import Iterable, Optional
 
 import pandas as pd
 
-from core.guard import now_ny
+from core.guard import now_ny, in_futures_session
+
+from core.sessions import in_futures_session  # wherever you decide to place it
 
 from etl.session import ensure_ny_index, NY
 
@@ -80,7 +82,7 @@ def current_4h_bucket_start_5pm_anchor(now: Optional[datetime] = None) -> pd.Tim
     bucket = shifted.floor("4h") + pd.Timedelta(hours=17)
     return bucket
 
-
+"""
 def patch_partial_1h_from_5m(
     *,
     df_1h: pd.DataFrame,
@@ -163,6 +165,89 @@ def patch_partial_1h_from_5m(
     )
 
     return _upsert_bar(base, hour_start, stub)
+"""
+
+
+def patch_partial_1h_from_5m(
+    *,
+    df_1h: pd.DataFrame,
+    df_5m: pd.DataFrame,
+    now: Optional[datetime] = None,
+    symbol: Optional[str] = None,
+) -> pd.DataFrame:
+
+    base = df_1h.copy() if df_1h is not None and not df_1h.empty else pd.DataFrame()
+
+    if df_5m is None or df_5m.empty:
+        return base
+
+    if not base.empty:
+        base.index = pd.to_datetime(base.index)
+
+    df_5m = df_5m.copy()
+    idx5 = pd.to_datetime(df_5m.index)
+    if getattr(idx5, "tz", None) is not None:
+        idx5 = idx5.tz_convert("America/New_York").tz_localize(None)
+    df_5m.index = idx5
+    df_5m = df_5m.sort_index()
+
+    hour_start = pd.to_datetime(current_hour_start(now))
+    hour_end = hour_start + pd.Timedelta(hours=1)
+
+    # ✅ CHANGE 2: never stub outside futures session
+    # if not in_futures_session(now_ny() if now is None else now):
+    #     return base
+    now_eff = now_ny() if now is None else now
+    if not in_futures_session(now_eff):
+        return base
+
+    existing_row_exists = (not base.empty and hour_start in base.index)
+
+    # 1) If we have 5m prints inside the current hour, aggregate them (OK to overwrite)
+    chunk = df_5m.loc[(df_5m.index >= hour_start) & (df_5m.index < hour_end)]
+    if not chunk.empty:
+        bar = _agg_ohlcv(chunk)
+        if "adj_close" not in bar.index:
+            bar["adj_close"] = bar.get("close", float("nan"))
+        return _upsert_bar(base, hour_start, bar)
+
+    # ✅ CHANGE 1: if bar already exists but no 5m prints, do NOT stub over it
+    if existing_row_exists:
+        return base
+
+    # 2) Otherwise create carry-forward stub
+    last_close = None
+
+    if not base.empty and "close" in base.columns:
+        s = base.sort_index()["close"].dropna()
+        if not s.empty:
+            last_close = float(s.iloc[-1])
+
+    if last_close is None and "close" in df_5m.columns:
+        prev_5m = df_5m.loc[df_5m.index < hour_start]
+        s = prev_5m["close"].dropna()
+        if not s.empty:
+            last_close = float(s.iloc[-1])
+
+    if last_close is None:
+        return base
+
+    sym = f"{symbol} " if symbol else ""
+    print(f"[STUB][1H] {sym}@ {hour_start} (vol=0, close={last_close})", flush=True)
+
+    stub = pd.Series(
+        {
+            "open": last_close,
+            "high": last_close,
+            "low": last_close,
+            "close": last_close,
+            "adj_close": last_close,
+            "volume": 0.0,
+        },
+        dtype="float64",
+    )
+
+    return _upsert_bar(base, hour_start, stub)
 
 
 def patch_partial_4h_from_5m(
@@ -190,27 +275,30 @@ def patch_partial_4h_from_5m(
     df_5m.index = idx5
     df_5m = df_5m.sort_index()
 
-    bucket_start = current_4h_bucket_start_5pm_anchor(now)
-    bucket_start = pd.to_datetime(bucket_start)
+    bucket_start = pd.to_datetime(current_4h_bucket_start_5pm_anchor(now))
     bucket_end = bucket_start + pd.Timedelta(hours=4)
 
-    # If a real 4h row already exists at bucket_start (with nonzero vol), don't stomp it.
-    if not base.empty and bucket_start in pd.to_datetime(base.index):
-        try:
-            v = base.loc[bucket_start, "volume"] if "volume" in base.columns else None
-            if v is not None and float(v) > 0:
-                return base
-        except Exception:
-            pass
+    # ✅ CHANGE 2: never stub outside futures session
+    # (place in a shared module; this is just the call site)
+    # if not in_futures_session(now_ny() if now is None else now):
+    #     return base
+    now_eff = now_ny() if now is None else now
+    if not in_futures_session(now_eff):
+        return base
 
-    # 1) If we have 5m prints inside the current bucket, aggregate them
+    existing_row_exists = (not base.empty and bucket_start in base.index)
+
+    # 1) If we have 5m prints inside the current bucket, aggregate them (OK to overwrite)
     chunk = df_5m.loc[(df_5m.index >= bucket_start) & (df_5m.index < bucket_end)]
     if not chunk.empty:
-        bar = _agg_ohlcv(chunk.sort_index())
-        # ensure adj_close exists
+        bar = _agg_ohlcv(chunk)
         if "adj_close" not in bar.index:
             bar["adj_close"] = bar.get("close", float("nan"))
         return _upsert_bar(base, bucket_start, bar)
+
+    # ✅ CHANGE 1: if bar already exists but no 5m prints, do NOT stub over it
+    if existing_row_exists:
+        return base
 
     # 2) Otherwise create carry-forward stub
     last_close = None
@@ -230,10 +318,7 @@ def patch_partial_4h_from_5m(
         return base
 
     sym = f"{symbol} " if symbol else ""
-    print(
-        f"[STUB][4H] {sym}@ {hour_start} (vol=0, close={last_close})",
-        flush=True,
-    )
+    print(f"[STUB][4H] {sym}@ {bucket_start} (vol=0, close={last_close})", flush=True)
 
     stub = pd.Series(
         {
@@ -248,3 +333,4 @@ def patch_partial_4h_from_5m(
     )
 
     return _upsert_bar(base, bucket_start, stub)
+    
