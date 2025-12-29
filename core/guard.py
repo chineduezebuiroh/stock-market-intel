@@ -22,8 +22,36 @@ NY_TZ = ZoneInfo("America/New_York")
 def now_ny() -> datetime:
     return datetime.now(NY_TZ)
 
+
+def in_futures_session(now: datetime) -> bool:
+    """
+    CME futures week (approx):
+      - Closed Sat all day
+      - Opens Sun 18:01 ET
+      - Closes Fri 16:01 ET
+    Assumes `now` is timezone-aware in America/New_York (or at least NY-local time).
+    """
+    dow = now.weekday()  # Mon=0 .. Sun=6
+    t = now.time()
+
+    if dow == 5:  # Saturday
+        return False
+
+    if dow == 6:  # Sunday
+        return (t.hour > 18) or (t.hour == 18 and t.minute >= 1)
+
+    if dow in (0, 1, 2, 3):  # Mon–Thu
+        return True
+
+    if dow == 4:  # Friday
+        return (t.hour < 16) or (t.hour == 16 and t.minute < 1)
+
+    return False
+
+
 def minutes_since_midnight(t: time) -> int:
     return t.hour * 60 + t.minute
+
 
 def _fmt_dt(dt: datetime) -> str:
     # Stable, filename-safe-ish timestamp (no ":" or "+")
