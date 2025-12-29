@@ -10,8 +10,6 @@ import pandas as pd
 
 from core.guard import now_ny, in_futures_session
 
-from core.sessions import in_futures_session  # wherever you decide to place it
-
 from etl.session import ensure_ny_index, NY
 
 
