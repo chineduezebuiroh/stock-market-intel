@@ -158,12 +158,12 @@ def main() -> None:
 
     if diff > TOLERANCE_MIN:
         print(
-            f"[INFO] {now} local (NY) is outside +/-{TOLERANCE_MIN} minutes "
+            f"[INFO] {now_time} local (NY) is outside +/-{TOLERANCE_MIN} minutes "
             f"of target {TARGET_TIME}. Skipping options-universe build."
         )
         sys.exit(0)
 
-    print(f"[INFO] Within window at {now} NY. Running weekly stocks rollup profile...")
+    print(f"[INFO] Within window at {now_time} NY. Running weekly stocks rollup profile...")
     run_profile()
     print("[OK] options universe build completed.")
 
