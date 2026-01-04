@@ -5,6 +5,7 @@ CIBR,First Trust NASDAQ Cybersecurity ETF
 DGRO,iShares Core Dividend Growth ETF
 DGRW,WisdomTree U.S. Quality Dividend Growth ETF
 DIA,SPDR Dow Jones Industrial Average ETF Trust
+EFA,iShares MSCI EAFE ETF
 EFV,iShares MSCI EAFE Value ETF
 EWA,iShares MSCI Australia ETF
 FBND,Fidelity Total Bond ETF
@@ -18,6 +19,7 @@ IGM,iShares Expanded Tech Sector ETF
 IGV,iShares Expanded Tech-Software Sector ETF
 IJH,iShares Core S&P Mid-Cap ETF
 IJR,iShares Core S&P Small-Cap ETF
+ILF,iShares Latin America 40 ETF
 INDA,iShares MSCI India ETF
 IQLT,iShares MSCI International Quality Factor ETF
 ITOT,iShares Core S&P Total U.S. Stock Market ETF
@@ -55,9 +57,11 @@ SPMO,Invesco S&P 500 Momentum ETF
 SPSM,SPDR Portfolio S&P 600 Small Cap ETF
 SPTI,SPDR Portfolio Intermediate Term Treasury ETF
 SPY,SPDR S&P 500 ETF Trust
+SPYG,State Street SPDR Portfolio S&P 500 Growth ETF
 TLT,iShares 20+ Year Treasury Bond ETF
 USIG,iShares Broad USD Investment Grade Corporate Bond ETF
 VCIT,Vanguard Intermediate-Term Corporate Bond ETF
+VEU,Vanguard FTSE All-World ex-US ETF
 VGIT,Vanguard Intermediate-Term Treasury ETF
 VNQ,Vanguard Real Estate ETF
 VONG,Vanguard Russell 1000 Growth ETF
