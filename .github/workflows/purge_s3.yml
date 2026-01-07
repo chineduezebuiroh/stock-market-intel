@@ -73,7 +73,7 @@ jobs:
 
           if [[ "$TARGET" == "custom_list" ]]; then
             printf "%s\n" "${{ inputs.custom_paths }}" > /tmp/custom_paths.txt
-            python scripts/purge_s3.py custom_list "$DRY" /tmp/custom_paths.txt
+            python .github/scripts/purge_s3.py custom_list "$DRY" /tmp/custom_paths.txt
           else
-            python scripts/purge_s3.py "$TARGET" "$DRY"
+            python .github/scripts/purge_s3.py "$TARGET" "$DRY"
           fi
