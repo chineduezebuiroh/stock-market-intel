@@ -8,3 +8,4 @@ PyYAML
 streamlit
 requests
 s3fs>=2024.3.0
+boto3>=1.34
