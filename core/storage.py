@@ -15,6 +15,30 @@ import s3fs
 _DATA_BACKEND = os.getenv("DATA_BACKEND", "local").lower()
 
 
+def _s3_bucket_prefix() -> tuple[str, str]:
+    bucket = os.environ.get("S3_BUCKET_DATA")
+    if not bucket:
+        raise RuntimeError("S3_BUCKET_DATA is required when DATA_BACKEND='s3'")
+    prefix = os.getenv("S3_PREFIX_DATA", "").strip("/")
+    return bucket, prefix
+
+
+def delete_s3_prefix(rel_prefix: str) -> None:
+    """
+    Delete everything under a prefix relative to DATA root.
+    Example: rel_prefix="bars/futures_intraday_4h"
+    """
+    if _DATA_BACKEND != "s3":
+        raise RuntimeError("delete_s3_prefix only valid for DATA_BACKEND='s3'")
+
+    bucket, base_prefix = _s3_bucket_prefix()
+    rel_prefix = rel_prefix.strip("/")
+
+    full = f"{bucket}/{base_prefix}/{rel_prefix}" if base_prefix else f"{bucket}/{rel_prefix}"
+    fs = _s3_fs()
+    fs.rm(full, recursive=True)
+
+
 def _ensure_path(path: str | Path) -> Path:
     """Normalize input into a Path object."""
     if isinstance(path, Path):
