@@ -1,0 +1,79 @@
+name: Purge S3 Data (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to purge"
+        required: true
+        type: choice
+        options:
+          - futures_poisoned_4hdw
+          - futures_all_intraday
+          - custom_list
+      dry_run:
+        description: "Dry run (prints keys, does not delete)"
+        required: true
+        default: "true"
+      confirm:
+        description: "Type PURGE to actually delete"
+        required: true
+        default: ""
+      custom_paths:
+        description: "If target=custom_list: newline-separated paths relative to S3_PREFIX_DATA (data/). Use trailing / for prefixes."
+        required: false
+        default: ""
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    env:
+      DATA_BACKEND: s3
+      S3_BUCKET_DATA: stock-intel-data-prod
+      S3_PREFIX_DATA: data
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Sanity check AWS identity
+        run: |
+          python - << 'PY'
+          import boto3
+          sts = boto3.client("sts")
+          print(sts.get_caller_identity())
+          PY
+
+      - name: Purge (guarded)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="${{ inputs.target }}"
+          DRY="${{ inputs.dry_run }}"
+          CONFIRM="${{ inputs.confirm }}"
+
+          # Force dry_run unless confirm == PURGE
+          if [[ "$CONFIRM" != "PURGE" ]]; then
+            echo "confirm != PURGE → forcing dry_run=true"
+            DRY="true"
+          fi
+
+          if [[ "$TARGET" == "custom_list" ]]; then
+            printf "%s\n" "${{ inputs.custom_paths }}" > /tmp/custom_paths.txt
+            python scripts/purge_s3.py custom_list "$DRY" /tmp/custom_paths.txt
+          else
+            python scripts/purge_s3.py "$TARGET" "$DRY"
+          fi
