@@ -347,7 +347,16 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
             continue
 
         # Take the last bar as a Series
-        last = df.iloc[-1]
+        #last = df.iloc[-1]
+
+        # Take the last bar as a Series (but futures intraday must be valid OHLC)
+        if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
+            df_valid = df.dropna(subset=["open","high","low","close"], how="any")
+            if df_valid.empty:
+                continue
+            last = df_valid.iloc[-1]
+        else:
+            last = df.iloc[-1]
 
         # Ensure all base columns are present
         missing = [c for c in base_cols if c not in last.index]
