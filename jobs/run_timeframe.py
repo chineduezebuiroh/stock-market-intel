@@ -248,7 +248,19 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
             existing = pd.DataFrame()
 
         merged = update_fixed_window(df_new, existing, window_bars)
-        
+
+        # --- futures intraday sanitization: drop invalid bars ---
+        if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
+            ohlc = ["open", "high", "low", "close"]
+            
+            # Drop rows where all OHLC are NaN (your exact poison signature)
+            #merged = merged[~merged[ohlc].isna().all(axis=1)]
+            
+            # Drop rows where ANY OHLC are NaN (your exact poison signature)
+            #merged = merged.dropna(subset=["open","high","low","close"], how="any")
+            merged = merged.dropna(subset=ohlc, how="any")
+
+
         # 🔹 NEW: log if merged goes empty
         if merged is None or merged.empty:
             elapsed = time.perf_counter() - start_sym
