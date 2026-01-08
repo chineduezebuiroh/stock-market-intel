@@ -12,11 +12,11 @@ on:
           - futures_all_intraday
           - custom_list
       dry_run:
-        description: "Dry run (prints keys, does not delete)"
+        description: "Dry run (prints keys, does not delete - if actual purge type 'false')"
         required: true
         default: "true"
       confirm:
-        description: "Type PURGE to actually delete"
+        description: "Type PURGE to actually delete. Otherwise type DRYRUN"
         required: true
         default: ""
       custom_paths:
