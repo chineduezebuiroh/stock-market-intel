@@ -22,7 +22,6 @@ ABTC,American Bitcoin Corp,Financial Services,Capital Markets,KCE,SPDR S&P Capit
 ABVX,ABIVAX Société Anonyme,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 ACA,"Arcosa, Inc.",Industrials,Engineering & Construction,ITB,iShares U.S. Home Construction ETF,0.2,XLI,Industrial Select Sector SPDR Fund,1.0,ITB,XLI
 ACAD,ACADIA Pharmaceuticals Inc.,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
-ACET,"Adicet Bio, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 ACGL,Arch Capital Group Ltd.,Financial Services,Insurance - Diversified,KIE,SPDR S&P Insurance ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 ACHC,"Acadia Healthcare Company, Inc.",Healthcare,Medical Care Facilities,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 ACHR,Archer Aviation Inc.,Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospace & Defense ETF,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,ITA,XLI
@@ -57,6 +56,7 @@ AEP,"American Electric Power Company, Inc.",Utilities,Utilities - Regulated Elec
 AER,AerCap Holdings N.V.,Industrials,Rental & Leasing Services,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 AES,The AES Corporation,Utilities,Utilities - Diversified,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 AESI,Atlas Energy Solutions Inc.,Energy,Oil & Gas Equipment & Services,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
+AEVA,"Aeva Technologies, Inc.",Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 AFG,"American Financial Group, Inc.",Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 AFL,Aflac Incorporated,Financial Services,Insurance - Life,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 AFRM,"Affirm Holdings, Inc.",Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
@@ -93,18 +93,20 @@ ALGN,"Align Technology, Inc.",Healthcare,Medical Instruments & Supplies,,,0.0,XL
 ALGT,Allegiant Travel Company,Industrials,Airlines,JETS,U.S. Global Jets ETF,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,JETS,XLI
 ALH,Alliance Laundry Holdings Inc.,Consumer Cyclical,"Furnishings, Fixtures & Appliances",,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 ALHC,"Alignment Healthcare, Inc.",Healthcare,Healthcare Plans,XLV,Health Care Select Sector SPDR Fund,0.5,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
-ALIT,"Alight, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 ALK,"Alaska Air Group, Inc.",Industrials,Airlines,JETS,U.S. Global Jets ETF,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,JETS,XLI
 ALKS,Alkermes plc,Healthcare,Drug Manufacturers - Specialty & Generic,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 ALKT,"Alkami Technology, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 ALL,The Allstate Corporation,Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 ALLE,Allegion plc,Industrials,Security & Protection Services,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 ALLY,Ally Financial Inc.,Financial Services,Credit Services,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
+ALMS,Alumis Inc.,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
+ALNT,Allient Inc.,Technology,Electronic Components,,,0.0,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 ALNY,"Alnylam Pharmaceuticals, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 ALRM,"Alarm.com Holdings, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 ALSN,"Allison Transmission Holdings, Inc.",Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 ALV,"Autoliv, Inc.",Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 AM,Antero Midstream Corporation,Energy,Oil & Gas Midstream,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
+AMAL,Amalgamated Financial Corp.,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 AMAT,"Applied Materials, Inc.",Technology,Semiconductor Equipment & Materials,SMH,VanEck Semiconductor ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 AMBA,"Ambarella, Inc.",Technology,Semiconductor Equipment & Materials,SMH,VanEck Semiconductor ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 AMBP,Ardagh Metal Packaging S.A.,Consumer Cyclical,Packaging & Containers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -230,6 +232,7 @@ AXP,American Express Company,Financial Services,Credit Services,,,0.0,XLF,Financ
 AXS,AXIS Capital Holdings Limited,Financial Services,Insurance - Specialty,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 AXSM,"Axsome Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 AXTA,Axalta Coating Systems Ltd.,Basic Materials,Specialty Chemicals,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
+AXTI,"AXT, Inc.",Technology,Semiconductor Equipment & Materials,SMH,VanEck Semiconductor ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 AYI,Acuity Inc.,Industrials,Electrical Equipment & Parts,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 AZN,AstraZeneca PLC,Healthcare,Drug Manufacturers - General,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 AZO,"AutoZone, Inc.",Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -254,7 +257,6 @@ BBAI,"BigBear.ai Holdings, Inc.",Technology,Information Technology Services,XLK,
 BBAR,Banco BBVA Argentina S.A.,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 BBD,Banco Bradesco S.A.,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 BBIO,"BridgeBio Pharma, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
-BBNX,"Beta Bionics, Inc.",Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 BBT,Beacon Financial Corporation,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 BBU,Brookfield Business Partners L.P.,Industrials,Conglomerates,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 BBUC,Brookfield Business Corporation,Financial Services,Asset Management,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
@@ -281,6 +283,7 @@ BEPC,Brookfield Renewable Corporation,Utilities,Utilities - Renewable,XLU,Utilit
 BETA,"BETA Technologies, Inc.",Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospace & Defense ETF,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,ITA,XLI
 BFAM,Bright Horizons Family Solutions Inc.,Consumer Cyclical,Personal Services,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 BFH,"Bread Financial Holdings, Inc.",Financial Services,Credit Services,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
+BFLY,"Butterfly Network, Inc.",Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 BFS,"Saul Centers, Inc.",Real Estate,REIT - Retail,XRT,SPDR S&P Retail ETF,0.25,XLRE,Real Estate Select Sector SPDR Fund,1.0,XRT,XLRE
 BG,Bunge Global SA,Consumer Defensive,Farm Products,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 BGC,"BGC Group, Inc.",Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
@@ -341,7 +344,7 @@ BRC,Brady Corporation,Industrials,Security & Protection Services,,,0.0,XLI,Indus
 BRKR,Bruker Corporation,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 BRO,"Brown & Brown, Inc.",Financial Services,Insurance Brokers,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 BROS,Dutch Bros Inc.,Consumer Cyclical,Restaurants,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
-BRSL,Brightstar Lottery,Consumer Cyclical,Gambling,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
+BRSL,Brightstar Lottery PLC,Consumer Cyclical,Gambling,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 BRX,Brixmor Property Group Inc.,Real Estate,REIT - Retail,XRT,SPDR S&P Retail ETF,0.25,XLRE,Real Estate Select Sector SPDR Fund,1.0,XRT,XLRE
 BRZE,"Braze, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 BSAC,Banco Santander-Chile,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
@@ -418,7 +421,6 @@ CCOI,"Cogent Communications Holdings, Inc.",Communication Services,Telecom Servi
 CCS,"Century Communities, Inc.",Real Estate,Real Estate - Development,XLRE,Real Estate Select Sector SPDR Fund,0.6666666666666666,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 CCU,Compañía Cervecerías Unidas S.A.,Consumer Defensive,Beverages - Brewers,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 CDE,"Coeur Mining, Inc.",Basic Materials,Gold,GLD,SPDR Gold Shares,0.5,XLB,Materials Select Sector SPDR Fund,0.5,GLD,XLB
-CDNA,"CareDx, Inc.",Healthcare,Diagnostics & Research,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 CDNS,"Cadence Design Systems, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 CDP,COPT Defense Properties,Real Estate,REIT - Office,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 CDRE,"Cadre Holdings, Inc.",Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospace & Defense ETF,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,ITA,XLI
@@ -551,6 +553,7 @@ CRI,"Carter's, Inc.",Consumer Cyclical,Apparel Retail,XRT,SPDR S&P Retail ETF,0.
 CRK,"Comstock Resources, Inc.",Energy,Oil & Gas E&P,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.42857142857142855,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 CRL,"Charles River Laboratories International, Inc.",Healthcare,Diagnostics & Research,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 CRM,"Salesforce, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
+CRML,Critical Metals Corp.,Basic Materials,Other Industrial Metals & Mining,XLI,Industrial Select Sector SPDR Fund,0.25,XLB,Materials Select Sector SPDR Fund,0.5,XLI,XLB
 CRNX,"Crinetics Pharmaceuticals, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 CRON,Cronos Group Inc.,Healthcare,Drug Manufacturers - Specialty & Generic,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 CROX,"Crocs, Inc.",Consumer Cyclical,Footwear & Accessories,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -611,6 +614,7 @@ CYTK,"Cytokinetics, Incorporated",Healthcare,Biotechnology,IBB,iShares Biotechno
 CZR,"Caesars Entertainment, Inc.",Consumer Cyclical,Resorts & Casinos,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 D,"Dominion Energy, Inc.",Utilities,Utilities - Regulated Electric,XLU,Utilities Select Sector SPDR Fund,0.3333333333333333,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 DAC,Danaos Corporation,Industrials,Marine Shipping,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
+DAKT,"Daktronics, Inc.",Technology,Electronic Components,,,0.0,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 DAL,"Delta Air Lines, Inc.",Industrials,Airlines,JETS,U.S. Global Jets ETF,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,JETS,XLI
 DAN,Dana Incorporated,Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 DAO,"Youdao, Inc.",Consumer Defensive,Education & Training Services,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
@@ -654,6 +658,7 @@ DLB,"Dolby Laboratories, Inc.",Industrials,Specialty Business Services,,,0.0,XLI
 DLO,DLocal Limited,Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 DLR,"Digital Realty Trust, Inc.",Real Estate,REIT - Specialty,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 DLTR,"Dollar Tree, Inc.",Consumer Defensive,Discount Stores,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
+DLX,Deluxe Corporation,Industrials,Conglomerates,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 DMLP,"Dorchester Minerals, L.P.",Energy,Oil & Gas E&P,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.42857142857142855,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 DNLI,Denali Therapeutics Inc.,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 DNN,Denison Mines Corp.,Energy,Uranium,,,0.0,XLE,Energy Select Sector SPDR Fund,1.0,XLE,
@@ -722,10 +727,11 @@ EL,The Estée Lauder Companies Inc.,Consumer Defensive,Household & Personal Prod
 ELAN,Elanco Animal Health Incorporated,Healthcare,Drug Manufacturers - Specialty & Generic,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 ELE,Elemental Royalty Corporation,Basic Materials,Other Precious Metals & Mining,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
 ELF,"e.l.f. Beauty, Inc.",Consumer Defensive,Household & Personal Products,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
-ELME,Elme Communities,Real Estate,REIT - Residential,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 ELPC,Companhia Paranaense de Energia,Utilities,Utilities - Regulated Electric,XLU,Utilities Select Sector SPDR Fund,0.3333333333333333,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 ELS,"Equity LifeStyle Properties, Inc.",Real Estate,REIT - Residential,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 ELV,"Elevance Health, Inc.",Healthcare,Healthcare Plans,XLV,Health Care Select Sector SPDR Fund,0.5,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
+ELVN,"Enliven Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
+ELVR,Elevra Lithium Limited,Basic Materials,Other Industrial Metals & Mining,XLI,Industrial Select Sector SPDR Fund,0.25,XLB,Materials Select Sector SPDR Fund,0.5,XLI,XLB
 EMA,Emera Incorporated,Utilities,Utilities - Regulated Electric,XLU,Utilities Select Sector SPDR Fund,0.3333333333333333,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 EMBJ,Embraer S.A.,Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospace & Defense ETF,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,ITA,XLI
 EME,"EMCOR Group, Inc.",Industrials,Engineering & Construction,ITB,iShares U.S. Home Construction ETF,0.2,XLI,Industrial Select Sector SPDR Fund,1.0,ITB,XLI
@@ -907,7 +913,7 @@ GDDY,GoDaddy Inc.,Technology,Software - Infrastructure,IGV,iShares Expanded Tech
 GDS,GDS Holdings Limited,Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 GE,GE Aerospace,Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospace & Defense ETF,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,ITA,XLI
 GEF,"Greif, Inc.",Consumer Cyclical,Packaging & Containers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
-GEHC,GE HealthCare Technologies Inc.,Healthcare,Health Information Services,XLV,Health Care Select Sector SPDR Fund,0.5,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
+GEHC,GE HealthCare Technologies Inc.,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 GEL,"Genesis Energy, L.P.",Energy,Oil & Gas Midstream,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 GEMI,"Gemini Space Station, Inc.",Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
 GEN,Gen Digital Inc.,Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
@@ -917,7 +923,7 @@ GEV,GE Vernova Inc.,Industrials,Specialty Industrial Machinery,XLI,Industrial Se
 GFF,Griffon Corporation,Industrials,Building Products & Equipment,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 GFI,Gold Fields Limited,Basic Materials,Gold,GLD,SPDR Gold Shares,0.5,XLB,Materials Select Sector SPDR Fund,0.5,GLD,XLB
 GFL,GFL Environmental Inc.,Industrials,Waste Management,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
-GFS,GLOBALFOUNDRIES Inc.,Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
+GFS,GlobalFoundries Inc.,Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 GGAL,Grupo Financiero Galicia S.A.,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 GGB,Gerdau S.A.,Basic Materials,Steel,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
 GGG,Graco Inc.,Industrials,Specialty Industrial Machinery,XLI,Industrial Select Sector SPDR Fund,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
@@ -927,16 +933,18 @@ GIC,Global Industrial Company,Industrials,Industrial Distribution,XLI,Industrial
 GIII,"G-III Apparel Group, Ltd.",Consumer Cyclical,Apparel Manufacturing,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 GIL,Gildan Activewear Inc.,Consumer Cyclical,Apparel Manufacturing,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 GILD,"Gilead Sciences, Inc.",Healthcare,Drug Manufacturers - General,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
+GILT,Gilat Satellite Networks Ltd.,Technology,Communication Equipment,XLC,Communication Services Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLC,XLK
 GIS,"General Mills, Inc.",Consumer Defensive,Packaged Foods,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 GKOS,Glaukos Corporation,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 GL,Globe Life Inc.,Financial Services,Insurance - Life,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 GLBE,Global-E Online Ltd.,Consumer Cyclical,Internet Retail,XRT,SPDR S&P Retail ETF,0.25,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,XRT,RSPD
-GLIBK,"GCI Liberty, Inc. - Series C GC",Communication Services,Telecom Services,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
+GLIBK,"GCI Liberty, Inc.",Communication Services,Telecom Services,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 GLNG,Golar LNG Limited,Energy,Oil & Gas Midstream,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 GLOB,Globant S.A.,Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 GLP,Global Partners LP,Energy,Oil & Gas Midstream,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 GLPG,Galapagos NV,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 GLPI,"Gaming and Leisure Properties, Inc.",Real Estate,REIT - Specialty,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
+GLUE,"Monte Rosa Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 GLW,Corning Incorporated,Technology,Electronic Components,,,0.0,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 GLXY,Galaxy Digital,Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
 GM,General Motors Company,Consumer Cyclical,Auto Manufacturers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -1021,6 +1029,7 @@ HLMN,Hillman Solutions Corp.,Industrials,Tools & Accessories,,,0.0,XLI,Industria
 HLN,Haleon plc,Healthcare,Drug Manufacturers - Specialty & Generic,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 HLNE,Hamilton Lane Incorporated,Financial Services,Asset Management,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
 HLT,Hilton Worldwide Holdings Inc.,Consumer Cyclical,Lodging,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
+HLX,"Helix Energy Solutions Group, Inc.",Energy,Oil & Gas Equipment & Services,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 HMC,"Honda Motor Co., Ltd.",Consumer Cyclical,Auto Manufacturers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 HMN,Horace Mann Educators Corporation,Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 HMY,Harmony Gold Mining Company Limited,Basic Materials,Gold,GLD,SPDR Gold Shares,0.5,XLB,Materials Select Sector SPDR Fund,0.5,GLD,XLB
@@ -1069,6 +1078,7 @@ HXL,Hexcel Corporation,Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospac
 HYMC,Hycroft Mining Holding Corporation,Basic Materials,Gold,GLD,SPDR Gold Shares,0.5,XLB,Materials Select Sector SPDR Fund,0.5,GLD,XLB
 IAC,IAC Inc.,Communication Services,Internet Content & Information,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 IAG,IAMGOLD Corporation,Basic Materials,Gold,GLD,SPDR Gold Shares,0.5,XLB,Materials Select Sector SPDR Fund,0.5,GLD,XLB
+IART,Integra LifeSciences Holdings Corporation,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 IAS,Integral Ad Science Holding Corp.,Communication Services,Advertising Agencies,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 IBKR,"Interactive Brokers Group, Inc.",Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
 IBM,International Business Machines Corporation,Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
@@ -1111,7 +1121,6 @@ INFY,Infosys Limited,Technology,Information Technology Services,XLK,Technology S
 ING,ING Groep N.V.,Financial Services,Banks - Diversified,KBWB,Invesco KBW Bank ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 INGM,Ingram Micro Holding Corporation,Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 INGR,Ingredion Incorporated,Consumer Defensive,Packaged Foods,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
-INMD,InMode Ltd.,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 INOD,Innodata Inc.,Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 INSM,Insmed Incorporated,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 INSP,"Inspire Medical Systems, Inc.",Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
@@ -1127,7 +1136,6 @@ IONQ,"IonQ, Inc.",Technology,Computer Hardware,,,0.0,XLK,Technology Select Secto
 IONS,"Ionis Pharmaceuticals, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 IOSP,Innospec Inc.,Basic Materials,Specialty Chemicals,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
 IOT,Samsara Inc.,Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
-IOVA,"Iovance Biotherapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 IP,International Paper Company,Consumer Cyclical,Packaging & Containers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 IPAR,"Interparfums, Inc.",Consumer Defensive,Household & Personal Products,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 IPGP,IPG Photonics Corporation,Technology,Semiconductor Equipment & Materials,SMH,VanEck Semiconductor ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
@@ -1183,7 +1191,7 @@ KBH,KB Home,Consumer Cyclical,Residential Construction,ITB,iShares U.S. Home Con
 KBR,"KBR, Inc.",Industrials,Engineering & Construction,ITB,iShares U.S. Home Construction ETF,0.2,XLI,Industrial Select Sector SPDR Fund,1.0,ITB,XLI
 KC,Kingsoft Cloud Holdings Limited,Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 KD,"Kyndryl Holdings, Inc.",Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
-KDK,"Kodiak AI, Inc.",Industrials,Farm & Heavy Construction Machinery,ITB,iShares U.S. Home Construction ETF,0.14285714285714285,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
+KDK,"Kodiak AI, Inc.",Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 KDP,Keurig Dr Pepper Inc.,Consumer Defensive,Beverages - Non-Alcoholic,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 KEN,Kenon Holdings Ltd.,Utilities,Utilities - Independent Power Producers,XLU,Utilities Select Sector SPDR Fund,0.25,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 KEP,Korea Electric Power Corporation,Utilities,Utilities - Regulated Electric,XLU,Utilities Select Sector SPDR Fund,0.3333333333333333,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
@@ -1236,6 +1244,7 @@ LAC,Lithium Americas Corp.,Basic Materials,Other Industrial Metals & Mining,XLI,
 LAD,"Lithia Motors, Inc.",Consumer Cyclical,Auto & Truck Dealerships,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 LADR,Ladder Capital Corp,Real Estate,REIT - Mortgage,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 LAMR,Lamar Advertising Company,Real Estate,REIT - Specialty,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
+LAR,Lithium Argentina AG,Basic Materials,Other Industrial Metals & Mining,XLI,Industrial Select Sector SPDR Fund,0.25,XLB,Materials Select Sector SPDR Fund,0.5,XLI,XLB
 LASR,"nLIGHT, Inc.",Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 LAUR,"Laureate Education, Inc.",Consumer Defensive,Education & Training Services,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 LAZ,"Lazard, Inc.",Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
@@ -1248,6 +1257,7 @@ LBTYK,Liberty Global Ltd.,Communication Services,Telecom Services,,,0.0,XLC,Comm
 LC,LendingClub Corporation,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
 LCID,"Lucid Group, Inc.",Consumer Cyclical,Auto Manufacturers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 LCII,LCI Industries,Consumer Cyclical,Recreational Vehicles,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
+LDI,"loanDepot, Inc.",Financial Services,Mortgage Finance,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
 LDOS,"Leidos Holdings, Inc.",Technology,Information Technology Services,XLK,Technology Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
 LEA,Lear Corporation,Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 LECO,"Lincoln Electric Holdings, Inc.",Industrials,Tools & Accessories,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
@@ -1258,6 +1268,7 @@ LEU,Centrus Energy Corp.,Energy,Uranium,,,0.0,XLE,Energy Select Sector SPDR Fund
 LEVI,Levi Strauss & Co.,Consumer Cyclical,Apparel Manufacturing,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 LFST,"LifeStance Health Group, Inc.",Healthcare,Medical Care Facilities,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 LFUS,"Littelfuse, Inc.",Technology,Electronic Components,,,0.0,XLK,Technology Select Sector SPDR Fund,1.0,XLK,
+LGIH,"LGI Homes, Inc.",Consumer Cyclical,Residential Construction,ITB,iShares U.S. Home Construction ETF,0.2,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,ITB,RSPD
 LGND,Ligand Pharmaceuticals Incorporated,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 LH,Labcorp Holdings Inc.,Healthcare,Diagnostics & Research,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 LHX,"L3Harris Technologies, Inc.",Industrials,Aerospace & Defense,ITA,iShares U.S. Aerospace & Defense ETF,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,ITA,XLI
@@ -1383,6 +1394,7 @@ MLCO,Melco Resorts & Entertainment Limited,Consumer Cyclical,Resorts & Casinos,,
 MLI,"Mueller Industries, Inc.",Industrials,Metal Fabrication,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 MLKN,"MillerKnoll, Inc.",Consumer Cyclical,"Furnishings, Fixtures & Appliances",,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 MLM,"Martin Marietta Materials, Inc.",Basic Materials,Building Materials,XLB,Materials Select Sector SPDR Fund,0.5,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
+MLTX,MoonLake Immunotherapeutics,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 MLYS,"Mineralys Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 MMC,"Marsh & McLennan Companies, Inc.",Financial Services,Insurance Brokers,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 MMI,"Marcus & Millichap, Inc.",Real Estate,Real Estate Services,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
@@ -1413,6 +1425,7 @@ MRCY,"Mercury Systems, Inc.",Industrials,Aerospace & Defense,ITA,iShares U.S. Ae
 MRK,"Merck & Co., Inc.",Healthcare,Drug Manufacturers - General,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 MRNA,"Moderna, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 MRP,"Millrose Properties, Inc.",Real Estate,REIT - Residential,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
+MRTN,"Marten Transport, Ltd.",Industrials,Trucking,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 MRUS,Merus N.V.,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 MRVI,"Maravai LifeSciences Holdings, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 MRVL,"Marvell Technology, Inc.",Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
@@ -1444,6 +1457,7 @@ MUFG,"Mitsubishi UFJ Financial Group, Inc.",Financial Services,Banks - Diversifi
 MUR,Murphy Oil Corporation,Energy,Oil & Gas E&P,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.42857142857142855,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 MUSA,Murphy USA Inc.,Consumer Cyclical,Specialty Retail,XRT,SPDR S&P Retail ETF,0.25,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,XRT,RSPD
 MUX,McEwen Inc.,Basic Materials,Other Precious Metals & Mining,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
+MVST,"Microvast Holdings, Inc.",Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 MWA,"Mueller Water Products, Inc.",Industrials,Specialty Industrial Machinery,XLI,Industrial Select Sector SPDR Fund,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 MXL,"MaxLinear, Inc.",Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 MYRG,MYR Group Inc.,Industrials,Engineering & Construction,ITB,iShares U.S. Home Construction ETF,0.2,XLI,Industrial Select Sector SPDR Fund,1.0,ITB,XLI
@@ -1489,7 +1503,6 @@ NIO,NIO Inc.,Consumer Cyclical,Auto Manufacturers,,,0.0,RSPD,Invesco S&P 500 Equ
 NJR,New Jersey Resources Corporation,Utilities,Utilities - Regulated Gas,XLU,Utilities Select Sector SPDR Fund,0.3333333333333333,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 NKE,"NIKE, Inc.",Consumer Cyclical,Footwear & Accessories,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 NLY,"Annaly Capital Management, Inc.",Real Estate,REIT - Mortgage,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
-NMAX,"Newsmax, Inc.",Communication Services,Broadcasting,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 NMIH,"NMI Holdings, Inc.",Financial Services,Insurance - Specialty,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 NMM,Navios Maritime Partners L.P.,Industrials,Marine Shipping,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 NMR,"Nomura Holdings, Inc.",Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
@@ -1507,6 +1520,7 @@ NOVT,Novanta Inc.,Technology,Scientific & Technical Instruments,,,0.0,XLK,Techno
 NOW,"ServiceNow, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 NPKI,NPK International Inc.,Energy,Oil & Gas Equipment & Services,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 NPO,Enpro Inc.,Industrials,Specialty Industrial Machinery,XLI,Industrial Select Sector SPDR Fund,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
+NRDS,"NerdWallet, Inc.",Communication Services,Internet Content & Information,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 NRG,"NRG Energy, Inc.",Utilities,Utilities - Independent Power Producers,XLU,Utilities Select Sector SPDR Fund,0.25,XLU,Utilities Select Sector SPDR Fund,1.0,XLU,
 NRIX,"Nurix Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 NRP,Natural Resource Partners L.P.,Energy,Thermal Coal,,,0.0,XLE,Energy Select Sector SPDR Fund,1.0,XLE,
@@ -1577,10 +1591,10 @@ OLED,Universal Display Corporation,Technology,Electronic Components,,,0.0,XLK,Te
 OLLI,"Ollie's Bargain Outlet Holdings, Inc.",Consumer Defensive,Discount Stores,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 OLMA,"Olema Pharmaceuticals, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 OLN,Olin Corporation,Basic Materials,Chemicals,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
+OLPX,"Olaplex Holdings, Inc.",Consumer Cyclical,Specialty Retail,XRT,SPDR S&P Retail ETF,0.25,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,XRT,RSPD
 OMAB,"Grupo Aeroportuario del Centro Norte, S.A.B. de C.V.",Industrials,Airports & Air Services,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 OMC,Omnicom Group Inc.,Communication Services,Advertising Agencies,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 OMCL,"Omnicell, Inc.",Healthcare,Health Information Services,XLV,Health Care Select Sector SPDR Fund,0.5,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
-OMER,Omeros Corporation,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 OMF,"OneMain Holdings, Inc.",Financial Services,Credit Services,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
 ON,ON Semiconductor Corporation,Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 ONB,Old National Bancorp,Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
@@ -1676,6 +1690,7 @@ PHAT,"Phathom Pharmaceuticals, Inc.",Healthcare,Biotechnology,IBB,iShares Biotec
 PHG,Koninklijke Philips N.V.,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 PHIN,PHINIA Inc.,Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 PHM,"PulteGroup, Inc.",Consumer Cyclical,Residential Construction,ITB,iShares U.S. Home Construction ETF,0.2,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,ITB,RSPD
+PHR,"Phreesia, Inc.",Healthcare,Health Information Services,XLV,Health Care Select Sector SPDR Fund,0.5,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 PHVS,Pharvaris N.V.,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 PI,"Impinj, Inc.",Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 PII,Polaris Inc.,Consumer Cyclical,Recreational Vehicles,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -1715,6 +1730,7 @@ PPTA,Perpetua Resources Corp.,Basic Materials,Other Precious Metals & Mining,,,0
 PR,Permian Resources Corporation,Energy,Oil & Gas E&P,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.42857142857142855,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 PRA,ProAssurance Corporation,Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 PRAX,"Praxis Precision Medicines, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
+PRCH,"Porch Group, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 PRCT,PROCEPT BioRobotics Corporation,Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 PRDO,Perdoceo Education Corporation,Consumer Defensive,Education & Training Services,,,0.0,XLP,Consumer Staples Select Sector SPDR Fund,1.0,XLP,
 PRG,"PROG Holdings, Inc.",Industrials,Rental & Leasing Services,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
@@ -1746,7 +1762,6 @@ PTGX,"Protagonist Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biote
 PTON,"Peloton Interactive, Inc.",Consumer Cyclical,Leisure,PEJ,Invesco Dynamic Leisure & Entertainment ETF,0.3333333333333333,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,PEJ,RSPD
 PTRN,Pattern Group Inc.,Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 PUK,Prudential plc,Financial Services,Insurance - Life,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
-PUMP,ProPetro Holding Corp.,Energy,Oil & Gas Equipment & Services,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 PVH,PVH Corp.,Consumer Cyclical,Apparel Manufacturing,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 PVLA,"Palvella Therapeutics, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 PWP,Perella Weinberg Partners,Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
@@ -1863,8 +1878,10 @@ RYAAY,Ryanair Holdings plc,Industrials,Airlines,JETS,U.S. Global Jets ETF,0.3333
 RYAN,"Ryan Specialty Holdings, Inc.",Financial Services,Insurance - Specialty,KIE,SPDR S&P Insurance ETF,0.25,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 RYN,Rayonier Inc.,Real Estate,REIT - Specialty,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 RYTM,"Rhythm Pharmaceuticals, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
+RZLV,Rezolve AI PLC,Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 S,"SentinelOne, Inc.",Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 SA,Seabridge Gold Inc.,Basic Materials,Gold,GLD,SPDR Gold Shares,0.5,XLB,Materials Select Sector SPDR Fund,0.5,GLD,XLB
+SAFE,Safehold Inc.,Real Estate,REIT - Diversified,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 SAFT,"Safety Insurance Group, Inc.",Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 SAH,"Sonic Automotive, Inc.",Consumer Cyclical,Auto & Truck Dealerships,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 SAIA,"Saia, Inc.",Industrials,Trucking,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
@@ -1901,6 +1918,7 @@ SEIC,SEI Investments Company,Financial Services,Asset Management,,,0.0,XLF,Finan
 SEM,Select Medical Holdings Corporation,Healthcare,Medical Care Facilities,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
 SEMR,"Semrush Holdings, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 SEPN,"Septerna, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
+SERV,Serve Robotics Inc.,Industrials,Specialty Industrial Machinery,XLI,Industrial Select Sector SPDR Fund,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 SEZL,Sezzle Inc.,Financial Services,Credit Services,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
 SF,Stifel Financial Corp.,Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
 SFBS,"ServisFirst Bancshares, Inc.",Financial Services,Banks - Regional,KBWB,Invesco KBW Bank ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
@@ -1923,6 +1941,7 @@ SHOO,"Steven Madden, Ltd.",Consumer Cyclical,Footwear & Accessories,,,0.0,RSPD,I
 SHOP,Shopify Inc.,Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 SHW,The Sherwin-Williams Company,Basic Materials,Specialty Chemicals,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
 SID,Companhia Siderúrgica Nacional,Basic Materials,Steel,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
+SIFY,Sify Technologies Limited,Communication Services,Telecom Services,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 SIG,Signet Jewelers Limited,Consumer Cyclical,Luxury Goods,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 SIGI,"Selective Insurance Group, Inc.",Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 SII,Sprott Inc.,Financial Services,Asset Management,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
@@ -1942,6 +1961,7 @@ SKYW,"SkyWest, Inc.",Industrials,Airlines,JETS,U.S. Global Jets ETF,0.3333333333
 SLAB,Silicon Laboratories Inc.,Technology,Semiconductors,SMH,VanEck Semiconductor ETF,1.0,XLK,Technology Select Sector SPDR Fund,1.0,SMH,XLK
 SLB,SLB N.V.,Energy,Oil & Gas Equipment & Services,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 SLDE,"Slide Insurance Holdings, Inc.",Financial Services,Insurance - Property & Casualty,KIE,SPDR S&P Insurance ETF,0.2,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
+SLDP,"Solid Power, Inc.",Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 SLF,Sun Life Financial Inc.,Financial Services,Insurance - Diversified,KIE,SPDR S&P Insurance ETF,0.3333333333333333,XLF,Financial Select Sector SPDR Fund,1.0,KIE,XLF
 SLG,SL Green Realty Corp.,Real Estate,REIT - Office,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 SLGN,Silgan Holdings Inc.,Consumer Cyclical,Packaging & Containers,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -2192,6 +2212,7 @@ U,Unity Software Inc.,Technology,Software - Application,IGV,iShares Expanded Tec
 UA,"Under Armour, Inc.",Consumer Cyclical,Apparel Manufacturing,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 UAA,"Under Armour, Inc.",Consumer Cyclical,Apparel Manufacturing,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 UAL,"United Airlines Holdings, Inc.",Industrials,Airlines,JETS,U.S. Global Jets ETF,0.3333333333333333,XLI,Industrial Select Sector SPDR Fund,1.0,JETS,XLI
+UAMY,United States Antimony Corporation,Basic Materials,Other Industrial Metals & Mining,XLI,Industrial Select Sector SPDR Fund,0.25,XLB,Materials Select Sector SPDR Fund,0.5,XLI,XLB
 UAN,"CVR Partners, LP",Basic Materials,Agricultural Inputs,,,0.0,XLB,Materials Select Sector SPDR Fund,0.5,XLB,
 UBER,"Uber Technologies, Inc.",Technology,Software - Application,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
 UBS,UBS Group AG,Financial Services,Banks - Diversified,KBWB,Invesco KBW Bank ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KBWB,XLF
@@ -2226,7 +2247,6 @@ UPS,"United Parcel Service, Inc.",Industrials,Integrated Freight & Logistics,,,0
 UPST,"Upstart Holdings, Inc.",Financial Services,Credit Services,,,0.0,XLF,Financial Select Sector SPDR Fund,1.0,XLF,
 UPWK,Upwork Inc.,Communication Services,Internet Content & Information,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 URBN,"Urban Outfitters, Inc.",Consumer Cyclical,Apparel Retail,XRT,SPDR S&P Retail ETF,0.25,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,XRT,RSPD
-URGN,UroGen Pharma Ltd.,Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 URI,"United Rentals, Inc.",Industrials,Rental & Leasing Services,,,0.0,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
 USAC,"USA Compression Partners, LP",Energy,Oil & Gas Equipment & Services,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 USAR,"USA Rare Earth, Inc.",Basic Materials,Other Industrial Metals & Mining,XLI,Industrial Select Sector SPDR Fund,0.25,XLB,Materials Select Sector SPDR Fund,0.5,XLI,XLB
@@ -2379,7 +2399,6 @@ XENE,Xenon Pharmaceuticals Inc.,Healthcare,Biotechnology,IBB,iShares Biotechnolo
 XERS,"Xeris Biopharma Holdings, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 XHR,"Xenia Hotels & Resorts, Inc.",Real Estate,REIT - Hotel & Motel,,,0.0,XLRE,Real Estate Select Sector SPDR Fund,1.0,XLRE,
 XMTR,"Xometry, Inc.",Industrials,Industrial Distribution,XLI,Industrial Select Sector SPDR Fund,0.5,XLI,Industrial Select Sector SPDR Fund,1.0,XLI,
-XNCR,"Xencor, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 XOM,Exxon Mobil Corporation,Energy,Oil & Gas Integrated,XOP,SPDR S&P Oil & Gas Exploration & Production ETF,0.2857142857142857,XLE,Energy Select Sector SPDR Fund,1.0,XOP,XLE
 XP,XP Inc.,Financial Services,Capital Markets,KCE,SPDR S&P Capital Markets ETF,0.5,XLF,Financial Select Sector SPDR Fund,1.0,KCE,XLF
 XPEL,"XPEL, Inc.",Consumer Cyclical,Auto Parts,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
@@ -2399,7 +2418,6 @@ YUM,"Yum! Brands, Inc.",Consumer Cyclical,Restaurants,,,0.0,RSPD,Invesco S&P 500
 YUMC,"Yum China Holdings, Inc.",Consumer Cyclical,Restaurants,,,0.0,RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,0.5,RSPD,
 Z,"Zillow Group, Inc.",Communication Services,Internet Content & Information,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 ZBH,"Zimmer Biomet Holdings, Inc.",Healthcare,Medical Devices,,,0.0,XLV,Health Care Select Sector SPDR Fund,1.0,XLV,
-ZBIO,"Zenas BioPharma, Inc.",Healthcare,Biotechnology,IBB,iShares Biotechnology ETF,1.0,XLV,Health Care Select Sector SPDR Fund,1.0,IBB,XLV
 ZBRA,Zebra Technologies Corporation,Technology,Communication Equipment,XLC,Communication Services Select Sector SPDR Fund,0.5,XLK,Technology Select Sector SPDR Fund,1.0,XLC,XLK
 ZD,"Ziff Davis, Inc.",Communication Services,Advertising Agencies,,,0.0,XLC,Communication Services Select Sector SPDR Fund,1.0,XLC,
 ZETA,Zeta Global Holdings Corp.,Technology,Software - Infrastructure,IGV,iShares Expanded Tech-Software Sector ETF,0.3333333333333333,XLK,Technology Select Sector SPDR Fund,1.0,IGV,XLK
