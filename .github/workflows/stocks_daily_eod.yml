@@ -3,10 +3,10 @@ name: Stocks Daily EOD
 
 on:
   schedule:
-    # Weekdays Mon–Fri at 21:30, 22:30, and 23:30 UTC
-    # - In Standard, 22:30 UTC ≈ 17:30 ET
-    # - In DST, 21:30 UTC or 23:30 ≈ 17:30 ET (don't remember)
-    - cron: "30 21-23 * * 1-5"
+    # Weekdays Mon–Fri at 21:00, 22:00, and 23:00 UTC
+    # - In Standard, 22:00 UTC ≈ 17:00 ET
+    # - In DST, 21:00 UTC or 23:00 ≈ 17:00 ET (don't remember)
+    - cron: "00 21-23 * * 1-5"
   workflow_dispatch: {}
 
 concurrency:
@@ -19,7 +19,7 @@ permissions:
 jobs:
   daily-eod-stocks:
     runs-on: ubuntu-latest
-    timeout-minutes: 270  # 4.5 hours
+    timeout-minutes: 300  # 5 hours
     env:
       DATA_BACKEND: s3
       S3_BUCKET_DATA: stock-intel-data-prod
