@@ -3,8 +3,8 @@ name: Weekly – Build Options Universe
 
 on:
   schedule:
-    # Every Sunday at 06:00 UTC (~01:30 est DST-aware)
-    - cron: "30 5-7 * * 0"
+    # Every Sunday at 07:00 UTC (~02:30 est DST-aware)
+    - cron: "30 6-8 * * 0"
   workflow_dispatch: {}
 
 concurrency:
@@ -60,5 +60,3 @@ jobs:
             git commit -m "Update options universe & ETF mapping [skip ci]"
             git push
           fi
-
-          
