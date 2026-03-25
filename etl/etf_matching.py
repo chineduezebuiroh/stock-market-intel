@@ -15,10 +15,9 @@ import difflib
 ROOT = Path(__file__).resolve().parents[1]
 from core.paths import REF, CFG  # NEW
 
-# -----------------------------------------------------------
+# ===========================================================
 # Tokenization + similarity
-# -----------------------------------------------------------
-
+# ===========================================================
 _token_re = re.compile(r"[A-Za-z0-9]+")
 
 _STOPWORDS = {
@@ -73,6 +72,9 @@ _SPECIAL_STEMS = {
     # "utilities": "utility", etc., but plural handling already helps a lot
 }
 
+# ===========================================================
+# Helper Functions
+# ===========================================================
 def _normalize_token(tok: str) -> str:
     """
     Domain-aware normalization:
@@ -159,18 +161,75 @@ def _fuzzy_similarity(a: str, b: str, stopwords: set[str] | None = None) -> floa
 # -----------------------------------------------------------
 # DTOs
 # -----------------------------------------------------------
-
 @dataclass
 class EtfInfo:
     symbol: str
     name: str
     tokens: set[str]
 
+def _load_etf_match_overrides() -> dict[str, dict[str, str]]:
+    """
+    Load manual ETF match overrides from config/etf_match_overrides.csv.
 
-# -----------------------------------------------------------
-# Public API
-# -----------------------------------------------------------
+    Expected columns:
+      - symbol
+      - etf_symbol_primary
+      - (optional) etf_symbol_secondary
+      - (optional) notes
 
+    Returns:
+      {
+        "AAPL": {
+            "etf_symbol_primary": "XLK",
+            "etf_symbol_secondary": "QQQ",
+            "notes": "manual override"
+        },
+        ...
+      }
+    """
+    p = CFG / "etf_match_overrides.csv"
+    if not p.exists():
+        return {}
+
+    df = pd.read_csv(p)
+
+    required = {"symbol", "etf_symbol_primary"}
+    missing = required - set(df.columns)
+    if missing:
+        raise KeyError(f"ETF override file missing columns: {sorted(missing)}")
+
+    out: dict[str, dict[str, str]] = {}
+
+    for _, row in df.iterrows():
+        sym = str(row["symbol"]).strip().upper()
+        if not sym:
+            continue
+
+        primary = str(row["etf_symbol_primary"]).strip().upper()
+        if not primary or primary.lower() == "nan":
+            continue
+
+        secondary_raw = row["etf_symbol_secondary"] if "etf_symbol_secondary" in row.index else ""
+        secondary = str(secondary_raw).strip().upper() if pd.notna(secondary_raw) else ""
+        if secondary.lower() == "nan":
+            secondary = ""
+
+        notes_raw = row["notes"] if "notes" in row.index else ""
+        notes = str(notes_raw).strip() if pd.notna(notes_raw) else ""
+        if notes.lower() == "nan":
+            notes = ""
+
+        out[sym] = {
+            "etf_symbol_primary": primary,
+            "etf_symbol_secondary": secondary,
+            "notes": notes,
+        }
+
+    return out
+    
+# ===========================================================
+# Main Function - Public API
+# ===========================================================
 def build_symbol_to_etf_map(
     stocks_meta: pd.DataFrame,
     etfs_df: pd.DataFrame,
@@ -232,10 +291,12 @@ def build_symbol_to_etf_map(
             }
         )
 
+    overrides = _load_etf_match_overrides()
+    
     rows: list[dict] = []
 
     for _, s in stocks_meta.iterrows():
-        sym = str(s["symbol"])
+        sym = str(s["symbol"]).strip().upper()
         sector = str(s["sector"])
         industry = str(s["industry"])
         name = str(s.get("name", ""))  # stock’s long name if present
@@ -266,30 +327,42 @@ def build_symbol_to_etf_map(
                 best_sector_etf = etf["symbol"]
                 best_sector_name = etf["name"]
 
-        # --- Primary selection (you can tweak this logic later) ---
-        if best_industry_etf is not None and best_industry_score >= industry_min_score:
-            primary = best_industry_etf
-        elif best_sector_etf is not None and best_sector_score >= sector_min_score:
-            primary = best_sector_etf
-        else:
-            primary = default_etf
+ 
+        override = overrides.get(sym)
 
-        # --- Secondary selection (keep the "other" candidate if meaningful) ---
-        secondary = None
-        # Candidate list: (etf_symbol, score)
-        candidates = [
-            (best_industry_etf, best_industry_score, industry_min_score),
-            (best_sector_etf, best_sector_score, sector_min_score),
-        ]
-        for etf_sym, score, th in candidates:
-            if etf_sym is None:
-                continue
-            if etf_sym == primary:
-                continue
-            if score < th: #<--- previously was score <= 0.0:
-                continue
-            secondary = etf_sym
-            break  # first non-primary, sufficiently positive-score candidate
+        if override is not None:
+            primary = override["etf_symbol_primary"]
+            secondary = override.get("etf_symbol_secondary") or None
+            match_source = "override"
+            override_notes = override.get("notes", "")
+        else:
+            # --- Primary selection (you can tweak this logic later) ---
+            if best_industry_etf is not None and best_industry_score >= industry_min_score:
+                primary = best_industry_etf
+            elif best_sector_etf is not None and best_sector_score >= sector_min_score:
+                primary = best_sector_etf
+            else:
+                primary = default_etf
+    
+            # --- Secondary selection (keep the "other" candidate if meaningful) ---
+            secondary = None
+            # Candidate list: (etf_symbol, score)
+            candidates = [
+                (best_industry_etf, best_industry_score, industry_min_score),
+                (best_sector_etf, best_sector_score, sector_min_score),
+            ]
+            for etf_sym, score, th in candidates:
+                if etf_sym is None:
+                    continue
+                if etf_sym == primary:
+                    continue
+                if score < th: #<--- previously was score <= 0.0:
+                    continue
+                secondary = etf_sym
+                break  # first non-primary, sufficiently positive-score candidate
+
+            match_source = "fuzzy"
+            override_notes = ""
 
         rows.append(
             {
@@ -305,6 +378,8 @@ def build_symbol_to_etf_map(
                 "sector_score": float(best_sector_score),
                 "etf_symbol_primary": primary,
                 "etf_symbol_secondary": secondary,
+                "etf_match_source": match_source,
+                "etf_override_notes": override_notes,
             }
         )
 
