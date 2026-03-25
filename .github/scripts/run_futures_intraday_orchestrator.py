@@ -17,6 +17,13 @@ import run_futures_intraday_1h_guarded as g1h
 import run_futures_intraday_4h_guarded as g4h
 
 
+def _env_flag(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
@@ -45,10 +52,14 @@ def _run_if_ready() -> None:
     ran_1h = False
 
     # 1) Run 1h if it qualifies
+    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True)    
     if g1h.near_hour_plus_one(now):
-        print(f"[ORCH] {now} NY qualifies for 1h cadence. Running 1h profile...")
-        g1h.run_profile()
-        ran_1h = True
+        if one_hour_enabled:
+            print(f"[ORCH] {now} NY qualifies for 1h cadence. Running 1h profile...")
+            g1h.run_profile()
+            ran_1h = True
+        else:
+            print(f"[ORCH] {now} NY qualifies for 1h cadence, but FUTURES_1H_ENABLED=false. Skipping 1h profile.")
     else:
         print(f"[ORCH] {now} NY does not qualify for 1h cadence.")
 
