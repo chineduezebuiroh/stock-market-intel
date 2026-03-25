@@ -3,7 +3,12 @@ name: Futures Intraday Orchestrator
 on:
   schedule:
     - cron: "1/10 * * * 0-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_1h:
+        description: "Force-run 1h branch even if FUTURES_1H_ENABLED=false"
+        required: false
+        default: "false"
 
 concurrency:
   group: futures-intraday
@@ -26,6 +31,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       FUTURES_1H_ENABLED: ${{ vars.FUTURES_1H_ENABLED }}
+      FORCE_1H: ${{ github.event.inputs.force_1h || 'false' }}
       
     steps:
       - name: Checkout repo
