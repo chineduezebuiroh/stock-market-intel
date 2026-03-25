@@ -44,6 +44,9 @@ def main() -> None:
 def _run_if_ready() -> None:
     now = now_ny()
 
+    force_1h = _env_flag("FORCE_1H", default=False)
+    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True) or force_1h
+
     # Shared futures session gate (use the 1h module’s function as the canonical one)
     if not g1h.in_futures_session(now):
         print(f"[INFO] {now} NY outside futures session. Skipping.")
@@ -52,9 +55,6 @@ def _run_if_ready() -> None:
     ran_1h = False
 
     # 1) Run 1h if it qualifies
-    force_1h = _env_flag("FORCE_1H", default=False)
-    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True) or force_1h
-    
     if g1h.near_hour_plus_one(now):
         if one_hour_enabled:
             print(f"[ORCH] {now} NY qualifies for 1h cadence. Running 1h profile...")
@@ -69,6 +69,11 @@ def _run_if_ready() -> None:
     # IMPORTANT: even if it qualifies, we still want it to run AFTER 1h when both qualify
     if g4h.near_4h_grid(now):
         print(f"[ORCH] {now} NY qualifies for 4h cadence.")
+        if not one_hour_enabled:
+            print(f"[ORCH] {now} NY qualifies for 4h cadence, but FUTURES_1H_ENABLED=false. Running 1h profile.")
+            g1h.run_profile()
+            ran_1h = True
+        
         if not ran_1h:
             print("[ORCH] Skipping 4h because 1h did not run this tick.")
             return
