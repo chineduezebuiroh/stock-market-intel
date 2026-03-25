@@ -388,8 +388,5 @@ def build_symbol_to_etf_map(
 # ---------------------------------------------------------------------
 # Public entrypoint: build ETF mapping for options-eligible only
 # ---------------------------------------------------------------------
-
-
-
 if __name__ == "__main__":
     build_options_eligible_etf_map()
