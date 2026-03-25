@@ -52,7 +52,9 @@ def _run_if_ready() -> None:
     ran_1h = False
 
     # 1) Run 1h if it qualifies
-    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True)    
+    force_1h = _env_flag("FORCE_1H", default=False)
+    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True) or force_1h
+    
     if g1h.near_hour_plus_one(now):
         if one_hour_enabled:
             print(f"[ORCH] {now} NY qualifies for 1h cadence. Running 1h profile...")
