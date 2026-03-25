@@ -70,6 +70,10 @@ def _run_if_ready() -> None:
     if g4h.near_4h_grid(now):
         print(f"[ORCH] {now} NY qualifies for 4h cadence.")
         if not one_hour_enabled:
+            """
+            4h profile is dependent on 1h profile running and completing. Now that we included a flag to disable
+            1h-only run, must add logic here to execute 1h run when 4h is qualified
+            """
             print(f"[ORCH] {now} NY qualifies for 4h cadence, but FUTURES_1H_ENABLED=false. Running 1h profile.")
             g1h.run_profile()
             ran_1h = True
