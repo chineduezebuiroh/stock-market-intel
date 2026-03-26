@@ -299,3 +299,11 @@ def run_guarded(
     if mark_on_success:
         mark_run(marker_name, run_key, now=now_ny() if now is None else now, status="success", meta=meta)
         print(f"[GUARD] marked success {marker_name} ({run_key})")
+
+
+def _env_flag(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+    
