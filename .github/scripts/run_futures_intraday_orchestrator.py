@@ -10,18 +10,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import now_ny
+from core.guard import now_ny, _env_flag
 
 # Import the two guard modules (so we can call their gate funcs + run_profile)
 import run_futures_intraday_1h_guarded as g1h
 import run_futures_intraday_4h_guarded as g4h
-
-
-def _env_flag(name: str, default: bool = True) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def main() -> None:
