@@ -1,7 +1,7 @@
 from __future__ import annotations
-
 # etf/mapping_engine.py
 
+import os
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 REF = ROOT / "ref"
 """
 from core.paths import REF #, CFG  # NEW
+from core.qa_etf import send_etf_mapping_qa_sample
 
 import pandas as pd
 
@@ -70,6 +71,10 @@ def write_options_etf_mapping() -> Path:
     mapping = build_options_eligible_etf_map()
     out = REF / "symbol_to_etf_options_eligible.csv"
     mapping.to_csv(out, index=False)
+
+    if os.getenv("ETF_QA_ENABLED", "true").lower() in ("1", "true", "yes"):
+        send_etf_mapping_qa_sample(mapping)
+    
     print(
         f"[OK] Wrote ETF mapping for options-eligible symbols "
         f"({len(mapping)} rows) to {out}"
