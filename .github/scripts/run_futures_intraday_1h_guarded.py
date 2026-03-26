@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import NY_TZ, now_ny, in_futures_session
+from core.guard import NY_TZ, now_ny, in_futures_session, _env_flag
 
 from core.health import run_combo_health, print_results
 #from core.signal_alerts import notify_on_signals
