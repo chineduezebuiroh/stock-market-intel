@@ -32,6 +32,9 @@ def near_hour_plus_one(now: datetime) -> bool:
 def run_profile() -> None:
     root = ROOT
 
+    force_1h = _env_flag("FORCE_1H", default=False)
+    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True) or force_1h
+
     cmds = [
         # 1) Refresh futures intraday_1h + cascade (4h, daily) for shortlist only
         [sys.executable, str(root / "jobs" / "run_timeframe.py"), "futures", "intraday_1h", "--cascade"],
@@ -51,7 +54,8 @@ def run_profile() -> None:
     results += run_combo_health(combos=["futures_1_1h4hd_shortlist"], universe_csv="shortlist_futures.csv")
     print_results(results)
 
-    notify_combo_signals("futures_1_1h4hd_shortlist", only_if_changed=True)
+    if one_hour_enabled:
+        notify_combo_signals("futures_1_1h4hd_shortlist", only_if_changed=True)
 
 
 def main() -> None:
