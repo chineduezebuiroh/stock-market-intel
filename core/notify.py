@@ -186,7 +186,7 @@ def format_signal_message(
     combo_name: str,
     asof: str,
     rows: list[SignalRow],
-    max_lines_per_bucket: int = 40,
+    max_lines_per_bucket: int = 75,
 ) -> str:
     """
     Compact, scan-friendly message.
