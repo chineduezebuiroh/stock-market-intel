@@ -1,5 +1,5 @@
 from __future__ import annotations
-# core.qa_etf.py
+# core/qa_etf.py
 
 import pandas as pd
 import numpy as np
