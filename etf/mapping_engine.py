@@ -73,7 +73,10 @@ def write_options_etf_mapping() -> Path:
     mapping.to_csv(out, index=False)
 
     if os.getenv("ETF_QA_ENABLED", "true").lower() in ("1", "true", "yes"):
-        send_etf_mapping_qa_sample(mapping, fuzzy_only=True)
+        try:
+            send_etf_mapping_qa_sample(mapping, fuzzy_only=True)
+        except Exception as e:
+            print(f"[WARN] ETF QA email failed: {e}")
         
     print(
         f"[OK] Wrote ETF mapping for options-eligible symbols "
