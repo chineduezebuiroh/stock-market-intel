@@ -21,6 +21,12 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       ETF_QA_ENABLED: "true"
+      EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+      EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+      EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
 
     steps:
       - name: Checkout repo
