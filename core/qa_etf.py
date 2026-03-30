@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from core.notify import notify_telegram_message
+from core.notify import send_telegram_message
 
 
 def send_etf_mapping_qa_sample(
@@ -65,6 +65,8 @@ def send_etf_mapping_qa_sample(
         primary = row.get("etf_symbol_primary", "")
         secondary = row.get("etf_symbol_secondary", "")
         source = row.get("etf_match_source", "")
+        industry = row.get("industry", "")
+        sector = row.get("sector", "")
         ind_score = row.get("industry_score", "")
         sec_score = row.get("sector_score", "")
 
@@ -80,13 +82,14 @@ def send_etf_mapping_qa_sample(
 
         line = (
             f"{symbol} | "
-            f"P:{primary} "
-            f"S:{secondary} | "
+            f"P:{primary} S:{secondary} | "
             f"src:{source} | "
-            f"ind:{ind_score_fmt} "
-            f"sec:{sec_score_fmt}"
+            f"sector:{sector} | "
+            f"industry:{industry} | "
+            f"ind:{ind_score_fmt} sec:{sec_score_fmt}"
         )
         lines.append(line)
 
     msg = "\n".join(lines)
-    notify_telegram_message(msg)
+    send_telegram_message(msg)
+    
