@@ -14,7 +14,8 @@ import requests
 
 from core.paths import DATA
 from core import storage
-
+import smtplib
+from email.message import EmailMessage
 
 SIGNALS_OF_INTEREST = {"long", "short", "watch", "anti"}
 
@@ -51,6 +52,56 @@ def send_telegram_message(text: str) -> None:
     r = requests.post(url, data=payload, timeout=20)
     if not r.ok:
         raise RuntimeError(f"Telegram send failed: {r.status_code} {r.text}")
+
+
+def send_email_message(
+    *,
+    subject: str,
+    body: str,
+    to_email: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> None:
+    """
+    Send an email via SMTP.
+
+    Env vars required:
+      - EMAIL_SMTP_HOST
+      - EMAIL_SMTP_PORT   (optional, default 465)
+      - EMAIL_USERNAME
+      - EMAIL_PASSWORD
+      - EMAIL_FROM
+      - EMAIL_TO          (optional if to_email passed explicitly)
+
+    attachments:
+      list of tuples: (filename, content_bytes, mime_type)
+      e.g. ("sample.csv", csv_bytes, "text/csv")
+    """
+    smtp_host = _env("EMAIL_SMTP_HOST")
+    smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "465"))
+    username = _env("EMAIL_USERNAME")
+    password = _env("EMAIL_PASSWORD")
+    from_email = _env("EMAIL_FROM")
+    recipient = to_email or _env("EMAIL_TO")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = recipient
+    msg.set_content(body)
+
+    for attachment in attachments or []:
+        filename, content_bytes, mime_type = attachment
+        maintype, subtype = mime_type.split("/", 1)
+        msg.add_attachment(
+            content_bytes,
+            maintype=maintype,
+            subtype=subtype,
+            filename=filename,
+        )
+
+    with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+        server.login(username, password)
+        server.send_message(msg)
 
 
 def _alert_state_path(alert_key: str) -> Path:
