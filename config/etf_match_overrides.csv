@@ -1,3 +1,4 @@
 symbol,etf_symbol_primary,etf_symbol_secondary,notes
 
 AAPL,XLK,QQQ,manual override
+UE,XLRE,XRT,manual override
