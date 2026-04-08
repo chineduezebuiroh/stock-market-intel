@@ -1,4 +1,21 @@
 symbol,etf_symbol_primary,etf_symbol_secondary,notes
 
 AAPL,XLK,QQQ,manual override
+
 UE,XLRE,XRT,manual override
+
+CSCO,IYZ,XLC,manual override
+VZ,IYZ,XLC,manual override
+T,IYZ,XLC,manual override
+CIEN,IYZ,XLC,manual override
+TMUS,IYZ,XLC,manual override
+ANET,IYZ,XLC,manual override
+CMCSA,IYZ,XLC,manual override
+LITE,IYZ,XLC,manual override
+IRDM,IYZ,XLC,manual override
+MSI,IYZ,XLC,manual override
+TIGO,IYZ,XLC,manual override
+UI,IYZ,XLC,manual override
+CHTR,IYZ,XLC,manual override
+ASTS,IYZ,XLC,manual override
+GLIBK,IYZ,XLC,manual override
