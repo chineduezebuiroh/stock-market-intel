@@ -5,31 +5,26 @@ from __future__ import annotations
 import subprocess
 import os
 import sys
-from datetime import time
+#from datetime import time
 #from zoneinfo import ZoneInfo
 from pathlib import Path
-import pandas as pd
+#import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.paths import DATA
-from core import storage
+#from core.paths import DATA
+#from core import storage
 from core.health import run_combo_health, print_results
-from core.guard import run_guarded
+from core.guard import run_registry_guarded
 #from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ----- Config: Set job name constant for auidt log -----
 # =======================================================
-TARGET_TIME = time(hour=17, minute=00)  # 5:00 pm America/New_York
-TOLERANCE_MIN = 45                      # + 45 minutes window
-
-
-def minutes_since_midnight(t: time) -> int:
-    return t.hour * 60 + t.minute
+JOB_NAME = "stocks_eod"
 
 
 def run_profile() -> None:
@@ -72,41 +67,27 @@ def run_profile() -> None:
     notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False)
     notify_combo_signals("stocks_c_dwm_all", only_if_changed=False)
 
-
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
     # Manual runs:
-    # - bypass time window (so you can run anytime)
-    # - bypass idempotency (so you can force a rerun even if it already ran today)
+    # - bypass registry check so you can force a run anytime
+    # - still mark successful execution afterward
     if event_name == "workflow_dispatch":
-        print("[INFO] Triggered via workflow_dispatch; bypassing time-window guard.")
-        run_guarded(
-            marker_name="stocks_eod",
-            period="daily",
-            target_time=TARGET_TIME,
-            tolerance_min=TOLERANCE_MIN,
-            mode="after_only",
+        print("[INFO] Triggered via workflow_dispatch; bypassing registry guard.")
+        run_registry_guarded(
+            job_name=JOB_NAME,
             fn=run_profile,
-            bypass_time_window=True,
-            respect_idempotency=False,
-            meta={"event": "workflow_dispatch"},
+            bypass_registry=True,
         )
         return
 
     # Scheduled runs:
-    # - enforce after-only window (no running before target)
-    # - enforce idempotency per NY day
-    run_guarded(
-        marker_name="stocks_eod",
-        period="daily",
-        target_time=TARGET_TIME,
-        tolerance_min=TOLERANCE_MIN,
-        mode="after_only",
+    # - obey execution registry (active flag + last_execution/check_window_hours)
+    run_registry_guarded(
+        job_name=JOB_NAME,
         fn=run_profile,
-        bypass_time_window=False,
-        respect_idempotency=True,
-        meta={"event": event_name or "schedule"},
+        bypass_registry=False,
     )
 
 
