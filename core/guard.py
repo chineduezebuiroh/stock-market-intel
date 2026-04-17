@@ -17,7 +17,6 @@ from core import storage
 # -----------------------------
 # Time helpers
 # -----------------------------
-
 NY_TZ = ZoneInfo("America/New_York")
 
 def now_ny() -> datetime:
@@ -118,11 +117,9 @@ def check_time_window(
         return WindowDecision(True, f"within {tolerance_min} min after target {target_time}")
     return WindowDecision(False, f"more than {tolerance_min} min after target {target_time}")
 
-
 # -----------------------------
 # Run keys (idempotency)
 # -----------------------------
-
 RunPeriod = Literal["daily", "weekly", "monthly", "custom"]
 
 
@@ -159,7 +156,6 @@ def make_run_key(*, period: RunPeriod, now: datetime, custom: Optional[str] = No
 # -----------------------------
 # Marker storage (Parquet)
 # -----------------------------
-
 def _marker_path(marker_name: str, run_key: str) -> Path:
     """
     Store markers under DATA/_runs/<marker_name>/<run_key>.parquet
@@ -214,12 +210,213 @@ def mark_run(
     # Ensure parent exists for local; for S3 the "dirs" are virtual (fine)
     # storage.save_parquet handles local mkdirs already.
     storage.save_parquet(df, p)
+    
+# -----------------------------
+# Execution registry (Parquet)
+# -----------------------------
+def _execution_registry_path() -> Path:
+    """
+    Canonical execution registry shared by guard scripts.
+    Stored in DATA so it works on local and S3 via core.storage.
+    """
+    return DATA / "_runs" / "execution_registry.parquet"
 
+
+def load_execution_registry() -> pd.DataFrame:
+    p = _execution_registry_path()
+    if not storage.exists(p):
+        return pd.DataFrame(
+            columns=["job", "active", "last_execution", "check_window_hours"]
+        )
+
+    df = storage.load_parquet(p)
+    if df is None or df.empty:
+        return pd.DataFrame(
+            columns=["job", "active", "last_execution", "check_window_hours"]
+        )
+
+    # normalize expected cols
+    for col in ["job", "active", "last_execution", "check_window_hours"]:
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    return df[["job", "active", "last_execution", "check_window_hours"]].copy()
+
+
+def save_execution_registry(df: pd.DataFrame) -> None:
+    p = _execution_registry_path()
+    out = df.copy()
+    storage.save_parquet(out, p)
+
+
+def _normalize_active(v: Any) -> bool:
+    if pd.isna(v):
+        return False
+    s = str(v).strip().lower()
+    return s in {"yes", "y", "true", "1", "on"}
+
+
+def get_job_registry_row(job_name: str) -> Optional[pd.Series]:
+    df = load_execution_registry()
+    if df.empty:
+        return None
+
+    hit = df[df["job"].astype(str).str.strip() == str(job_name).strip()]
+    if hit.empty:
+        return None
+
+    # if duplicates exist, take the last one
+    return hit.iloc[-1]
+
+
+def should_run_from_registry(
+    *,
+    job_name: str,
+    now: Optional[datetime] = None,
+) -> tuple[bool, str]:
+    """
+    Returns (ok_to_run, reason) based on the execution registry.
+
+    Rules:
+      - if job missing from registry -> skip (fail closed)
+      - if active != yes -> skip
+      - if last_execution is within check_window_hours -> skip
+      - otherwise run
+    """
+    if now is None:
+        now = now_ny()
+
+    row = get_job_registry_row(job_name)
+    if row is None:
+        return False, f"job '{job_name}' missing from execution registry"
+
+    active = _normalize_active(row.get("active"))
+    if not active:
+        return False, f"job '{job_name}' inactive"
+
+    try:
+        check_window_hours = float(row.get("check_window_hours"))
+    except Exception:
+        return False, f"job '{job_name}' has invalid check_window_hours"
+
+    if check_window_hours <= 0:
+        return False, f"job '{job_name}' has non-positive check_window_hours"
+
+    last_execution_raw = row.get("last_execution")
+
+    # Never run before first successful execution? No.
+    # If never run, allow it.
+    if pd.isna(last_execution_raw) or str(last_execution_raw).strip() == "":
+        return True, "never executed before"
+
+    try:
+        last_execution = pd.to_datetime(last_execution_raw, utc=True)
+        now_utc = pd.Timestamp(now.astimezone(ZoneInfo("UTC")))
+        hours_since = (now_utc - last_execution).total_seconds() / 3600.0
+    except Exception:
+        return False, f"job '{job_name}' has invalid last_execution"
+
+    if hours_since < check_window_hours:
+        return False, (
+            f"last execution {hours_since:.2f}h ago < "
+            f"check_window_hours={check_window_hours:g}"
+        )
+
+    return True, (
+        f"last execution {hours_since:.2f}h ago >= "
+        f"check_window_hours={check_window_hours:g}"
+    )
+
+
+def mark_registry_execution(
+    *,
+    job_name: str,
+    now: Optional[datetime] = None,
+) -> None:
+    """
+    Update the registry row for a job with the latest successful execution timestamp.
+    """
+    if now is None:
+        now = now_ny()
+
+    df = load_execution_registry()
+    now_utc_iso = now.astimezone(ZoneInfo("UTC")).isoformat()
+
+    if df.empty:
+        df = pd.DataFrame(
+            [{
+                "job": job_name,
+                "active": "Yes",
+                "last_execution": now_utc_iso,
+                "check_window_hours": 24,
+            }]
+        )
+        save_execution_registry(df)
+        return
+
+    mask = df["job"].astype(str).str.strip() == str(job_name).strip()
+
+    if mask.any():
+        df.loc[mask, "last_execution"] = now_utc_iso
+    else:
+        # fail-open creation only if somehow missing;
+        # default active Yes + 24h window
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame([{
+                    "job": job_name,
+                    "active": "Yes",
+                    "last_execution": now_utc_iso,
+                    "check_window_hours": 24,
+                }]),
+            ],
+            ignore_index=True,
+        )
+
+    save_execution_registry(df)
+
+
+def run_registry_guarded(
+    *,
+    job_name: str,
+    fn: Callable[[], None],
+    now: Optional[datetime] = None,
+    bypass_registry: bool = False,
+    mark_on_success: bool = True,
+) -> None:
+    """
+    Registry-based guard:
+      - scheduled runs: bypass_registry=False
+      - manual runs:    bypass_registry=True (run anytime)
+    """
+    if now is None:
+        now = now_ny()
+
+    if bypass_registry:
+        print(f"[GUARD] bypass registry for {job_name}")
+        fn()
+        if mark_on_success:
+            mark_registry_execution(job_name=job_name, now=now)
+            print(f"[GUARD] marked success {job_name} in execution registry")
+        return
+
+    ok, reason = should_run_from_registry(job_name=job_name, now=now)
+
+    if not ok:
+        print(f"[GUARD] skip {job_name}: {reason}")
+        return
+
+    print(f"[GUARD] run {job_name}: {reason}")
+    fn()
+
+    if mark_on_success:
+        mark_registry_execution(job_name=job_name, now=now)
+        print(f"[GUARD] marked success {job_name} in execution registry")
 
 # -----------------------------
 # One-call “guard then run”
 # -----------------------------
-
 def should_run(
     *,
     marker_name: str,
