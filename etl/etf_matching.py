@@ -70,6 +70,8 @@ _SPECIAL_STEMS = {
     "cyclical": "cyclical",
     "staples": "defensive",
     "defensive": "defensive",
+    "telecom": "telecommunications",
+    "telecommunications": "telecommunications",
     # you can extend this later, e.g.:
     # "utilities": "utility", etc., but plural handling already helps a lot
 }
