@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import os
 import sys
-from datetime import time
+#from datetime import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,15 +13,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.health import run_combo_health, print_results
-from core.guard import run_guarded  # ✅ your existing core/guard.py
-#from core.signal_alerts import notify_on_signals
+from core.guard import run_registry_guarded
+
 from core.notify import notify_combo_signals
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ----- Config: Set job name constant for auidt log -----
 # =======================================================
-TARGET_TIME = time(hour=6, minute=30)   # 6:30am America/New_York
-TOLERANCE_MIN = 45                      # +/- 45 minutes
+JOB_NAME = "stocks_weekly"
 
 
 def run_profile() -> None:
@@ -65,31 +64,24 @@ def run_profile() -> None:
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
-    # Manual runs: bypass time window (but you can choose whether to respect idempotency)
+    # Manual runs:
+    # - bypass registry check so you can force a run anytime
+    # - still mark successful execution afterward
     if event_name == "workflow_dispatch":
-        print("[INFO] Triggered via workflow_dispatch; bypassing time-window guard.")
-        run_guarded(
-            marker_name="stocks_weekly_rollup",
-            period="weekly",
-            target_time=TARGET_TIME,
-            tolerance_min=TOLERANCE_MIN,
-            mode="abs",                 # ✅ weekly: abs window is fine
+        print("[INFO] Triggered via workflow_dispatch; bypassing registry guard.")
+        run_registry_guarded(
+            job_name=JOB_NAME,
             fn=run_profile,
-            bypass_time_window=True,
-            respect_idempotency=False, 
+            bypass_registry=True,
         )
         return
 
-    # Scheduled runs: enforce window + idempotency
-    run_guarded(
-        marker_name="stocks_weekly_rollup",
-        period="weekly",
-        target_time=TARGET_TIME,
-        tolerance_min=TOLERANCE_MIN,
-        mode="abs",
+    # Scheduled runs:
+    # - obey execution registry (active flag + last_execution/check_window_hours)
+    run_registry_guarded(
+        job_name=JOB_NAME,
         fn=run_profile,
-        bypass_time_window=False,
-        respect_idempotency=True,
+        bypass_registry=False,
     )
 
 
