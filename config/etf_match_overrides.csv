@@ -2,6 +2,17 @@ symbol,etf_symbol_primary,etf_symbol_secondary,notes
 
 AAPL,XLK,QQQ,manual override
 
-UE,XLRE,XRT,manual override
+CHDN,PEJ,RSPD,manual override
 
+HPE,XLK,QQQ,manual override
+
+J,XLI,,manual override
+
+MGM,PEJ,RSPD,manual override
+
+QSR,PEJ,RSPD,manual override
+
+UE,XLRE,XRT,manual override
 USAS,XLB,XLI,manual override
+
+YUMC,PEJ,RSPD,manual override
