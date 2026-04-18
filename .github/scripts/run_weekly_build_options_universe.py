@@ -15,15 +15,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.health import run_combo_health, print_results
-from core.guard import minutes_since_midnight, now_ny #run_guarded  # ✅ your existing core/guard.py
+from core.guard import minutes_since_midnight, now_ny, run_registry_guarded
 #from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ----- Config: Set job name constant for auidt log -----
 # =======================================================
-TARGET_TIME = time(hour=1, minute=30)  # 01:30 America/New_York
-TOLERANCE_MIN = 45                      # +/- 45 minutes
+JOB_NAME = "weekly_build_options_universe"
 
 # =======================================================
 # ---- Options universe sanity thresholds ----
@@ -101,7 +100,6 @@ def validate_options_universe(root: Path) -> None:
     )
 
 
-
 def run_profile() -> None:
     root = Path(__file__).resolve().parents[2]
 
@@ -131,16 +129,22 @@ def run_profile() -> None:
     validate_options_universe(root)
 
 
-
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
-    # ✅ Manual runs always execute, regardless of time
+    # Manual runs:
+    # - bypass registry check so you can force a run anytime
+    # - still mark successful execution afterward
     if event_name == "workflow_dispatch":
-        print("[INFO] Triggered via workflow_dispatch; bypassing time-window guard.")
-        run_profile()
+        print("[INFO] Triggered via workflow_dispatch; bypassing registry guard.")
+        run_registry_guarded(
+            job_name=JOB_NAME,
+            fn=run_profile,
+            bypass_registry=True,
+        )
         print("[OK] options universe build completed.")
         return
+
 
     # ✅ Scheduled runs: enforce DST-aware time window
     now_time = now_ny()
@@ -152,6 +156,7 @@ def main() -> None:
         print(f"[INFO] Today ({today}) is not Sunday in NY. Skipping options-universe build.")
         sys.exit(0)
 
+    """
     now_min = minutes_since_midnight(now_time)
     target_min = minutes_since_midnight(TARGET_TIME)
     diff = abs(now_min - target_min)
@@ -162,9 +167,16 @@ def main() -> None:
             f"of target {TARGET_TIME}. Skipping options-universe build."
         )
         sys.exit(0)
-
-    print(f"[INFO] Within window at {now_time} NY. Running weekly stocks rollup profile...")
-    run_profile()
+    """
+    
+    """print(f"[INFO] Within window at {now_time} NY. Running weekly stocks rollup profile...")"""
+    # Scheduled runs:
+    # - obey execution registry (active flag + last_execution/check_window_hours)
+    run_registry_guarded(
+        job_name=JOB_NAME,
+        fn=run_profile,
+        bypass_registry=False,
+    )
     print("[OK] options universe build completed.")
 
 
