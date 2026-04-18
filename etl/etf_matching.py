@@ -23,6 +23,8 @@ _token_re = re.compile(r"[A-Za-z0-9]+")
 _STOPWORDS = {
     "500",
     "&",
+    "-",
+    "alcoholic",
     "and",
     "care",
     #"consumer",
@@ -51,6 +53,7 @@ _STOPWORDS = {
     "spdr",
     "the",
     "trust",
+    "u.s.",
     "usd",    
     "vaneck",
     "weight",
