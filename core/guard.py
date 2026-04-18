@@ -15,12 +15,31 @@ from core.paths import DATA
 from core import storage
 
 # -----------------------------
-# Time helpers
+# Time helpers and Constants
 # -----------------------------
 NY_TZ = ZoneInfo("America/New_York")
 
 def now_ny() -> datetime:
     return datetime.now(NY_TZ)
+
+JOB_REGISTRY_DEFAULTS: dict[str, dict[str, Any]] = {
+    "stocks_eod":                    {"active": "Yes", "check_window_hours": 20,
+    },
+    "stocks_intraday_130m":          {"active": "No",  "check_window_hours": 1.8,
+    },
+    "stocks_weekly":                 {"active": "Yes", "check_window_hours": 24,
+    },
+    "stocks_monthly":                {"active": "Yes", "check_window_hours": 24,
+    },
+    "futures_eod":                   {"active": "Yes", "check_window_hours": 20,
+    },
+    "futures_intraday_1h":           {"active": "No",  "check_window_hours": 1,
+    },
+    "futures_intraday_4h":           {"active": "Yes", "check_window_hours": 3.4,
+    },
+    "weekly_build_options_universe": {"active": "Yes", "check_window_hours": 24,
+    },
+}
 
 
 def in_futures_session(now: datetime) -> bool:
@@ -214,6 +233,20 @@ def mark_run(
 # -----------------------------
 # Execution registry (Parquet)
 # -----------------------------
+def get_job_registry_defaults(job_name: str) -> dict[str, Any]:
+    """
+    Return default registry settings for a job.
+    Falls back to safe generic defaults if job not explicitly configured.
+    """
+    return JOB_REGISTRY_DEFAULTS.get(
+        str(job_name).strip(),
+        {
+            "active": "Yes",
+            "check_window_hours": 24,
+        },
+    )
+
+
 def _execution_registry_path() -> Path:
     """
     Canonical execution registry shared by guard scripts.
@@ -335,20 +368,24 @@ def mark_registry_execution(
 ) -> None:
     """
     Update the registry row for a job with the latest successful execution timestamp.
+
+    If the job does not yet exist in the registry, auto-seed it using
+    per-job defaults from JOB_REGISTRY_DEFAULTS.
     """
     if now is None:
         now = now_ny()
 
     df = load_execution_registry()
     now_utc_iso = now.astimezone(ZoneInfo("UTC")).isoformat()
+    defaults = get_job_registry_defaults(job_name)
 
     if df.empty:
         df = pd.DataFrame(
             [{
                 "job": job_name,
-                "active": "Yes",
+                "active": defaults.get("active", "Yes"),
                 "last_execution": now_utc_iso,
-                "check_window_hours": 24,
+                "check_window_hours": defaults.get("check_window_hours", 24),
             }]
         )
         save_execution_registry(df)
@@ -358,17 +395,25 @@ def mark_registry_execution(
 
     if mask.any():
         df.loc[mask, "last_execution"] = now_utc_iso
+
+        # Backfill missing values only; do NOT overwrite existing explicit config
+        if "active" in df.columns:
+            missing_active = mask & df["active"].isna()
+            df.loc[missing_active, "active"] = defaults.get("active", "Yes")
+
+        if "check_window_hours" in df.columns:
+            missing_window = mask & df["check_window_hours"].isna()
+            df.loc[missing_window, "check_window_hours"] = defaults.get("check_window_hours", 24)
+
     else:
-        # fail-open creation only if somehow missing;
-        # default active Yes + 24h window
         df = pd.concat(
             [
                 df,
                 pd.DataFrame([{
                     "job": job_name,
-                    "active": "Yes",
+                    "active": defaults.get("active", "Yes"),
                     "last_execution": now_utc_iso,
-                    "check_window_hours": 24,
+                    "check_window_hours": defaults.get("check_window_hours", 24),
                 }]),
             ],
             ignore_index=True,
