@@ -14,15 +14,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.health import run_combo_health, print_results
-from core.guard import run_guarded  # ✅ central guard logic
+from core.guard import run_registry_guarded
 #from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ----- Config: Set job name constant for auidt log -----
 # =======================================================
-TARGET_TIME = time(hour=18, minute=15)  # 6:15 pm America/New_York
-TOLERANCE_MIN = 45                      # allow runs up to 45 min AFTER target
+JOB_NAME = "futures_eod"
 
 
 def run_profile() -> None:
@@ -60,33 +59,25 @@ def run_profile() -> None:
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
-    # ✅ Manual runs: bypass time window (still idempotent by default)
+    # ✅ Manual runs:
+    # - bypass registry check so you can force a run anytime
+    # - still mark successful execution afterward
     if event_name == "workflow_dispatch":
-        print("[INFO] Triggered via workflow_dispatch; bypassing time-window guard.")
-        run_guarded(
-            marker_name="futures_eod",
-            period="daily",
-            target_time=TARGET_TIME,
-            tolerance_min=TOLERANCE_MIN,
-            mode="after_only",          # ✅ do not run before target
+        print("[INFO] Triggered via workflow_dispatch; bypassing registry guard.")
+        run_registry_guarded(
+            job_name=JOB_NAME,
             fn=run_profile,
-            bypass_time_window=True,
-            respect_idempotency=False,   # you can rerun same day, manually
+            bypass_registry=True,
         )
         return
 
-    # ✅ Scheduled runs: enforce time window + idempotency
-    run_guarded(
-        marker_name="futures_eod",
-        period="daily",
-        target_time=TARGET_TIME,
-        tolerance_min=TOLERANCE_MIN,
-        mode="after_only",
+    # ✅ Scheduled runs:
+    # - obey execution registry (active flag + last_execution/check_window_hours)
+    run_registry_guarded(
+        job_name=JOB_NAME,
         fn=run_profile,
-        bypass_time_window=False,
-        respect_idempotency=True,
+        bypass_registry=False,
     )
-
 
 if __name__ == "__main__":
     main()
