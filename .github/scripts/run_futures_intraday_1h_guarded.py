@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 # .github/scripts/run_futures_intraday_1h_guarded.py
 
 import os
@@ -12,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import NY_TZ, now_ny, in_futures_session, _env_flag
+from core.guard import NY_TZ, now_ny, in_futures_session, _env_flag, run_registry_guarded
 
 from core.health import run_combo_health, print_results
 #from core.signal_alerts import notify_on_signals
@@ -21,6 +20,7 @@ from core.notify import notify_combo_signals
 # =======================================================
 # ---- Config: desired cadence tolerance ----
 # =======================================================
+JOB_NAME = "futures_intraday_1h"
 MINUTE_TOLERANCE = 45  # around HH:01
 
 
@@ -60,14 +60,18 @@ def run_profile() -> None:
 
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
+    now = now_ny()
 
-    # Manual runs always execute
+    # Manual runs always allowed
     if event_name == "workflow_dispatch":
-        print("[INFO] Manual dispatch; running futures 1h intraday profile.")
-        run_profile()
+        print("[INFO] Manual dispatch; bypassing registry for futures 1h.")
+        run_registry_guarded(
+            job_name=JOB_NAME,
+            fn=run_profile,
+            now=now,
+            bypass_registry=True,
+        )
         return
-
-    now = now_ny()  # ✅ tz-aware NY now
 
     if not in_futures_session(now):
         print(f"[INFO] {now} NY outside futures weekly session. Skipping.")
@@ -78,7 +82,12 @@ def main() -> None:
         sys.exit(0)
 
     print(f"[INFO] {now} NY inside 1h futures session + cadence. Running profile...")
-    run_profile()
+    run_registry_guarded(
+        job_name=JOB_NAME,
+        fn=run_profile,
+        now=now,
+        bypass_registry=False,
+    )
 
 
 if __name__ == "__main__":
