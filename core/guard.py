@@ -33,7 +33,7 @@ JOB_REGISTRY_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "futures_eod":                   {"active": "Yes", "check_window_hours": 20,
     },
-    "futures_intraday_1h":           {"active": "No",  "check_window_hours": 1,
+    "futures_intraday_1h":           {"active": "No",  "check_window_hours": 0.85,
     },
     "futures_intraday_4h":           {"active": "Yes", "check_window_hours": 3.4,
     },
