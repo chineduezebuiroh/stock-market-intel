@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import now_ny, _env_flag
+from core.guard import now_ny, should_run_from_registry
 
 # Import the two guard modules (so we can call their gate funcs + run_profile)
 import run_futures_intraday_1h_guarded as g1h
@@ -20,14 +20,13 @@ import run_futures_intraday_4h_guarded as g4h
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
 
-    # Manual dispatch: run both checks, run what qualifies
+    # Manual dispatch: let each guarded module handle its own bypass logic
     if event_name == "workflow_dispatch":
-        print("[INFO] Manual dispatch; Running 1h + 4h profiles.")
-        print(f"[INFO] Running 1h profile...")
-        g1h.run_profile()
-        print("[ORCH] Running 4h profile...")
-        g4h.run_profile()
-        #_run_if_ready()
+        print("[INFO] Manual dispatch; delegating to 1h + 4h guarded mains.")
+        print(f"[INFO] Running 1h guarded main...")
+        g1h.main()
+        print(f"[ORCH] Running 4h profile...")
+        g4h.main()
         return
 
     # Scheduled dispatch
@@ -37,57 +36,42 @@ def main() -> None:
 def _run_if_ready() -> None:
     now = now_ny()
 
-    force_1h = _env_flag("FORCE_1H", default=False)
-    one_hour_enabled = _env_flag("FUTURES_1H_ENABLED", default=True) or force_1h
-
-    # Shared futures session gate (use the 1h module’s function as the canonical one)
-    if not g1h.in_futures_session(now):
-        print(f"[INFO] {now} NY outside futures session. Skipping.")
-        return
-
-    ran_1h = False
-
-    # 1) Run 1h if it qualifies
-    if g1h.near_hour_plus_one(now):
-        if one_hour_enabled:
-            print(f"[ORCH] {now} NY qualifies for 1h cadence. Running 1h profile...")
-            g1h.run_profile()
-            ran_1h = True
+    # --------------------------------------------------
+    # 1) Standalone 1h branch (registry-controlled)
+    # --------------------------------------------------
+    if g1h.in_futures_session(now):
+        if g1h.near_hour_plus_one(now) and not g4h.near_4h_grid(now):
+            ok_1h, reason_1h = should_run_from_registry(job_name="futures_intraday_1h", now=now)
+            if ok_1h:
+                print(f"[ORCH] {now} 1h qualifies and registry allows run. Running standalone 1h profile...")
+                g1h.run_profile()
+                mark_registry_execution(job_name="futures_intraday_1h", now=now)
+            else:
+                print(f"[ORCH] 1h qualifies but registry says skip: {reason_1h}")
         else:
-            print(f"[ORCH] {now} NY qualifies for 1h cadence, but FUTURES_1H_ENABLED=false. Skipping 1h profile.")
+            print(f"[ORCH] {now} does not qualify for 1h cadence.")
     else:
-        print(f"[ORCH] {now} NY does not qualify for 1h cadence.")
+        print(f"[ORCH] {now} outside 1h futures session.")
 
-    # 2) Run 4h if it qualifies
-    # IMPORTANT: even if it qualifies, we still want it to run AFTER 1h when both qualify
-    if g4h.near_4h_grid(now):
-        print(f"[ORCH] {now} NY qualifies for 4h cadence.")
-        if not one_hour_enabled:
-            """
-            4h profile is dependent on 1h profile running and completing. Now that we included a flag to disable
-            1h-only run, must add logic here to execute 1h run when 4h is qualified
-            """
-            print(f"[ORCH] {now} NY qualifies for 4h cadence, but FUTURES_1H_ENABLED=false. Running 1h profile.")
-            g1h.run_profile()
-            ran_1h = True
-        
-        if not ran_1h:
-            print("[ORCH] Skipping 4h because 1h did not run this tick.")
-            return
-            """
-            If you want to be more lenient,  allow the job to continue even if ran_1h is False.
-            Replace this block:
-                - print("[ORCH] Skipping 4h because 1h did not run this tick.")
-                - return
-            with:
-                - print("[ORCH] 4h qualifies but 1h did not run this tick. "
-                  "Proceeding anyway (your 4h step assumes 1h cascade has already produced 4h/daily).")
-                - # No 'return' statement
-            """
-        print("[ORCH] Running 4h profile...")
-        g4h.run_profile()
+    # --------------------------------------------------
+    # 2) 4h branch (registry-controlled, with 1h dependency refresh)
+    # --------------------------------------------------
+    if g4h.in_futures_4h_session(now):
+        if g4h.near_4h_grid(now):
+            ok_4h, reason_4h = should_run_from_registry(job_name="futures_intraday_4h", now=now)
+            if ok_4h:
+                print(f"[ORCH] {now} 4h qualifies and registry allows run.")
+                print("[ORCH] Running 1h dependency refresh before 4h...")
+                g1h.run_profile()   # dependency step, NOT standalone 1h job
+                print("[ORCH] Running 4h profile...")
+                g4h.run_profile()
+                mark_registry_execution(job_name="futures_intraday_4h", now=now)
+            else:
+                print(f"[ORCH] 4h qualifies but registry says skip: {reason_4h}")
+        else:
+            print(f"[ORCH] {now} does not qualify for 4h cadence.")
     else:
-        print(f"[ORCH] {now} NY does not qualify for 4h cadence.")
+        print(f"[ORCH] {now} outside 4h futures session.")
 
 
 if __name__ == "__main__":
