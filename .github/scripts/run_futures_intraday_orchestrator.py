@@ -56,7 +56,7 @@ def _run_if_ready() -> None:
     # --------------------------------------------------
     # 2) 4h branch (registry-controlled, with 1h dependency refresh)
     # --------------------------------------------------
-    if g4h.in_futures_4h_session(now):
+    if g4h.in_futures_session(now):
         if g4h.near_4h_grid(now):
             ok_4h, reason_4h = should_run_from_registry(job_name="futures_intraday_4h", now=now)
             if ok_4h:
