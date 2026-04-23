@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import now_ny, should_run_from_registry
+from core.guard import now_ny, should_run_from_registry, mark_registry_execution
 
 # Import the two guard modules (so we can call their gate funcs + run_profile)
 import run_futures_intraday_1h_guarded as g1h
