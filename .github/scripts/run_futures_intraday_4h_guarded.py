@@ -22,7 +22,7 @@ from core.notify import notify_combo_signals
 # ---- Config: cadence window ----
 # =======================================================
 JOB_NAME = "futures_intraday_4h"
-MINUTE_TOLERANCE = 60
+MINUTE_TOLERANCE = 65
 FOUR_HOUR_HOURS = {1, 5, 9, 13, 17, 21}
 
 
