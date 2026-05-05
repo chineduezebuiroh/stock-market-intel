@@ -1,7 +1,6 @@
 symbol,etf_symbol_primary,etf_symbol_secondary,notes
 
 AAPL,XLK,QQQ,manual override
-ANET,IYZ,XLC,manual override
 ASTS,IYZ,XLC,manual override
 
 CHDN,PEJ,RSPD,manual override
