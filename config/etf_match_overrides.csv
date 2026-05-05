@@ -1,18 +1,26 @@
 symbol,etf_symbol_primary,etf_symbol_secondary,notes
 
 AAPL,XLK,QQQ,manual override
+ANET,IYZ,XLC,manual override
+ASTS,IYZ,XLC,manual override
 
 CHDN,PEJ,RSPD,manual override
+CIEN,IYZ,XLC,manual override
+CSCO,IYZ,XLC,manual override
 
 HPE,XLK,QQQ,manual override
 
 J,XLI,,manual override
 
+LITE,IYZ,XLC,manual override
+
 MGM,PEJ,RSPD,manual override
+MSI,IYZ,XLC,manual override
 
 QSR,PEJ,RSPD,manual override
 
 UE,XLRE,XRT,manual override
+UI,IYZ,XLC,manual override
 USAS,XLB,XLI,manual override
 
 YUMC,PEJ,RSPD,manual override
