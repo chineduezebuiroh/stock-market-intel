@@ -14,13 +14,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.health import run_combo_health, print_results
-from core.guard import run_guarded  # ✅ central guard logic
-#from core.signal_alerts import notify_on_signals
+from core.guard import run_registry_guarded
 from core.notify import notify_combo_signals
 
 # =======================================================
-# ---- Config: desired local target time + tolerance ----
+# ---- Config: cadence window ----
 # =======================================================
+JOB_NAME = "stocks_monthly"
 TARGET_TIME = time(hour=6, minute=30)  # 6:30 am America/New_York (Sunday early)
 TOLERANCE_MIN = 45                    # +/- 45 minutes window
 
@@ -33,7 +33,6 @@ def is_first_sunday(dt: datetime) -> bool:
     if dt.weekday() != 6:  # Sunday = 6
         return False
     return dt.day <= 7
-
 
 
 def run_profile() -> None:
@@ -81,17 +80,13 @@ def main() -> None:
     # ✅ Manual runs bypass first-Sunday + time window (still idempotent by default)
     if event_name == "workflow_dispatch":
         print("[INFO] Triggered via workflow_dispatch; bypassing first-Sunday + time-window guard.")
-        run_guarded(
-            marker_name="stocks_monthly_rollup",
-            period="monthly",
-            target_time=TARGET_TIME,
-            tolerance_min=TOLERANCE_MIN,
-            mode="abs",                 # monthly/weekly weekend jobs: abs window is fine
+        run_registry_guarded(
+            job_name=JOB_NAME,
             fn=run_profile,
-            bypass_time_window=True,
-            respect_idempotency=False,
+            bypass_registry=True,
         )
         return
+
 
     # ✅ Scheduled runs: first-Sunday gate (local), then time/idempotency (core)
     if not is_first_sunday(now_ny):
@@ -101,6 +96,7 @@ def main() -> None:
         )
         sys.exit(0)
 
+    """
     run_guarded(
         marker_name="stocks_monthly_rollup",
         period="monthly",
@@ -110,6 +106,12 @@ def main() -> None:
         fn=run_profile,
         bypass_time_window=False,
         respect_idempotency=True,
+    )
+    """
+    run_registry_guarded(
+        job_name=JOB_NAME,
+        fn=run_profile,
+        bypass_registry=False,
     )
 
 
