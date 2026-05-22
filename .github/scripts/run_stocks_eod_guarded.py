@@ -64,8 +64,10 @@ def run_profile() -> None:
     results += run_combo_health(combos=["stocks_c_dwm_all"], universe_csv=None)
     print_results(results)
 
-    notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False)
-    notify_combo_signals("stocks_c_dwm_all", only_if_changed=False)
+    #notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False)
+    #notify_combo_signals("stocks_c_dwm_all", only_if_changed=False)
+    notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False, route="stocks_eod")
+    notify_combo_signals("stocks_c_dwm_all", only_if_changed=False, route="stocks_eod")
 
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")
