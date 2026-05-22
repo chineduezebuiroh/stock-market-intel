@@ -36,9 +36,17 @@ def _env(name: str) -> str:
     return v
 
 
-def send_telegram_message(text: str) -> None:
+def telegram_chat_id_for_route(route: str | None = None) -> str:
+    if not route or route == "default":
+        return _env("TELEGRAM_CHAT_ID")
+
+    key = f"TELEGRAM_CHAT_ID_{route.upper()}"
+    return os.getenv(key, "").strip() or _env("TELEGRAM_CHAT_ID")
+
+
+def send_telegram_message(text: str, *, chat_id: str | None = None) -> None:
     token = _env("TELEGRAM_BOT_TOKEN")
-    chat_id = _env("TELEGRAM_CHAT_ID")
+    chat_id = chat_id or _env("TELEGRAM_CHAT_ID")
 
     # Telegram has message size limits; keep it safe.
     # If you ever hit limits, we can chunk.
@@ -291,6 +299,7 @@ def notify_combo_signals(
     *,
     only_if_changed: bool,
     alert_key: Optional[str] = None,
+    route: str = "default",
 ) -> None:
     """
     Reads data/combo_<combo_name>.parquet and sends a Telegram message
@@ -324,7 +333,7 @@ def notify_combo_signals(
             return
 
     msg = format_signal_message(combo_name=combo_name, asof=asof, rows=rows)
-    send_telegram_message(msg)
+    send_telegram_message(msg, chat_id=telegram_chat_id_for_route(route))
 
     # record last fingerprint (for change suppression)
     save_alert_fingerprint(key, fp, meta={"combo": combo_name, "asof": asof})
