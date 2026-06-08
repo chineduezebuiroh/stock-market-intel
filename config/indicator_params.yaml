@@ -59,6 +59,65 @@ indicators:
         id: ttm_squeeze_pro
         z: 1
 
+    intraday_4h:
+      wyckoff_stage:
+        id: wyckoff_stage
+        fast_len: 6
+        int_len: 15
+        slow_len: 30
+        vma_length_source: "fast"
+
+      exh_abs_pa_current_bar:
+        id: exh_abs_price_action
+        lookback_period: 126
+        z: 0
+
+      exh_abs_pa_prior_bar:
+        id: exh_abs_price_action
+        lookback_period: 126
+        z: 1
+
+      sig_vol_current_bar:
+        id: significant_volume
+        lookback_period: 126
+        z: 0
+
+      sig_vol_prior_bar:
+        id: significant_volume
+        lookback_period: 126
+        z: 1
+
+      spy_qqq_vol_ma_ratio:
+        id: spy_qqq_volume_ma_ratio
+        length: 30
+        timeframe_name: "intraday_4h"
+
+      ma_trend_bullish:
+        id: movingavg_trend_bullish
+        fast_length: 12
+        displace: 1
+
+      ma_trend_bearish:
+        id: movingavg_trend_bearish
+        fast_length: 12
+        displace: 1
+        
+      macdv_core_bull:
+        id: macdv_core_bullish
+        z: 1
+
+      macdv_core_bear:
+        id: macdv_core_bearish
+        z: 1
+
+      macdv_guard:
+        id: macdv_guard
+        z: 0
+
+      ttm_squeeze_pro:
+        id: ttm_squeeze_pro
+        z: 1
+    
     daily:
       wyckoff_stage:
         id: wyckoff_stage
