@@ -683,8 +683,12 @@ def load_stocks_intraday_4h_extended(
         session=session,
     )
 
+    """
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
+    """
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame(columns=["open", "high", "low", "close", "adj_close", "volume"])
 
     # 2) Normalize to hour-start grid and merge duplicate/random minute bars
     # This helper is futures-named, but it is generic OHLCV hourly normalization.
