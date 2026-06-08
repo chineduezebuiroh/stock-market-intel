@@ -77,6 +77,19 @@ stocks:
     upper_profile: upper_core_v1
     
 
+  stocks_d_4hdw_shortlist:
+    universe: shortlist_stocks
+    
+    lower_tf: intraday_4h
+    lower_profile: lower_core_v1
+    
+    middle_tf: daily
+    middle_profile: middle_core_v1
+    
+    upper_tf: weekly
+    upper_profile: upper_core_v1
+    
+  
   stocks_d_130mdw_shortlist:
     universe: shortlist_stocks
     
