@@ -2,6 +2,9 @@ stocks:
   intraday_130m:
     session: regular
     window_bars: 300
+  intraday_4h:
+    session: extended
+    window_bars: 250
   daily:
     session: regular
     window_bars: 260
