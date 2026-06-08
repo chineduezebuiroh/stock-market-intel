@@ -19,6 +19,7 @@ import yaml
 from etl.sources import (
     load_eod,
     load_130m_from_5m,
+    load_stocks_intraday_4h_extended,
     load_quarterly_from_monthly,
     load_yearly_from_monthly,
     load_futures_intraday,
@@ -58,6 +59,7 @@ with open(CFG / "multi_timeframe_combos.yaml", "r") as f:
 CASCADE = {
     "stocks": {
         "intraday_130m": ["daily", "weekly"],
+        "intraday_4h": ["daily", "weekly"],
         "daily": ["weekly", "monthly"],
         "weekly": ["monthly", "quarterly"],
         "monthly": ["quarterly", "yearly"],
@@ -203,6 +205,9 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         try:
             if namespace == "stocks" and timeframe == "intraday_130m":
                 df_new = load_130m_from_5m(sym, session=session)
+
+            elif namespace == "stocks" and timeframe == "intraday_4h":
+                df_new = load_stocks_intraday_4h_extended(sym, window_bars=window_bars, session=session)
                 
             elif namespace == "stocks" and timeframe == "yearly":
                 df_new = load_yearly_from_monthly(sym, window_bars=window_bars, session=session)
