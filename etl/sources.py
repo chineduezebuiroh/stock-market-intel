@@ -53,7 +53,7 @@ def _agg_ohlcv_intraday(g: pd.DataFrame) -> pd.Series:
     return pd.Series(out)
 
 
-def normalize_futures_1h_index(df: pd.DataFrame) -> pd.DataFrame:
+def normalize_intraday_1h_index(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return df
 
@@ -394,7 +394,7 @@ def load_futures_intraday(
         return pd.DataFrame()
         
     #collapse multiple / random minute bars into a singular 1-hour bar
-    df_1h = normalize_futures_1h_index(df_1h)
+    df_1h = normalize_intraday_1h_index(df_1h)
 
     # NEW: patch in partial current hour from recent 5m/15m
     df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
@@ -688,11 +688,12 @@ def load_stocks_intraday_4h_extended(
 
     # 2) Normalize to hour-start grid and merge duplicate/random minute bars
     # This helper is futures-named, but it is generic OHLCV hourly normalization.
-    df_1h = normalize_futures_1h_index(df_1h)
+    df_1h = normalize_intraday_1h_index(df_1h)
 
     # 3) Patch partial current 1h bar from recent 5m/15m
     df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
-    df_1h = patch_partial_1h_from_5m(df_1h=df_1h, df_5m=df_recent, symbol=symbol)
+    
+    df_1h = patch_partial_1h_from_5m(df_1h=df_1h, df_5m=df_recent, symbol=symbol, session_gate=None)
 
     # 4) Resample 1h -> 4h with same 17:00 ET anchor as futures
     df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
@@ -701,7 +702,7 @@ def load_stocks_intraday_4h_extended(
         return pd.DataFrame()
 
     # 5) Patch partial current 4h bucket from recent 5m/15m
-    df_4h = patch_partial_4h_from_5m(df_4h=df_4h, df_5m=df_recent, symbol=symbol)
+    df_4h = patch_partial_4h_from_5m(df_4h=df_4h, df_5m=df_recent, symbol=symbol, session_gate=None)
 
     # 6) Final cleanup
     if df_4h is None or df_4h.empty:
