@@ -27,6 +27,8 @@ JOB_REGISTRY_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "stocks_intraday_130m":          {"active": "No",  "check_window_hours": 1.8,
     },
+    "stocks_intraday_4h":            {"active": "Yes", "check_window_hours": 3.4,
+    },
     "stocks_weekly":                 {"active": "Yes", "check_window_hours": 24,
     },
     "stocks_monthly":                {"active": "Yes", "check_window_hours": 24,
