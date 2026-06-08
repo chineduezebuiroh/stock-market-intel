@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 # etl/sources.py
 
 import os
@@ -22,7 +21,6 @@ class TimeoutException(Exception):
     
 ALPHA_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
-
 # ======================================================
 # --------------- Helper Function(s) ---------------
 # ======================================================
@@ -37,7 +35,6 @@ def timeout(seconds: int, msg: str = "Timeout"):
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old)
-
 
 # ======================================================
 # ---------------- Actual Processes ----------------
@@ -221,7 +218,6 @@ def load_eod(
     else:
         end_utc = end_utc.tz_convert("UTC")
 
-    
     start_utc = end_utc - timedelta(days=lookback_days)
 
     t = yf.Ticker(symbol)
@@ -631,6 +627,103 @@ def load_130m_from_5m(symbol: str, session: str = "regular") -> pd.DataFrame:
         out = out[~bad_mask]
 
     return out
+
+
+def load_stocks_intraday_4h_extended(
+    symbol: str,
+    window_bars: int,
+    session: str = "extended",
+) -> pd.DataFrame:
+    """
+    Build stock extended-hours 4h bars using the futures-style architecture:
+
+      - Pull 60m Yahoo bars.
+      - Normalize random/minute-drift timestamps to hour-start grid.
+      - Patch current partial 1h bar from recent 5m/15m data.
+      - Resample 1h -> 4h using 17:00 ET anchor:
+            17:00, 21:00, 01:00, 05:00, 09:00, 13:00
+      - Patch current partial 4h bucket from recent 5m/15m data.
+
+    This intentionally uses extended session data and should produce up to
+    6 four-hour bars per day, subject to Yahoo data availability.
+
+    Notes:
+      - This is for stocks, not futures.
+      - Stocks extended-hours data may be sparse / low volume overnight.
+      - Yahoo may not provide true 24h stock bars for all symbols.
+    """
+    # Stocks do not trade 24h like futures, but with prepost=True yfinance
+    # provides extended-hours where available.
+    if session != "extended":
+        print(
+            f"[WARN] load_stocks_intraday_4h_extended called with session={session!r}; "
+            "forcing extended session.",
+            flush=True,
+        )
+        session = "extended"
+
+    # Rough: 6 bars/day for the 4h output.
+    # We pull 60m bars and over-fetch.
+    bars_per_day_4h = 6
+    approx_days = max(5, int((window_bars / max(bars_per_day_4h, 1)) * 2))
+
+    # Yahoo 60m limit is about 730 days. Stay conservative.
+    MAX_YF_60M_DAYS = 729
+    approx_days = min(approx_days, MAX_YF_60M_DAYS)
+
+    period = f"{approx_days}d"
+
+    print(f"[YF] {symbol} stocks intraday_4h requesting 60m period={period}", flush=True)
+
+    # 1) Load 60m extended-hours bars
+    df_1h = load_intraday_yf(
+        symbol,
+        interval="60m",
+        period=period,
+        session=session,
+    )
+
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame()
+
+    # 2) Normalize to hour-start grid and merge duplicate/random minute bars
+    # This helper is futures-named, but it is generic OHLCV hourly normalization.
+    df_1h = normalize_futures_1h_index(df_1h)
+
+    # 3) Patch partial current 1h bar from recent 5m/15m
+    df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
+    df_1h = patch_partial_1h_from_5m(df_1h=df_1h, df_5m=df_recent, symbol=symbol)
+
+    # 4) Resample 1h -> 4h with same 17:00 ET anchor as futures
+    df_4h = resample_futures_1h_to_4h_5pm_anchor(df_1h)
+
+    if df_4h is None or df_4h.empty:
+        return pd.DataFrame()
+
+    # 5) Patch partial current 4h bucket from recent 5m/15m
+    df_4h = patch_partial_4h_from_5m(df_4h=df_4h, df_5m=df_recent, symbol=symbol)
+
+    # 6) Final cleanup
+    if df_4h is None or df_4h.empty:
+        return pd.DataFrame()
+
+    df_4h = df_4h.sort_index().copy()
+    df_4h.index = pd.to_datetime(df_4h.index)
+    df_4h.index.name = "date"
+
+    if "adj_close" not in df_4h.columns and "close" in df_4h.columns:
+        df_4h["adj_close"] = df_4h["close"]
+
+    cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    df_4h = df_4h[[c for c in cols if c in df_4h.columns]]
+    df_4h.columns = df_4h.columns.astype(str)
+
+    # Do not keep all-NaN OHLC rows.
+    ohlc_cols = [c for c in ["open", "high", "low", "close"] if c in df_4h.columns]
+    if ohlc_cols:
+        df_4h = df_4h[~df_4h[ohlc_cols].isna().all(axis=1)]
+
+    return df_4h
 
 
 def _resample_monthly_to_quarterly(df: pd.DataFrame) -> pd.DataFrame:
