@@ -36,6 +36,113 @@ def timeout(seconds: int, msg: str = "Timeout"):
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old)
 
+
+def _repair_intraday_bad_ticks(
+    df: pd.DataFrame,
+    *,
+    max_bar_range_pct: float = 0.08,
+) -> pd.DataFrame:
+    """
+    Repair obviously bad intraday OHLC rows instead of dropping them.
+
+    If a row has absurd OHLC behavior, replace OHLC with prior valid close
+    and set volume=0. This preserves continuous bar structure for indicators.
+    """
+    if df is None or df.empty:
+        return df
+
+    out = df.copy()
+    required = ["open", "high", "low", "close"]
+    missing = [c for c in required if c not in out.columns]
+    if missing:
+        return out
+
+    for c in required:
+        out[c] = pd.to_numeric(out[c], errors="coerce")
+
+    if "volume" in out.columns:
+        out["volume"] = pd.to_numeric(out["volume"], errors="coerce").fillna(0.0)
+
+    bad = (
+        out[required].isna().any(axis=1)
+        | (out[required] <= 0).any(axis=1)
+        | (out["high"] < out["low"])
+        | (((out["high"] - out["low"]) / out["close"].abs()) > max_bar_range_pct)
+    )
+
+    if not bad.any():
+        return out
+
+    print(f"[CLEAN] repairing {int(bad.sum())} bad intraday bars", flush=True)
+
+    prior_close = out["close"].where(~bad).ffill()
+
+    for idx in out.index[bad]:
+        px = prior_close.loc[idx]
+        if pd.isna(px):
+            continue
+
+        out.loc[idx, "open"] = px
+        out.loc[idx, "high"] = px
+        out.loc[idx, "low"] = px
+        out.loc[idx, "close"] = px
+
+        if "adj_close" in out.columns:
+            out.loc[idx, "adj_close"] = px
+
+        if "volume" in out.columns:
+            out.loc[idx, "volume"] = 0.0
+
+    return out
+
+
+def _ensure_continuous_4h_5pm_anchor(
+    df_4h: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Ensure continuous 4h bars on the 17:00 ET anchor grid:
+      17, 21, 01, 05, 09, 13
+
+    Missing buckets are filled with carry-forward close and volume=0.
+    """
+    if df_4h is None or df_4h.empty:
+        return df_4h
+
+    out = df_4h.copy().sort_index()
+    out.index = pd.to_datetime(out.index)
+
+    start = out.index.min()
+    end = out.index.max()
+
+    full_idx = pd.date_range(start=start, end=end, freq="4h")
+
+    out = out.reindex(full_idx)
+    out.index.name = df_4h.index.name or "date"
+
+    # Carry-forward close is the synthetic price anchor
+    prior_close = out["close"].ffill()
+
+    missing_price = out[["open", "high", "low", "close"]].isna().all(axis=1)
+
+    for c in ["open", "high", "low", "close"]:
+        out.loc[missing_price, c] = prior_close.loc[missing_price]
+
+    if "adj_close" in out.columns:
+        out.loc[missing_price, "adj_close"] = prior_close.loc[missing_price]
+    else:
+        out["adj_close"] = out["close"]
+
+    if "volume" in out.columns:
+        out.loc[missing_price, "volume"] = 0.0
+        out["volume"] = out["volume"].fillna(0.0)
+    else:
+        out["volume"] = 0.0
+
+    # If the first row was missing and had no prior close, drop it.
+    out = out.dropna(subset=["open", "high", "low", "close"], how="any")
+
+    return out
+    
 # ======================================================
 # ---------------- Actual Processes ----------------
 # ======================================================
@@ -676,12 +783,7 @@ def load_stocks_intraday_4h_extended(
     print(f"[YF] {symbol} stocks intraday_4h requesting 60m period={period}", flush=True)
 
     # 1) Load 60m extended-hours bars
-    df_1h = load_intraday_yf(
-        symbol,
-        interval="60m",
-        period=period,
-        session=session,
-    )
+    df_1h = load_intraday_yf(symbol, interval="60m", period=period, session=session)
 
     """
     if df_1h is None or df_1h.empty:
@@ -694,8 +796,12 @@ def load_stocks_intraday_4h_extended(
     # This helper is futures-named, but it is generic OHLCV hourly normalization.
     df_1h = normalize_intraday_1h_index(df_1h)
 
+    # New helper logic
+    df_1h = _repair_intraday_bad_ticks(df_1h, max_bar_range_pct=0.08)
+
     # 3) Patch partial current 1h bar from recent 5m/15m
     df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
+    df_recent = _repair_intraday_bad_ticks(df_recent, max_bar_range_pct=0.08)
     
     df_1h = patch_partial_1h_from_5m(df_1h=df_1h, df_5m=df_recent, symbol=symbol, session_gate=None)
 
@@ -704,6 +810,9 @@ def load_stocks_intraday_4h_extended(
 
     if df_4h is None or df_4h.empty:
         return pd.DataFrame()
+
+    # New helper logic
+    df_4h = _ensure_continuous_4h_5pm_anchor(df_4h)
 
     # 5) Patch partial current 4h bucket from recent 5m/15m
     df_4h = patch_partial_4h_from_5m(df_4h=df_4h, df_5m=df_recent, symbol=symbol, session_gate=None)
