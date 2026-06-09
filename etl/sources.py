@@ -115,6 +115,7 @@ def _ensure_continuous_4h_5pm_anchor(
     end = out.index.max()
 
     full_idx = pd.date_range(start=start, end=end, freq="4h")
+    full_idx = pd.DatetimeIndex([ts for ts in full_idx if _is_stock_extended_4h_bucket(ts)])
 
     out = out.reindex(full_idx)
     out.index.name = df_4h.index.name or "date"
@@ -142,6 +143,39 @@ def _ensure_continuous_4h_5pm_anchor(
     out = out.dropna(subset=["open", "high", "low", "close"], how="any")
 
     return out
+
+
+def _is_stock_extended_4h_bucket(ts: pd.Timestamp) -> bool:
+    """
+    TOS-style stock extended-hours 4h bucket calendar.
+
+    4h anchor grid: 17, 21, 01, 05, 09, 13
+
+    Observed pattern:
+      - Mon-Thu: 01, 05, 09, 13, 17, 21
+      - Fri:     01, 05, 09, 13, 17
+      - Sat:     none
+      - Sun:     17, 21
+
+    Holidays are intentionally not handled yet.
+    """
+    ts = pd.Timestamp(ts)
+    wd = ts.weekday()  # Mon=0 ... Sun=6
+    hr = ts.hour
+
+    if wd in (0, 1, 2, 3):  # Mon-Thu
+        return hr in (1, 5, 9, 13, 17, 21)
+
+    if wd == 4:  # Friday
+        return hr in (1, 5, 9, 13, 17)
+
+    if wd == 5:  # Saturday
+        return False
+
+    if wd == 6:  # Sunday
+        return hr in (17, 21)
+
+    return False
     
 # ======================================================
 # ---------------- Actual Processes ----------------
