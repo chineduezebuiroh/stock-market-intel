@@ -7,7 +7,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: stocks-intraday
+  group: stocks-intraday-4h
   cancel-in-progress: true
 
 permissions:
