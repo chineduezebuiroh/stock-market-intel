@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import pandas as pd
 from datetime import datetime, time
 from pathlib import Path
 
@@ -11,10 +12,12 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.paths import DATA
+from core import storage
 from core.guard import run_registry_guarded, now_ny  # ✅ central TZ-aware NY now
 from core.health import run_combo_health, print_results
 #from core.signal_alerts import notify_on_signals
-from core.notify import notify_combo_signals
+from core.notify import notify_combo_signals, send_telegram_message
 
 # =======================================================
 # ---- Config: 4h targets (NY time) + tolerance ----
@@ -71,8 +74,6 @@ def run_profile() -> None:
     # =======================================================
     #  Telemetry Reporting Handling
     # =======================================================
-    p = DATA / "_health" / "stocks_intraday_4h_repair_telemetry.parquet"
-
     def notify_repair_telemetry(warn_count: int = 50, warn_pct: float = 0.15) -> None:
         p = DATA / "_health" / "stocks_intraday_4h_repair_telemetry.parquet"
     
@@ -109,6 +110,8 @@ def run_profile() -> None:
             )
     
         send_telegram_message("\n".join(lines))
+
+    notify_repair_telemetry()
 
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
