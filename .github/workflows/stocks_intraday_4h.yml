@@ -3,7 +3,7 @@ name: Stocks Intraday 4h
 
 on:
   schedule:
-    - cron: "1/30 13-22 * * 1-5"   # starting at 1st minute, every 30 min; Mon–Fri 13:00 - 22:00 UTC (~08:00 - ~18:00 EST)
+    - cron: "7,37 13-22 * * 1-5"   # starting at 7th and 37th minute; Mon–Fri 13:00 - 22:00 UTC (~08:00 - ~18:00 EST)
   workflow_dispatch: {}
 
 concurrency:
