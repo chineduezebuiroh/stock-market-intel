@@ -21,6 +21,8 @@ class TimeoutException(Exception):
     
 ALPHA_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
+INTRADAY_REPAIR_TELEMETRY: dict[str, dict[str, int]] = {}
+
 # ======================================================
 # --------------- Helper Function(s) ---------------
 # ======================================================
@@ -37,9 +39,19 @@ def timeout(seconds: int, msg: str = "Timeout"):
         signal.signal(signal.SIGALRM, old)
 
 
+"""
 def _repair_intraday_bad_ticks(
     df: pd.DataFrame,
     *,
+    max_bar_range_pct: float = 0.08,
+) -> pd.DataFrame:
+"""
+def _repair_intraday_bad_ticks(
+    df: pd.DataFrame,
+    *,
+    symbol: str | None = None,
+    timeframe: str = "stocks_intraday_4h",
+    source: str = "60m",
     max_bar_range_pct: float = 0.08,
 ) -> pd.DataFrame:
     """
@@ -73,7 +85,19 @@ def _repair_intraday_bad_ticks(
     if not bad.any():
         return out
 
-    print(f"[CLEAN] repairing {int(bad.sum())} bad intraday bars", flush=True)
+    n_bad = int(bad.sum())
+    if n_bad:
+        key = f"{symbol or 'UNKNOWN'}|{source}"
+        INTRADAY_REPAIR_TELEMETRY[key] = {
+            "symbol": symbol or "",
+            "timeframe": timeframe,
+            "source": source,
+            "bars_total": int(len(out)),
+            "bars_repaired": n_bad,
+        }
+        print(f"[CLEAN] {symbol or ''} repairing {n_bad} bad intraday bars ({source})", flush=True)
+
+    #print(f"[CLEAN] repairing {int(bad.sum())} bad intraday bars", flush=True)
 
     prior_close = out["close"].where(~bad).ffill()
 
@@ -607,25 +631,6 @@ def resample_futures_1h_to_4h_5pm_anchor(
     # optional: if you want to ensure "close" exists for indicators
     #out = out.dropna(subset=["close"])
 
-    """
-    # Add current-bucket stub only if missing
-    if add_current_stub:
-        # current 4h bucket start under the same 17h anchor:
-        bucket_start = (now - pd.Timedelta(hours=17)).floor("4h") + pd.Timedelta(hours=17)
-        if bucket_start not in out.index:
-            stub = pd.DataFrame(
-                [{"open": pd.NA, "high": pd.NA, "low": pd.NA, "close": pd.NA, "adj_close": pd.NA, "volume": pd.NA}],
-                index=pd.DatetimeIndex([bucket_start], name=out.index.name or "Datetime"),
-            )
-            out = pd.concat([out, stub], axis=0).sort_index()
-
-    # Final column order
-    cols = ["open", "high", "low", "close", "adj_close", "volume"]
-    out = out[[c for c in cols if c in out.columns]]
-    out.columns = out.columns.astype(str)
-
-    return out
-    """
 
     # column order
     cols = ["open", "high", "low", "close", "adj_close", "volume"]
@@ -831,12 +836,12 @@ def load_stocks_intraday_4h_extended(
     df_1h = normalize_intraday_1h_index(df_1h)
 
     # New helper logic
-    df_1h = _repair_intraday_bad_ticks(df_1h, max_bar_range_pct=0.08)
+    df_1h = _repair_intraday_bad_ticks(df_1h, symbol=symbol, source="60m") # <- max_bar_range_pct=0.08 already set as default
 
     # 3) Patch partial current 1h bar from recent 5m/15m
     df_recent = _try_load_recent_intraday(load_intraday_yf, symbol, session=session)
-    df_recent = _repair_intraday_bad_ticks(df_recent, max_bar_range_pct=0.08)
-    
+    df_recent = _repair_intraday_bad_ticks(df_recent, symbol=symbol, source="5m") # <- max_bar_range_pct=0.08 already set as default
+
     df_1h = patch_partial_1h_from_5m(df_1h=df_1h, df_5m=df_recent, symbol=symbol, session_gate=None)
 
     # 4) Resample 1h -> 4h with same 17:00 ET anchor as futures
