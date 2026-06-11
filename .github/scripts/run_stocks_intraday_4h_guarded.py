@@ -21,9 +21,9 @@ from core.notify import notify_combo_signals
 # =======================================================
 JOB_NAME = "stocks_intraday_4h"
 TARGET_TIMES = [
-    time(9, 01),
-    time(13, 01),
-    time(17, 01),
+    time(9, 1),
+    time(13, 1),
+    time(17, 1),
 ]
 TOLERANCE_MIN = 70  # + 70 minutes
 
