@@ -43,4 +43,3 @@ jobs:
       - name: Run stocks intraday 4h (guarded)
         run: |
           python .github/scripts/run_stocks_intraday_4h_guarded.py
-          
