@@ -24,6 +24,7 @@ from etl.sources import (
     load_yearly_from_monthly,
     load_futures_intraday,
     safe_load_eod,
+    INTRADAY_REPAIR_TELEMETRY,
 )
 from etl.window import parquet_path, update_fixed_window
 from etl.universe import symbols_for_universe
@@ -110,6 +111,19 @@ def _load_symbol_exclusions() -> set[str]:
         .tolist()
     )
     return set(symbols)
+
+
+def write_intraday_repair_telemetry(namespace: str, timeframe: str) -> None:
+    if not INTRADAY_REPAIR_TELEMETRY:
+        print(f"[HEALTH] no repair telemetry for {namespace}:{timeframe}")
+        return
+
+    rows = list(INTRADAY_REPAIR_TELEMETRY.values())
+    df = pd.DataFrame(rows)
+
+    out = DATA / "_health" / f"{namespace}_{timeframe}_repair_telemetry.parquet"
+    storage.save_parquet(df, out)
+    print(f"[HEALTH] wrote repair telemetry: {out}")
 
 
 def universes_for_timeframe(namespace: str, timeframe: str) -> list[str]:
@@ -335,6 +349,8 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
 
     # --- 2) Ingest this timeframe (per-symbol parquet with indicators) ---
     ingest_one(namespace, timeframe, symbols, session, window_bars)
+    if namespace == "stocks" and timeframe == "intraday_4h":
+        write_intraday_repair_telemetry(namespace, timeframe)
 
     # 3) Build single-timeframe snapshot (no screening/pivoting for now)
     base_cols = get_snapshot_base_cols(namespace, timeframe)
