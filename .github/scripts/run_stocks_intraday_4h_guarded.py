@@ -69,6 +69,48 @@ def run_profile() -> None:
         subprocess.run(cmd, check=True)
 
     # =======================================================
+    #  Telemetry Reporting Handling
+    # =======================================================
+    p = DATA / "_health" / "stocks_intraday_4h_repair_telemetry.parquet"
+
+    def notify_repair_telemetry(warn_count: int = 50, warn_pct: float = 0.15) -> None:
+        p = DATA / "_health" / "stocks_intraday_4h_repair_telemetry.parquet"
+    
+        if not storage.exists(p):
+            print("[HEALTH] no repair telemetry artifact found.")
+            return
+    
+        df = storage.load_parquet(p)
+        if df is None or df.empty:
+            print("[HEALTH] repair telemetry empty.")
+            return
+    
+        df["bars_total"] = pd.to_numeric(df["bars_total"], errors="coerce").fillna(0)
+        df["bars_repaired"] = pd.to_numeric(df["bars_repaired"], errors="coerce").fillna(0)
+        df["repair_pct"] = df["bars_repaired"] / df["bars_total"].replace(0, pd.NA)
+    
+        bad = df[
+            (df["bars_repaired"] >= warn_count)
+            | (df["repair_pct"] >= warn_pct)
+        ].copy()
+    
+        if bad.empty:
+            print("[HEALTH] repair telemetry below warning thresholds.")
+            return
+    
+        bad = bad.sort_values("bars_repaired", ascending=False).head(20)
+    
+        lines = ["⚠️ *Stocks Intraday 4h Repair Telemetry*"]
+        for _, r in bad.iterrows():
+            lines.append(
+                f"- `{r['symbol']}` {r['source']}: "
+                f"{int(r['bars_repaired'])}/{int(r['bars_total'])} repaired "
+                f"({float(r['repair_pct']):.1%})"
+            )
+    
+        send_telegram_message("\n".join(lines))
+
+    # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
     results = []
