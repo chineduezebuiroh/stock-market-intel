@@ -16,12 +16,15 @@ from etl.futures_partial import (
     patch_partial_4h_from_5m,
 )
 
+from typing import Any
+
+
 class TimeoutException(Exception):
     pass
     
 ALPHA_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
-INTRADAY_REPAIR_TELEMETRY: dict[str, dict[str, int]] = {}
+INTRADAY_REPAIR_TELEMETRY: dict[str, dict[str, Any]] = {}
 
 # ======================================================
 # --------------- Helper Function(s) ---------------
