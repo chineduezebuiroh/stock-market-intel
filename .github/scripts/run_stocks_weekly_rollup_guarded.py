@@ -79,14 +79,7 @@ def ensure_shortlist_parent_timeframes(root: Path) -> None:
             f"{sorted(missing)}"
         )
 
-        cmd = [
-            sys.executable,
-            str(root / "jobs" / "run_timeframe.py"),
-            "stocks",
-            tf,
-            "--allowed-universes",
-            "shortlist_stocks",
-        ]
+        cmd = [sys.executable, str(root / "jobs" / "run_timeframe.py"), "stocks", tf]
 
         print(f"[INFO] Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
