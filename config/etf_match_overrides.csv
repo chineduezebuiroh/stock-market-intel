@@ -7,6 +7,8 @@ CHDN,PEJ,RSPD,manual override
 CIEN,IYZ,XLC,manual override
 CSCO,IYZ,XLC,manual override
 
+GILD,IHE,XLV,manual override
+
 HPE,XLK,QQQ,manual override
 
 J,XLI,,manual override
@@ -17,6 +19,8 @@ MGM,PEJ,RSPD,manual override
 MSI,IYZ,XLC,manual override
 
 QSR,PEJ,RSPD,manual override
+
+SUPN,IHE,XLV,manual override
 
 UE,XLRE,XRT,manual override
 UI,IYZ,XLC,manual override
