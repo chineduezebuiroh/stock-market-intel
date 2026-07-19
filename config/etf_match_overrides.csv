@@ -4,6 +4,7 @@ AAPL,XLK,QQQ,manual override
 ASTS,IYZ,XLC,manual override
 
 CHDN,PEJ,RSPD,manual override
+CHH,PEJ,RSPD,manual override
 CIEN,IYZ,XLC,manual override
 CSCO,IYZ,XLC,manual override
 
@@ -18,6 +19,8 @@ LITE,IYZ,XLC,manual override
 MGM,PEJ,RSPD,manual override
 MSI,IYZ,XLC,manual override
 
+PWR,XLI,,manual override
+
 QSR,PEJ,RSPD,manual override
 
 SUPN,IHE,XLV,manual override
@@ -25,5 +28,7 @@ SUPN,IHE,XLV,manual override
 UE,XLRE,XRT,manual override
 UI,IYZ,XLC,manual override
 USAS,XLB,XLI,manual override
+
+VAC,PEJ,RSPD,manual override
 
 YUMC,PEJ,RSPD,manual override
