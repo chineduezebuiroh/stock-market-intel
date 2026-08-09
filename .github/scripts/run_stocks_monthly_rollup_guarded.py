@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 # .github/scripts/run_stocks_monthly_rollup_guarded.py
 
 import subprocess
@@ -13,7 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.health import run_combo_health, print_results
+from core.health import (
+    run_combo_health,
+    print_results,
+    missing_shortlist_symbols_for_tf,
+)
 from core.guard import run_registry_guarded
 from core.notify import notify_combo_signals
 
@@ -24,7 +27,9 @@ JOB_NAME = "stocks_monthly"
 TARGET_TIME = time(hour=6, minute=30)  # 6:30 am America/New_York (Sunday early)
 TOLERANCE_MIN = 45                    # +/- 45 minutes window
 
-
+# =======================================================
+# Helper Functions
+# =======================================================
 def is_first_sunday(dt: datetime) -> bool:
     """
     Return True if the given datetime (in local TZ) is the first Sunday of the month.
@@ -35,8 +40,42 @@ def is_first_sunday(dt: datetime) -> bool:
     return dt.day <= 7
 
 
+def ensure_shortlist_parent_timeframes(root: Path) -> None:
+    """
+    Monthly rollup always runs yearly.
+
+    Bootstrap monthly/quarterly only if newly added shortlist symbols
+    are missing from those shared snapshots.
+    """
+    for tf in ["monthly", "quarterly"]:
+        missing = missing_shortlist_symbols_for_tf(tf)
+
+        if not missing:
+            print(f"[BOOTSTRAP] stocks:{tf} has all shortlist symbols.")
+            continue
+
+        print(
+            f"[BOOTSTRAP] stocks:{tf} missing {len(missing)} shortlist symbols: "
+            f"{sorted(missing)}"
+        )
+
+        cmd = [
+            sys.executable,
+            str(root / "jobs" / "run_timeframe.py"),
+            "stocks",
+            tf,
+        ]
+
+        print(f"[INFO] Running: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+
+# =======================================================
+# Primary Function
+# =======================================================
 def run_profile() -> None:
     root = ROOT
+
+    ensure_shortlist_parent_timeframes(root)
 
     cmds = [
         # 1) Refresh stocks YEARLY only (no cascade)
@@ -98,18 +137,6 @@ def main() -> None:
         )
         sys.exit(0)
 
-    """
-    run_guarded(
-        marker_name="stocks_monthly_rollup",
-        period="monthly",
-        target_time=TARGET_TIME,
-        tolerance_min=TOLERANCE_MIN,
-        mode="abs",
-        fn=run_profile,
-        bypass_time_window=False,
-        respect_idempotency=True,
-    )
-    """
     run_registry_guarded(
         job_name=JOB_NAME,
         fn=run_profile,
