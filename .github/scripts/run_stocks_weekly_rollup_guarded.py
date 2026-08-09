@@ -12,7 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.health import run_combo_health, print_results
+from core.health import (
+    run_combo_health,
+    print_results,
+    missing_shortlist_symbols_for_tf,
+)
 from core.guard import run_registry_guarded
 
 from core.notify import notify_combo_signals
@@ -28,38 +32,6 @@ JOB_NAME = "stocks_weekly"
 # =======================================================
 # Helper Functions
 # =======================================================
-def missing_shortlist_symbols_for_tf(timeframe: str) -> set[str]:
-    shortlist_path = CFG / "shortlist_stocks.csv"
-    if not shortlist_path.exists():
-        raise FileNotFoundError(f"Missing shortlist file: {shortlist_path}")
-
-    wanted = set(
-        pd.read_csv(shortlist_path)["symbol"]
-        .dropna()
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-
-    snap_path = DATA / f"snapshot_stocks_{timeframe}.parquet"
-    if not storage.exists(snap_path):
-        return wanted
-
-    snap = storage.load_parquet(snap_path)
-    if snap is None or snap.empty or "symbol" not in snap.columns:
-        return wanted
-
-    have = set(
-        snap["symbol"]
-        .dropna()
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-
-    return wanted - have
-
-
 def ensure_shortlist_parent_timeframes(root: Path) -> None:
     """
     Weekly rollup always runs quarterly.
