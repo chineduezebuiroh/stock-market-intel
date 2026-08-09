@@ -15,18 +15,15 @@ from core import storage
 # -------------------------
 # models
 # -------------------------
-
 @dataclass(frozen=True)
 class HealthResult:
     ok: bool
     name: str
     details: str
 
-
 # -------------------------
 # helpers
 # -------------------------
-
 def _norm_syms(values: Iterable[object]) -> set[str]:
     return set(
         pd.Series(list(values))
@@ -63,10 +60,45 @@ def load_universe_symbols(universe_csv: str) -> set[str]:
     raise ValueError(f"{path} must contain a symbol/ticker column")
 
 
+def missing_shortlist_symbols_for_tf(timeframe: str) -> set[str]:
+    """
+    Return shortlist stock symbols missing from the shared snapshot
+    for the requested timeframe.
+    """
+    shortlist_path = CFG / "shortlist_stocks.csv"
+    if not shortlist_path.exists():
+        raise FileNotFoundError(f"Missing shortlist file: {shortlist_path}")
+
+    wanted = set(
+        pd.read_csv(shortlist_path)["symbol"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    snap_path = DATA / f"snapshot_stocks_{timeframe}.parquet"
+    if not storage.exists(snap_path):
+        return wanted
+
+    snap = storage.load_parquet(snap_path)
+
+    if snap is None or snap.empty or "symbol" not in snap.columns:
+        return wanted
+
+    have = set(
+        snap["symbol"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    return wanted - have
+    
 # -------------------------
 # checks
 # -------------------------
-
 def check_combo_nonempty(combo_name: str) -> HealthResult:
     path = DATA / f"combo_{combo_name}.parquet"
 
@@ -79,7 +111,6 @@ def check_combo_nonempty(combo_name: str) -> HealthResult:
 
     #return HealthResult(True, combo_name, f"ok rows={len(df)}")
     return HealthResult(True, f"{combo_name}:nonempty", f"ok rows={len(df)}")
-
 
 
 def check_combo_symbol_coverage(
@@ -120,11 +151,9 @@ def check_combo_symbol_coverage(
     #return HealthResult(True, combo_name, f"ok coverage ({len(expected_symbols)} symbols)")
     return HealthResult(True, f"{combo_name}:coverage", f"ok coverage ({len(expected_symbols)} symbols)")
 
-
 # -------------------------
 # runner
 # -------------------------
-
 def run_combo_health(
     combos: list[str],
     universe_csv: Optional[str] = None,
@@ -156,19 +185,6 @@ def run_combo_health(
 
     return results
 
-"""
-def print_results(results: Iterable[HealthResult]) -> None:
-    failed = False
-    for r in results:
-        if r.ok:
-            print(f"[HEALTH] ✅ {r.name} — {r.details}")
-        else:
-            failed = True
-            print(f"[HEALTH] ⚠️  {r.name} — {r.details}")
-
-    if failed:
-        print("[HEALTH] One or more checks failed.")
-"""
 
 def print_results(results: Iterable[HealthResult], fail_on_error: bool = True) -> None:
     failed = False
