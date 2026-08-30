@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timezone
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 BUCKET = os.environ["S3_BUCKET_DATA"]
@@ -17,6 +18,7 @@ KEY = (
 
 START = datetime(2026, 7, 7, tzinfo=timezone.utc)
 END = datetime(2026, 7, 11, tzinfo=timezone.utc)
+COMBO_TS = datetime(2026, 7, 9, 3, 0, 53, tzinfo=timezone.utc)
 
 s3 = boto3.client(
     "s3",
@@ -27,12 +29,18 @@ print(f"[FORENSICS] bucket: {BUCKET}")
 print(f"[FORENSICS] key:    {KEY}")
 print(f"[FORENSICS] window: {START.isoformat()} -> {END.isoformat()}")
 
-# First check whether versioning is enabled.
-status = s3.get_bucket_versioning(Bucket=BUCKET)
-
-print("\n[FORENSICS] bucket versioning:")
-print(f"  Status:    {status.get('Status', '<not enabled>')}")
-print(f"  MFADelete: {status.get('MFADelete', '<not set>')}")
+# Bucket-versioning status is useful but not required.
+try:
+    status = s3.get_bucket_versioning(Bucket=BUCKET)
+    print("\n[FORENSICS] bucket versioning:")
+    print(f"  Status:    {status.get('Status', '<not enabled>')}")
+    print(f"  MFADelete: {status.get('MFADelete', '<not set>')}")
+except ClientError as exc:
+    code = exc.response.get("Error", {}).get("Code")
+    print(
+        "\n[FORENSICS] get_bucket_versioning unavailable "
+        f"(permission/error={code}); continuing."
+    )
 
 versions = []
 delete_markers = []
@@ -42,33 +50,42 @@ kwargs = {
     "Prefix": KEY,
 }
 
-while True:
-    resp = s3.list_object_versions(**kwargs)
+try:
+    while True:
+        resp = s3.list_object_versions(**kwargs)
 
-    for v in resp.get("Versions", []):
-        if v.get("Key") != KEY:
-            continue
+        for v in resp.get("Versions", []):
+            if v.get("Key") != KEY:
+                continue
 
-        lm = v["LastModified"]
+            lm = v["LastModified"]
+            if START <= lm <= END:
+                versions.append(v)
 
-        if START <= lm <= END:
-            versions.append(v)
+        for d in resp.get("DeleteMarkers", []):
+            if d.get("Key") != KEY:
+                continue
 
-    for d in resp.get("DeleteMarkers", []):
-        if d.get("Key") != KEY:
-            continue
+            lm = d["LastModified"]
+            if START <= lm <= END:
+                delete_markers.append(d)
 
-        lm = d["LastModified"]
+        if not resp.get("IsTruncated"):
+            break
 
-        if START <= lm <= END:
-            delete_markers.append(d)
+        kwargs["KeyMarker"] = resp.get("NextKeyMarker")
+        kwargs["VersionIdMarker"] = resp.get("NextVersionIdMarker")
 
-    if not resp.get("IsTruncated"):
-        break
+except ClientError as exc:
+    code = exc.response.get("Error", {}).get("Code")
+    msg = exc.response.get("Error", {}).get("Message")
 
-    kwargs["KeyMarker"] = resp.get("NextKeyMarker")
-    kwargs["VersionIdMarker"] = resp.get("NextVersionIdMarker")
-
+    print(
+        "\n[FORENSICS] list_object_versions unavailable."
+    )
+    print(f"  code={code}")
+    print(f"  message={msg}")
+    raise SystemExit(2)
 
 versions.sort(key=lambda x: x["LastModified"])
 delete_markers.sort(key=lambda x: x["LastModified"])
@@ -95,41 +112,24 @@ for d in delete_markers:
         f"is_latest={d['IsLatest']}"
     )
 
-if not versions:
+prior = [
+    v for v in versions
+    if v["LastModified"] <= COMBO_TS
+]
+
+print(
+    "\n[FORENSICS] candidate immediately preceding "
+    f"{COMBO_TS.isoformat()}:"
+)
+
+if prior:
+    candidate = max(prior, key=lambda x: x["LastModified"])
+
     print(
-        "\n[FORENSICS] No historical object versions were found "
-        "for CAKE.parquet in the requested window."
+        f"  LastModified={candidate['LastModified'].isoformat()}"
     )
+    print(f"  VersionId={candidate['VersionId']}")
+    print(f"  Size={candidate['Size']}")
+    print(f"  ETag={candidate.get('ETag')}")
 else:
-    print(
-        "\n[FORENSICS] Candidate version immediately preceding "
-        "the 2026-07-09T03:00:53Z combo run:"
-    )
-
-    combo_ts = datetime(2026, 7, 9, 3, 0, 53, tzinfo=timezone.utc)
-
-    prior = [
-        v for v in versions
-        if v["LastModified"] <= combo_ts
-    ]
-
-    if prior:
-        candidate = max(
-            prior,
-            key=lambda x: x["LastModified"],
-        )
-
-        print(
-            f"  LastModified={candidate['LastModified'].isoformat()}"
-        )
-        print(
-            f"  VersionId={candidate['VersionId']}"
-        )
-        print(
-            f"  Size={candidate['Size']}"
-        )
-        print(
-            f"  ETag={candidate.get('ETag')}"
-        )
-    else:
-        print("  None found before combo timestamp.")
+    print("  None found.")
