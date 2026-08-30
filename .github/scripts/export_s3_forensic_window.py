@@ -10,7 +10,7 @@ import s3fs
 BUCKET = os.environ["S3_BUCKET_DATA"]
 PREFIX = os.getenv("S3_PREFIX_DATA", "").strip("/")
 
-symbol = "CAKE"
+symbol = "BBY"
 target_date = pd.Timestamp("2026-07-08")
 rows_before = 180
 
@@ -86,8 +86,8 @@ if target_rows.empty:
 out_dir = Path("forensic_artifacts")
 out_dir.mkdir(parents=True, exist_ok=True)
 
-csv_path = out_dir / "CAKE_daily_through_2026-07-08.csv"
-parquet_path = out_dir / "CAKE_daily_through_2026-07-08.parquet"
+csv_path = out_dir / "BBY_daily_through_2026-07-08.csv"
+parquet_path = out_dir / "BBY_daily_through_2026-07-08.parquet"
 
 window.to_csv(csv_path, index=False)
 window.to_parquet(parquet_path, index=False)
