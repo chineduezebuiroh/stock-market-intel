@@ -36,14 +36,18 @@ jobs:
       #  run: |
       #    python .github/scripts/inspect_s3_combo_history.py
 
-      - name: Export CAKE historical window
-        run: |
-          python .github/scripts/export_s3_forensic_window.py
+      #- name: Export CAKE historical window
+      #  run: |
+      #    python .github/scripts/export_s3_forensic_window.py
       
-      - name: Upload forensic artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cake-july8-forensic-window
-          path: forensic_artifacts/
-          if-no-files-found: error
-          retention-days: 7
+      #- name: Upload forensic artifacts
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: cake-july8-forensic-window
+      #    path: forensic_artifacts/
+      #    if-no-files-found: error
+      #    retention-days: 7
+
+      - name: Inspect CAKE S3 object versions
+        run: |
+          python .github/scripts/inspect_s3_object_versions.py
