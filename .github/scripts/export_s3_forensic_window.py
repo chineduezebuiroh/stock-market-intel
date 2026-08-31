@@ -10,12 +10,17 @@ import s3fs
 BUCKET = os.environ["S3_BUCKET_DATA"]
 PREFIX = os.getenv("S3_PREFIX_DATA", "").strip("/")
 
-symbol = "BBY"
-target_date = pd.Timestamp("2026-07-08")
-rows_before = 180
+symbol = os.getenv("FORENSIC_SYMBOL", "CAKE").strip().upper()
+target_date = pd.Timestamp(
+    os.getenv("FORENSIC_TARGET_DATE", "2026-05-20")
+)
+rows_before = int(os.getenv("FORENSIC_ROWS_BEFORE", "180"))
 
-key = f"{PREFIX}/bars/stocks_daily/{symbol}.parquet" if PREFIX else \
-      f"bars/stocks_daily/{symbol}.parquet"
+key = (
+    f"{PREFIX}/bars/stocks_daily/{symbol}.parquet"
+    if PREFIX
+    else f"bars/stocks_daily/{symbol}.parquet"
+)
 
 s3_path = f"{BUCKET}/{key}"
 
@@ -27,6 +32,9 @@ fs = s3fs.S3FileSystem(
     },
 )
 
+print(f"[FORENSICS] symbol: {symbol}")
+print(f"[FORENSICS] target date: {target_date.date()}")
+print(f"[FORENSICS] rows before/through target: {rows_before}")
 print(f"[FORENSICS] reading s3://{s3_path}")
 
 with fs.open(s3_path, "rb") as f:
@@ -86,8 +94,14 @@ if target_rows.empty:
 out_dir = Path("forensic_artifacts")
 out_dir.mkdir(parents=True, exist_ok=True)
 
-csv_path = out_dir / "BBY_daily_through_2026-07-08.csv"
-parquet_path = out_dir / "BBY_daily_through_2026-07-08.parquet"
+target_str = target_date.strftime("%Y-%m-%d")
+
+csv_path = (
+    out_dir / f"{symbol}_daily_through_{target_str}.csv"
+)
+parquet_path = (
+    out_dir / f"{symbol}_daily_through_{target_str}.parquet"
+)
 
 window.to_csv(csv_path, index=False)
 window.to_parquet(parquet_path, index=False)
