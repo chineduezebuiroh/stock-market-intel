@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
 import pandas as pd
 import s3fs
 
@@ -8,9 +10,17 @@ import s3fs
 BUCKET = os.environ["S3_BUCKET_DATA"]
 PREFIX = os.getenv("S3_PREFIX_DATA", "").strip("/")
 
-combo_name = "stocks_c_dwm_all"
-target_market_date = pd.Timestamp("2026-07-08").date()
-symbols = {"CAKE", "BBY"}
+symbol = os.getenv("FORENSIC_SYMBOL", "CAKE").strip().upper()
+combo_name = os.getenv("FORENSIC_COMBO", "stocks_c_dwm_all").strip()
+target_ts = pd.Timestamp(os.getenv("FORENSIC_TARGET_DATE", "2026-05-20"))
+target_market_date = target_ts.date()
+
+# Search a narrow execution-date window around the market date.
+# The content predicate on lower_date remains authoritative.
+search_dates = {
+    (target_ts + pd.Timedelta(days=offset)).strftime("%Y-%m-%d")
+    for offset in (-1, 0, 1, 2)
+}
 
 base = (
     f"{BUCKET}/{PREFIX}/combo_history/stocks/{combo_name}"
@@ -26,114 +36,135 @@ fs = s3fs.S3FileSystem(
     },
 )
 
+print(f"[FORENSICS] symbol: {symbol}")
+print(f"[FORENSICS] combo: {combo_name}")
+print(f"[FORENSICS] target market date: {target_market_date}")
 print(f"[FORENSICS] scanning: s3://{base}")
 
 paths = sorted(fs.glob(f"{base}/*.parquet"))
 
 print(f"[FORENSICS] total history objects: {len(paths)}")
 
-# First show filenames around the market date so we understand execution timing.
 nearby = [
     p for p in paths
-    if any(
-        d in p
-        for d in (
-            "2026-07-07",
-            "2026-07-08",
-            "2026-07-09",
-            "2026-07-10",
-        )
-    )
+    if any(date_str in p for date_str in search_dates)
 ]
 
 print(f"\n[FORENSICS] nearby execution objects: {len(nearby)}")
 for p in nearby:
     print(" ", p)
 
-print("\n[FORENSICS] searching contents for lower_date = 2026-07-08 ...")
+if not nearby:
+    raise RuntimeError(
+        f"No combo-history objects found near {target_market_date} "
+        f"for combo {combo_name}."
+    )
 
-matches = []
+print(
+    f"\n[FORENSICS] searching contents for "
+    f"{symbol} with lower_date = {target_market_date} ..."
+)
+
+exact_matches: list[tuple[str, pd.DataFrame]] = []
+nearby_symbol_rows: list[dict[str, object]] = []
 
 for p in nearby:
     with fs.open(p, "rb") as f:
         df = pd.read_parquet(f)
 
-    if "lower_date" not in df.columns:
+    if "symbol" not in df.columns:
+        print(f"[FORENSICS] skipping object without symbol column: {p}")
         continue
 
-    lower_dates = pd.to_datetime(df["lower_date"], errors="coerce").dt.date
-
-    if (lower_dates == target_market_date).any():
-        matches.append((p, df))
-
-print(f"[FORENSICS] objects containing target lower_date: {len(matches)}")
-
-for p, df in matches:
-    print(f"\n\n[FORENSICS] OBJECT: s3://{p}")
-
-    rows = df[
-        df["symbol"]
-        .astype(str)
-        .str.upper()
-        .isin(symbols)
+    symbol_rows = df[
+        df["symbol"].astype(str).str.upper() == symbol
     ].copy()
 
-    if rows.empty:
-        print("[FORENSICS] CAKE/BBY not present in this object.")
+    if symbol_rows.empty:
         continue
 
-    for _, r in rows.iterrows():
-        sym = str(r["symbol"]).upper()
+    if "lower_date" in symbol_rows.columns:
+        for _, row in symbol_rows.iterrows():
+            nearby_symbol_rows.append(
+                {
+                    "source_object": p,
+                    "symbol": symbol,
+                    "lower_date": row.get("lower_date"),
+                }
+            )
 
-        print(f"\n================ {sym} ================")
+        lower_dates = pd.to_datetime(
+            symbol_rows["lower_date"], errors="coerce"
+        ).dt.date
 
-        basic = [
-            "lower_date",
-            "middle_date",
-            "upper_date",
+        target_rows = symbol_rows[
+            lower_dates == target_market_date
+        ].copy()
 
-            "lower_open",
-            "lower_high",
-            "lower_low",
-            "lower_close",
+        if not target_rows.empty:
+            target_rows.insert(0, "source_object", p)
+            exact_matches.append((p, target_rows))
 
-            "middle_open",
-            "middle_high",
-            "middle_low",
-            "middle_close",
+print(
+    f"[FORENSICS] exact objects containing {symbol} on target "
+    f"lower_date: {len(exact_matches)}"
+)
 
-            "upper_open",
-            "upper_high",
-            "upper_low",
-            "upper_close",
+out_dir = Path("forensic_artifacts")
+out_dir.mkdir(parents=True, exist_ok=True)
 
-            "mtf_long_score",
-            "mtf_short_score",
-            "signal",
-            "signal_side",
+safe_combo = combo_name.replace("/", "_")
+target_str = target_ts.strftime("%Y-%m-%d")
 
-            "etf_symbol_primary",
-            "etf_symbol_secondary",
-        ]
+if not exact_matches:
+    print(
+        f"\n[FORENSICS] No exact {symbol} lower_date="
+        f"{target_market_date} match found."
+    )
 
-        for c in basic:
-            if c in r.index:
-                print(f"{c}: {r[c]}")
+    if nearby_symbol_rows:
+        nearby_df = pd.DataFrame(nearby_symbol_rows)
+        print("\n[FORENSICS] nearby symbol/lower_date observations:")
+        print(nearby_df.to_string(index=False))
 
-        print("\n--- indicator / scoring fields ---")
-
-        interesting_tokens = (
-            "wyckoff",
-            "exh_abs",
-            "sig_vol",
-            "ma_trend",
-            "macdv",
-            "ttm_squeeze",
-            "spy_qqq",
-            "etf",
+        nearby_path = (
+            out_dir
+            / f"{symbol}_{safe_combo}_{target_str}_nearby_dates.csv"
         )
+        nearby_df.to_csv(nearby_path, index=False)
+        print(f"[FORENSICS] wrote {nearby_path}")
 
-        for c in r.index:
-            lc = str(c).lower()
-            if any(token in lc for token in interesting_tokens):
-                print(f"{c}: {r[c]}")
+    raise RuntimeError(
+        f"No exact combo-history row found for {symbol} "
+        f"lower_date={target_market_date}."
+    )
+
+combined = pd.concat(
+    [rows for _, rows in exact_matches],
+    ignore_index=True,
+)
+
+combo_csv_path = (
+    out_dir / f"{symbol}_{safe_combo}_{target_str}.csv"
+)
+combo_parquet_path = (
+    out_dir / f"{symbol}_{safe_combo}_{target_str}.parquet"
+)
+
+combined.to_csv(combo_csv_path, index=False)
+combined.to_parquet(combo_parquet_path, index=False)
+
+print(f"[FORENSICS] wrote {combo_csv_path}")
+print(f"[FORENSICS] wrote {combo_parquet_path}")
+
+for p, rows in exact_matches:
+    print(f"\n\n[FORENSICS] OBJECT: s3://{p}")
+
+    for _, row in rows.iterrows():
+        print(f"\n================ {symbol} ================")
+        print(row.to_string())
+
+print(
+    f"\n[FORENSICS] total exact target rows exported: "
+    f"{len(combined)}"
+)
