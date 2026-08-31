@@ -1,7 +1,31 @@
 name: Inspect S3 Forensics
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "Ticker symbol"
+        required: true
+        default: "CAKE"
+        type: string
+
+      target_date:
+        description: "Target market date (YYYY-MM-DD)"
+        required: true
+        default: "2026-05-20"
+        type: string
+
+      combo:
+        description: "Combo name"
+        required: true
+        default: "stocks_c_dwm_all"
+        type: string
+
+      rows_before:
+        description: "Historical daily rows to export through target date"
+        required: true
+        default: "180"
+        type: string
 
 permissions:
   contents: read
@@ -18,6 +42,11 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
 
+      FORENSIC_SYMBOL: ${{ inputs.symbol }}
+      FORENSIC_TARGET_DATE: ${{ inputs.target_date }}
+      FORENSIC_COMBO: ${{ inputs.combo }}
+      FORENSIC_ROWS_BEFORE: ${{ inputs.rows_before }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -32,22 +61,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Inspect July 8 DWM history
+      - name: Inspect combo history
         run: |
           python .github/scripts/inspect_s3_combo_history.py
 
-      - name: Export symbol historical window
+      - name: Export surviving daily historical window
         run: |
           python .github/scripts/export_s3_forensic_window.py
-      
+
       - name: Upload forensic artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bby-july8-forensic-window
+          name: ${{ inputs.symbol }}-${{ inputs.target_date }}-${{ inputs.combo }}-forensics
           path: forensic_artifacts/
           if-no-files-found: error
           retention-days: 7
-
-      - name: Inspect CAKE S3 object versions
-        run: |
-          python .github/scripts/inspect_s3_object_versions.py
