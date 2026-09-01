@@ -25,7 +25,6 @@ import boto3
 import numpy as np
 import pandas as pd
 
-
 MODERN_REQUIRED_FIELDS = [
     "symbol",
     "lower_date",
@@ -122,41 +121,54 @@ DERIVED_BOOL_FIELDS = [
     "participation_pass",
 ]
 
-SUPPORTED_OUTPUT_FIELDS = [
-    "source_s3_key",
-    "artifact_execution_utc",
-    "logic_era",
-    "symbol",
-    "lower_date",
-    "middle_date",
-    "upper_date",
-] + DERIVED_BOOL_FIELDS + [
-    "lower_sig_vol_current_bar",
-    "lower_sig_vol_prior_bar",
-    "lower_spy_qqq_vol_ma_ratio",
-    "middle_sig_vol_current_bar",
-    "middle_sig_vol_prior_bar",
-    "middle_spy_qqq_vol_ma_ratio",
-    "upper_wyckoff_stage",
-    "reconstructed_long_score",
-    "mtf_long_score",
-    "reconstructed_short_score",
-    "mtf_short_score",
-    "signal",
-    "signal_side",
-] + LOWER_OHLCV
+SUPPORTED_OUTPUT_FIELDS = (
+    [
+        "source_s3_key",
+        "artifact_execution_utc",
+        "logic_era",
+        "symbol",
+        "lower_date",
+        "middle_date",
+        "upper_date",
+    ]
+    + DERIVED_BOOL_FIELDS
+    + [
+        "lower_sig_vol_current_bar",
+        "lower_sig_vol_prior_bar",
+        "lower_spy_qqq_vol_ma_ratio",
+        "middle_sig_vol_current_bar",
+        "middle_sig_vol_prior_bar",
+        "middle_spy_qqq_vol_ma_ratio",
+        "upper_wyckoff_stage",
+        "reconstructed_long_score",
+        "mtf_long_score",
+        "reconstructed_short_score",
+        "mtf_short_score",
+        "signal",
+        "signal_side",
+    ]
+    + LOWER_OHLCV
+)
 
-EXCEPTION_FIELDS = [
-    "source_s3_key",
-    "artifact_execution_utc",
-    "symbol",
-    "lower_date",
-] + DERIVED_BOOL_FIELDS + [
-    "reconstructed_long_score",
-    "mtf_long_score",
-    "reconstructed_short_score",
-    "mtf_short_score",
-] + SCORING_NUMERIC_FIELDS
+EXCEPTION_FIELDS = (
+    [
+        "source_s3_key",
+        "artifact_execution_utc",
+        "symbol",
+        "lower_date",
+    ]
+    + DERIVED_BOOL_FIELDS
+    + [
+        "reconstructed_long_score",
+        "mtf_long_score",
+        "reconstructed_short_score",
+        "mtf_short_score",
+    ]
+    + SCORING_NUMERIC_FIELDS
+)
+
+FIVE_COMPONENT_ERA = "MODERN_SUPPORTED_FIVE_COMPONENT"
+PRE_PARTICIPATION_ERA = "MODERN_PRE_PARTICIPATION_SCORE"
 
 KNOWN_CASES = [
     {
@@ -236,7 +248,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Require complete modern fields and exact scores before support classification.",
     )
-    parser.add_argument("--phase", choices=["inventory", "validate"], default="inventory")
+    parser.add_argument(
+        "--phase", choices=["inventory", "validate"], default="inventory"
+    )
     parser.add_argument("--date-from")
     parser.add_argument("--date-to")
     parser.add_argument(
@@ -307,7 +321,9 @@ def list_s3_objects(bucket: str, key_prefix: str) -> tuple[Any, list[SourceObjec
             key = str(item["Key"])
             if not key.endswith(".parquet"):
                 continue
-            objects.append(SourceObject(key=key, execution_utc=execution_from_name(key)))
+            objects.append(
+                SourceObject(key=key, execution_utc=execution_from_name(key))
+            )
     objects.sort(key=lambda obj: (obj.execution_utc, obj.key))
     return client, objects
 
@@ -378,13 +394,11 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     mw = numbers["middle_wyckoff_stage"]
     me = numbers["middle_exh_abs_pa_prior_bar"]
 
-    result["regime_long_pass"] = (
-        (upper_available & ((u > 0) | (ue > 0)))
-        | (~upper_available & ((mw > 0) | (me > 0)))
+    result["regime_long_pass"] = (upper_available & ((u > 0) | (ue > 0))) | (
+        ~upper_available & ((mw > 0) | (me > 0))
     )
-    result["regime_short_pass"] = (
-        (upper_available & ((u < 0) | (ue < 0)))
-        | (~upper_available & ((mw < 0) | (me < 0)))
+    result["regime_short_pass"] = (upper_available & ((u < 0) | (ue < 0))) | (
+        ~upper_available & ((mw < 0) | (me < 0))
     )
 
     result["ma_long_pass"] = numbers["lower_ma_trend_bullish"] > 0
@@ -426,13 +440,11 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     lr = numbers["lower_spy_qqq_vol_ma_ratio"]
     ms = numbers["middle_sig_vol_current_bar"]
     mr = numbers["middle_spy_qqq_vol_ma_ratio"]
-    result["lower_route_pass"] = (
-        ((ls == 2) & (lr > strong_threshold))
-        | ((ls == 1) & (lr > 0.25))
+    result["lower_route_pass"] = ((ls == 2) & (lr > strong_threshold)) | (
+        (ls == 1) & (lr > 0.25)
     )
-    result["middle_route_pass"] = (
-        ((ms == 2) & (mr > strong_threshold))
-        | ((ms == 1) & (mr > 0.25))
+    result["middle_route_pass"] = ((ms == 2) & (mr > strong_threshold)) | (
+        (ms == 1) & (mr > 0.25)
     )
     result["participation_pass"] = (
         result["lower_route_pass"] | result["middle_route_pass"]
@@ -453,7 +465,9 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         "participation_pass",
     ]
     result["reconstructed_long_score"] = result[long_components].astype(int).sum(axis=1)
-    result["reconstructed_short_score"] = result[short_components].astype(int).sum(axis=1)
+    result["reconstructed_short_score"] = (
+        result[short_components].astype(int).sum(axis=1)
+    )
     result["long_score_match"] = (
         result["reconstructed_long_score"] == numbers["mtf_long_score"]
     )
@@ -464,6 +478,67 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         result["long_score_match"] & result["short_score_match"]
     )
     return result, malformed
+
+
+def score_pattern_summary(reconstructed: pd.DataFrame) -> dict[str, Any]:
+    """Describe score deltas and recognize the pre-participation scoring contract."""
+    checked = reconstructed.copy()
+    checked["long_delta"] = checked["reconstructed_long_score"] - pd.to_numeric(
+        checked["mtf_long_score"], errors="coerce"
+    )
+    checked["short_delta"] = checked["reconstructed_short_score"] - pd.to_numeric(
+        checked["mtf_short_score"], errors="coerce"
+    )
+    mismatches = checked[checked["either_score_mismatch"]]
+    nonparticipation = checked[~checked["participation_pass"]]
+    nonparticipation_mismatches = nonparticipation[
+        nonparticipation["either_score_mismatch"]
+    ]
+    pattern_counts = (
+        mismatches.groupby(
+            ["long_delta", "short_delta", "participation_pass"], dropna=False
+        )
+        .size()
+        .sort_index()
+    )
+    patterns = {
+        f"long={stable_value(long)},short={stable_value(short)},participation={bool(participation)}": int(
+            count
+        )
+        for (long, short, participation), count in pattern_counts.items()
+    }
+    expected_mismatches = (
+        (mismatches["long_delta"] == 1)
+        & (mismatches["short_delta"] == 1)
+        & mismatches["participation_pass"]
+    )
+    return {
+        "rows_checked": int(len(checked)),
+        "participation_true_rows": int(checked["participation_pass"].sum()),
+        "participation_false_rows": int((~checked["participation_pass"]).sum()),
+        "mismatch_rows": int(len(mismatches)),
+        "delta_pattern_counts": json.dumps(patterns, sort_keys=True),
+        "nonparticipation_mismatch_count": int(len(nonparticipation_mismatches)),
+        "is_pre_participation_score": bool(
+            len(mismatches) > 0
+            and expected_mismatches.all()
+            and nonparticipation_mismatches.empty
+        ),
+    }
+
+
+def classify_modern_scores(
+    reconstructed: pd.DataFrame, malformed_numeric_values: int = 0
+) -> str:
+    """Classify a modern-schema artifact without choosing the era boundary."""
+    if malformed_numeric_values:
+        return "MODERN_QUARANTINED_MALFORMED_NUMERIC"
+    pattern = score_pattern_summary(reconstructed)
+    if not pattern["mismatch_rows"]:
+        return FIVE_COMPONENT_ERA
+    if pattern["is_pre_participation_score"]:
+        return PRE_PARTICIPATION_ERA
+    return "MODERN_QUARANTINED_SCORE_MISMATCH"
 
 
 def stable_value(value: Any) -> Any:
@@ -500,7 +575,9 @@ def values_equal(left: Any, right: Any) -> bool:
         return True
     if pd.isna(left) or pd.isna(right):
         return False
-    if isinstance(left, (float, np.floating)) or isinstance(right, (float, np.floating)):
+    if isinstance(left, (float, np.floating)) or isinstance(
+        right, (float, np.floating)
+    ):
         try:
             return bool(np.isclose(float(left), float(right), rtol=0, atol=1e-12))
         except (TypeError, ValueError):
@@ -520,10 +597,15 @@ def changed_fields(group: pd.DataFrame, fields: list[str]) -> list[str]:
 
 
 def fixture_in_requested_range(
-    fixture: dict[str, Any], date_from: pd.Timestamp | None, date_to: pd.Timestamp | None
+    fixture: dict[str, Any],
+    date_from: pd.Timestamp | None,
+    date_to: pd.Timestamp | None,
 ) -> bool:
     date = pd.Timestamp(fixture["lower_date"])
-    return not ((date_from is not None and date < date_from) or (date_to is not None and date > date_to))
+    return not (
+        (date_from is not None and date < date_from)
+        or (date_to is not None and date > date_to)
+    )
 
 
 def run_known_case_validation(
@@ -588,15 +670,22 @@ def run_known_case_validation(
                             f"{field}: expected {expected}, got {row[field]}"
                         )
                 for field, (expected, tolerance) in fixture["approx"].items():
-                    actual = pd.to_numeric(pd.Series([row[field]]), errors="coerce").iloc[0]
+                    actual = pd.to_numeric(
+                        pd.Series([row[field]]), errors="coerce"
+                    ).iloc[0]
                     if pd.isna(actual) or not math.isclose(
-                        float(actual), float(expected), rel_tol=0, abs_tol=float(tolerance)
+                        float(actual),
+                        float(expected),
+                        rel_tol=0,
+                        abs_tol=float(tolerance),
                     ):
                         assertion_messages.append(
                             f"{field}: expected approximately {expected}, got {actual}"
                         )
                 if not bool(row["long_score_match"] and row["short_score_match"]):
-                    assertion_messages.append("stored scores do not reconstruct exactly")
+                    assertion_messages.append(
+                        "stored scores do not reconstruct exactly"
+                    )
                 failures.extend(
                     f"known case {fixture['case_id']}: {message}"
                     for message in assertion_messages
@@ -675,11 +764,15 @@ def main(argv: list[str] | None = None) -> int:
         schema_columns.setdefault(signature, tuple(sorted(raw.columns)))
         era, missing = provisional_era(raw.columns)
 
-        fundamental_missing = [field for field in ("symbol", "lower_date") if field not in raw]
+        fundamental_missing = [
+            field for field in ("symbol", "lower_date") if field not in raw
+        ]
         malformed_lower_dates = 0
         filtered = raw.copy()
         if not fundamental_missing:
-            filtered["lower_date"], malformed_lower_dates = normalize_dates(filtered["lower_date"])
+            filtered["lower_date"], malformed_lower_dates = normalize_dates(
+                filtered["lower_date"]
+            )
             if "middle_date" in filtered:
                 filtered["middle_date"], _ = normalize_dates(filtered["middle_date"])
             if "upper_date" in filtered:
@@ -698,7 +791,11 @@ def main(argv: list[str] | None = None) -> int:
         filtered["provisional_logic_era"] = era
         artifact_frames[source.key] = filtered
 
-        lower_dates = filtered["lower_date"].dropna() if "lower_date" in filtered else pd.Series(dtype="datetime64[ns]")
+        lower_dates = (
+            filtered["lower_date"].dropna()
+            if "lower_date" in filtered
+            else pd.Series(dtype="datetime64[ns]")
+        )
         required_nan_counts = {
             field: int(filtered[field].isna().sum())
             for field in MODERN_REQUIRED_FIELDS
@@ -712,8 +809,12 @@ def main(argv: list[str] | None = None) -> int:
                 "row_count": len(filtered),
                 "column_count": len(raw.columns),
                 "schema_signature": signature,
-                "min_lower_date": lower_dates.min() if not lower_dates.empty else pd.NaT,
-                "max_lower_date": lower_dates.max() if not lower_dates.empty else pd.NaT,
+                "min_lower_date": (
+                    lower_dates.min() if not lower_dates.empty else pd.NaT
+                ),
+                "max_lower_date": (
+                    lower_dates.max() if not lower_dates.empty else pd.NaT
+                ),
                 "modal_lower_date": (
                     lower_dates.value_counts().sort_index().idxmax()
                     if not lower_dates.empty
@@ -763,7 +864,9 @@ def main(argv: list[str] | None = None) -> int:
         .rename("artifact_rows_for_market_date")
         .reset_index()
         if not all_rows.empty and "lower_date" in all_rows
-        else pd.DataFrame(columns=["lower_date", "source_s3_key", "artifact_rows_for_market_date"])
+        else pd.DataFrame(
+            columns=["lower_date", "source_s3_key", "artifact_rows_for_market_date"]
+        )
     )
     market_execution_records: list[dict[str, Any]] = []
     if not row_counts_by_date.empty:
@@ -796,6 +899,7 @@ def main(argv: list[str] | None = None) -> int:
     era_records: list[dict[str, Any]] = []
     supported_frames: list[pd.DataFrame] = []
     validation_errors: list[str] = []
+    reconstructed_by_key: dict[str, pd.DataFrame] = {}
 
     for _, artifact in inventory.iterrows():
         key = artifact["source_s3_key"]
@@ -818,38 +922,74 @@ def main(argv: list[str] | None = None) -> int:
             "short_score_mismatches": 0,
             "either_score_mismatches": 0,
             "malformed_numeric_values": 0,
+            "participation_true_rows": 0,
+            "participation_false_rows": 0,
+            "delta_pattern_counts": "{}",
+            "nonparticipation_mismatch_count": 0,
+            "scoring_contract": "",
             "validation_status": "NOT_ATTEMPTED",
         }
-        if args.phase == "validate" and era == "MODERN_SUPPORTED_CANDIDATE" and not frame.empty:
+        if (
+            args.phase == "validate"
+            and era == "MODERN_SUPPORTED_CANDIDATE"
+            and not frame.empty
+        ):
             reconstructed, malformed = reconstruct_scores(frame)
             malformed_total = sum(malformed.values())
             mismatches = reconstructed[reconstructed["either_score_mismatch"]].copy()
+            pattern = score_pattern_summary(reconstructed)
+            score_classification = classify_modern_scores(
+                reconstructed, malformed_total
+            )
+            reconstructed_by_key[key] = reconstructed
             record.update(
                 {
                     "rows_checked": len(reconstructed),
-                    "long_score_mismatches": int((~reconstructed["long_score_match"]).sum()),
-                    "short_score_mismatches": int((~reconstructed["short_score_match"]).sum()),
+                    "long_score_mismatches": int(
+                        (~reconstructed["long_score_match"]).sum()
+                    ),
+                    "short_score_mismatches": int(
+                        (~reconstructed["short_score_match"]).sum()
+                    ),
                     "either_score_mismatches": len(mismatches),
                     "malformed_numeric_values": malformed_total,
+                    **{
+                        name: pattern[name]
+                        for name in (
+                            "participation_true_rows",
+                            "participation_false_rows",
+                            "delta_pattern_counts",
+                            "nonparticipation_mismatch_count",
+                        )
+                    },
                 }
             )
-            if malformed_total:
+            if score_classification == "MODERN_QUARANTINED_MALFORMED_NUMERIC":
                 record["final_logic_era"] = "MODERN_QUARANTINED_MALFORMED_NUMERIC"
                 record["validation_status"] = "QUARANTINED"
-                validation_errors.append(f"{key}: {malformed_total} malformed numeric values")
+                validation_errors.append(
+                    f"{key}: {malformed_total} malformed numeric values"
+                )
             elif not mismatches.empty:
-                record["final_logic_era"] = "MODERN_QUARANTINED_SCORE_MISMATCH"
-                record["validation_status"] = "QUARANTINED"
-                validation_errors.append(f"{key}: {len(mismatches)} score mismatches")
+                if score_classification == PRE_PARTICIPATION_ERA:
+                    record["final_logic_era"] = PRE_PARTICIPATION_ERA
+                    record["scoring_contract"] = (
+                        "four_component_without_participation_point"
+                    )
+                    record["validation_status"] = "HISTORICAL_EXCLUDED"
+                else:
+                    record["final_logic_era"] = "MODERN_QUARANTINED_SCORE_MISMATCH"
+                    record["validation_status"] = "QUARANTINED_UNEXPLAINED"
+                    validation_errors.append(
+                        f"{key}: {len(mismatches)} unexplained score mismatches"
+                    )
                 exceptions = pd.concat(
                     [exceptions, mismatches.reindex(columns=EXCEPTION_FIELDS)],
                     ignore_index=True,
                 )
             else:
-                record["final_logic_era"] = "MODERN_SUPPORTED"
-                record["validation_status"] = "EXACT"
-                reconstructed["logic_era"] = "MODERN_SUPPORTED"
-                supported_frames.append(reconstructed)
+                record["final_logic_era"] = "MODERN_EXACT_CANDIDATE"
+                record["validation_status"] = "EXACT_CANDIDATE"
         elif era == "MODERN_SUPPORTED_CANDIDATE" and frame.empty:
             record["validation_status"] = "NO_ROWS_IN_DATE_RANGE"
         elif era != "MODERN_SUPPORTED_CANDIDATE":
@@ -858,6 +998,47 @@ def main(argv: list[str] | None = None) -> int:
 
     schema_eras = pd.DataFrame(era_records).sort_values(
         ["artifact_execution_utc", "source_s3_key"]
+    )
+
+    # The supported five-component contract begins with the first exact artifact
+    # after the last formally recognized pre-participation artifact. Exact modern
+    # artifacts before that boundary are inventoried but never enter calibration.
+    historical = schema_eras[schema_eras["final_logic_era"] == PRE_PARTICIPATION_ERA]
+    historical_end = (
+        historical["artifact_execution_utc"].max() if not historical.empty else None
+    )
+    exact_candidates = schema_eras["final_logic_era"] == "MODERN_EXACT_CANDIDATE"
+    if historical_end is not None:
+        supported_mask = exact_candidates & (
+            schema_eras["artifact_execution_utc"] > historical_end
+        )
+        earlier_exact_mask = exact_candidates & ~supported_mask
+        schema_eras.loc[earlier_exact_mask, "final_logic_era"] = (
+            "MODERN_EXACT_BEFORE_FIVE_COMPONENT_ERA"
+        )
+        schema_eras.loc[earlier_exact_mask, "validation_status"] = "HISTORICAL_EXCLUDED"
+    else:
+        supported_mask = exact_candidates
+    schema_eras.loc[supported_mask, "final_logic_era"] = FIVE_COMPONENT_ERA
+    schema_eras.loc[supported_mask, "scoring_contract"] = (
+        "five_component_with_participation"
+    )
+    schema_eras.loc[supported_mask, "validation_status"] = "EXACT"
+
+    for key in schema_eras.loc[supported_mask, "source_s3_key"]:
+        reconstructed = reconstructed_by_key[str(key)]
+        reconstructed["logic_era"] = FIVE_COMPONENT_ERA
+        supported_frames.append(reconstructed)
+
+    first_supported_artifact = (
+        schema_eras.loc[supported_mask, "artifact_execution_utc"].min()
+        if supported_mask.any()
+        else None
+    )
+    last_supported_artifact = (
+        schema_eras.loc[supported_mask, "artifact_execution_utc"].max()
+        if supported_mask.any()
+        else None
     )
     era_lookup = schema_eras.set_index("source_s3_key")["final_logic_era"].to_dict()
     inventory["final_logic_era"] = inventory["source_s3_key"].map(era_lookup)
@@ -874,24 +1055,35 @@ def main(argv: list[str] | None = None) -> int:
     dedupe_records: list[dict[str, Any]] = []
     canonical_indices: list[int] = []
     if not supported_all.empty:
-        modal_lookup = inventory.set_index("source_s3_key")["modal_lower_date"].to_dict()
-        supported_all["artifact_modal_lower_date"] = supported_all["source_s3_key"].map(modal_lookup)
+        modal_lookup = inventory.set_index("source_s3_key")[
+            "modal_lower_date"
+        ].to_dict()
+        supported_all["artifact_modal_lower_date"] = supported_all["source_s3_key"].map(
+            modal_lookup
+        )
         supported_all["artifact_suspiciously_incomplete"] = supported_all[
             "source_s3_key"
         ].isin(incomplete_keys)
         supported_all["canonical_eligible"] = (
             ~supported_all["artifact_suspiciously_incomplete"]
             & supported_all["lower_date"].notna()
-            & (supported_all["lower_date"] == supported_all["artifact_modal_lower_date"])
+            & (
+                supported_all["lower_date"]
+                == supported_all["artifact_modal_lower_date"]
+            )
         )
-        grouped = supported_all.groupby(["symbol", "lower_date"], sort=True, dropna=False)
+        grouped = supported_all.groupby(
+            ["symbol", "lower_date"], sort=True, dropna=False
+        )
         for (symbol, lower_date), group in grouped:
             ordered = group.sort_values(["artifact_execution_utc", "source_s3_key"])
             eligible = ordered[ordered["canonical_eligible"]]
             canonical_index = eligible.index[-1] if not eligible.empty else None
             if canonical_index is not None:
                 canonical_indices.append(canonical_index)
-            changed = changed_fields(ordered, AUDIT_COMPARE_FIELDS + DERIVED_BOOL_FIELDS)
+            changed = changed_fields(
+                ordered, AUDIT_COMPARE_FIELDS + DERIVED_BOOL_FIELDS
+            )
             for index, row in ordered.iterrows():
                 dedupe_records.append(
                     {
@@ -914,7 +1106,10 @@ def main(argv: list[str] | None = None) -> int:
                         ),
                         "changed_field_count": len(changed),
                         "changed_fields": "|".join(changed),
-                        **{field: row.get(field) for field in LOWER_OHLCV + DERIVED_BOOL_FIELDS},
+                        **{
+                            field: row.get(field)
+                            for field in LOWER_OHLCV + DERIVED_BOOL_FIELDS
+                        },
                     }
                 )
 
@@ -925,7 +1120,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     canonical = (
         supported_all.loc[canonical_indices]
-        .sort_values(["lower_date", "symbol", "artifact_execution_utc", "source_s3_key"])
+        .sort_values(
+            ["lower_date", "symbol", "artifact_execution_utc", "source_s3_key"]
+        )
         .reset_index(drop=True)
         if canonical_indices
         else pd.DataFrame(columns=supported_all.columns)
@@ -956,12 +1153,20 @@ def main(argv: list[str] | None = None) -> int:
         "date_to": str(date_to.date()) if date_to is not None else None,
         "artifact_count": len(inventory),
         "artifacts_with_rows_in_range": int((inventory["row_count"] > 0).sum()),
-        "min_execution_timestamp": stable_value(inventory["artifact_execution_utc"].min()),
-        "max_execution_timestamp": stable_value(inventory["artifact_execution_utc"].max()),
-        "unique_lower_market_dates": int(all_rows["lower_date"].nunique()) if "lower_date" in all_rows else 0,
+        "min_execution_timestamp": stable_value(
+            inventory["artifact_execution_utc"].min()
+        ),
+        "max_execution_timestamp": stable_value(
+            inventory["artifact_execution_utc"].max()
+        ),
+        "unique_lower_market_dates": (
+            int(all_rows["lower_date"].nunique()) if "lower_date" in all_rows else 0
+        ),
         "raw_row_count": int(inventory["source_row_count"].sum()),
         "rows_in_requested_range": int(len(all_rows)),
-        "unique_symbols": int(all_rows["symbol"].nunique()) if "symbol" in all_rows else 0,
+        "unique_symbols": (
+            int(all_rows["symbol"].nunique()) if "symbol" in all_rows else 0
+        ),
         "rows_by_schema_signature": {
             str(key): int(value)
             for key, value in all_rows.get("source_s3_key", pd.Series(dtype=str))
@@ -972,16 +1177,24 @@ def main(argv: list[str] | None = None) -> int:
         },
         "artifacts_by_provisional_logic_era": {
             str(key): int(value)
-            for key, value in inventory["provisional_logic_era"].value_counts().sort_index().items()
+            for key, value in inventory["provisional_logic_era"]
+            .value_counts()
+            .sort_index()
+            .items()
         },
         "artifacts_by_final_logic_era": {
             str(key): int(value)
-            for key, value in inventory["final_logic_era"].value_counts().sort_index().items()
+            for key, value in inventory["final_logic_era"]
+            .value_counts()
+            .sort_index()
+            .items()
         },
         "per_market_date_row_count": percentile_summary(market_date_counts),
         "median_artifact_rows_in_range": median_rows,
         "suspicious_incomplete_floor": incomplete_floor,
-        "suspiciously_incomplete_artifacts": int(inventory["suspiciously_incomplete"].sum()),
+        "suspiciously_incomplete_artifacts": int(
+            inventory["suspiciously_incomplete"].sum()
+        ),
         "duplicate_symbol_date_groups": (
             int(
                 (
@@ -995,6 +1208,14 @@ def main(argv: list[str] | None = None) -> int:
             else 0
         ),
         "supported_observation_count": int(len(canonical)),
+        "supported_artifact_count": int(supported_mask.sum()),
+        "first_supported_five_component_artifact": stable_value(
+            first_supported_artifact
+        ),
+        "last_supported_five_component_artifact": stable_value(last_supported_artifact),
+        "excluded_historical_era_observation_count": int(
+            historical["rows_checked"].sum()
+        ),
         "score_reconstruction_exception_count": int(len(exceptions)),
         "validation_error_count": len(validation_errors),
         "strict_schema": bool(args.strict_schema),
@@ -1024,15 +1245,21 @@ def main(argv: list[str] | None = None) -> int:
             "exclusion_reason",
             "changed_field_count",
             "changed_fields",
-        ] + LOWER_OHLCV + DERIVED_BOOL_FIELDS,
+        ]
+        + LOWER_OHLCV
+        + DERIVED_BOOL_FIELDS,
     )
-    write_csv(exceptions, output_dir / "score_reconstruction_exceptions.csv", EXCEPTION_FIELDS)
+    write_csv(
+        exceptions, output_dir / "score_reconstruction_exceptions.csv", EXCEPTION_FIELDS
+    )
     write_csv(
         known_case_validation,
         output_dir / "known_case_validation.csv",
     )
     supported_output = canonical.reindex(columns=SUPPORTED_OUTPUT_FIELDS)
-    supported_output.to_parquet(output_dir / "supported_observations.parquet", index=False)
+    supported_output.to_parquet(
+        output_dir / "supported_observations.parquet", index=False
+    )
     json_dump(output_dir / "coverage_summary.json", coverage)
 
     report_lines = [
@@ -1056,6 +1283,10 @@ def main(argv: list[str] | None = None) -> int:
         "## Validation",
         "",
         f"- Canonical supported observations: {len(canonical)}",
+        f"- Supported five-component artifacts: {int(supported_mask.sum())}",
+        f"- First supported five-component artifact: `{stable_value(first_supported_artifact)}`",
+        f"- Last supported five-component artifact: `{stable_value(last_supported_artifact)}`",
+        f"- Excluded historical-era observations: {int(historical['rows_checked'].sum())}",
         f"- Score reconstruction exceptions: {len(exceptions)}",
         f"- Validation errors: {len(validation_errors)}",
         "",
@@ -1064,6 +1295,19 @@ def main(argv: list[str] | None = None) -> int:
     ]
     for era, count in sorted(coverage["artifacts_by_final_logic_era"].items()):
         report_lines.append(f"- {era}: {count} artifacts")
+    report_lines.extend(["", "## Historical mismatch pattern", ""])
+    if historical.empty:
+        report_lines.append("- No pre-participation-score artifacts identified.")
+    else:
+        for _, row in historical.iterrows():
+            report_lines.append(
+                f"- `{row['artifact_execution_utc']}`: rows_checked={row['rows_checked']}, "
+                f"participation_true_rows={row['participation_true_rows']}, "
+                f"participation_false_rows={row['participation_false_rows']}, "
+                f"mismatch_rows={row['either_score_mismatches']}, "
+                f"delta_pattern_counts={row['delta_pattern_counts']}, "
+                f"nonparticipation_mismatch_count={row['nonparticipation_mismatch_count']}"
+            )
     report_lines.extend(["", "## Errors", ""])
     if validation_errors:
         report_lines.extend(f"- {error}" for error in sorted(validation_errors))
