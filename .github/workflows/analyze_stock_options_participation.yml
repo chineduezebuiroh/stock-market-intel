@@ -1,0 +1,86 @@
+name: Analyze Stock Options Participation
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "Diagnostic phase"
+        required: true
+        default: "inventory"
+        type: choice
+        options:
+          - inventory
+          - validate
+      date_from:
+        description: "Optional first lower market date (YYYY-MM-DD); leave blank for all"
+        required: false
+        type: string
+      date_to:
+        description: "Optional last lower market date (YYYY-MM-DD); leave blank for all"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+      S3_BUCKET_DATA: stock-intel-data-prod
+      S3_PREFIX_DATA: data
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run read-only participation diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "READ-ONLY DIAGNOSTIC"
+          echo "NO S3 WRITES"
+          echo "NO PRODUCTION CHANGES"
+
+          args=(
+            --bucket "$S3_BUCKET_DATA"
+            --prefix "$S3_PREFIX_DATA"
+            --combo stocks_c_dwm_all
+            --output-dir diagnostic_artifacts/stock_options_participation
+            --dedupe latest-same-market-date
+            --strict-schema
+            --phase "${{ inputs.phase }}"
+          )
+
+          if [[ -n "${{ inputs.date_from }}" ]]; then
+            args+=(--date-from "${{ inputs.date_from }}")
+          fi
+          if [[ -n "${{ inputs.date_to }}" ]]; then
+            args+=(--date-to "${{ inputs.date_to }}")
+          fi
+
+          python diagnostics/analyze_stock_options_participation.py "${args[@]}"
+
+      - name: Upload local diagnostic artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-options-participation-${{ inputs.phase }}-${{ github.run_id }}
+          path: diagnostic_artifacts/stock_options_participation/
+          if-no-files-found: error
+          retention-days: 10
