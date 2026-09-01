@@ -11,6 +11,7 @@ on:
         options:
           - inventory
           - validate
+          - phase3
       date_from:
         description: "Optional first lower market date (YYYY-MM-DD); leave blank for all"
         required: false
@@ -61,7 +62,7 @@ jobs:
             --bucket "$S3_BUCKET_DATA"
             --prefix "$S3_PREFIX_DATA"
             --combo stocks_c_dwm_all
-            --output-dir diagnostic_artifacts/stock_options_participation
+            --output-dir "diagnostic_artifacts/stock_options_participation${{ inputs.phase == 'phase3' && '_phase3' || '' }}"
             --dedupe latest-same-market-date
             --strict-schema
             --phase "${{ inputs.phase }}"
@@ -81,6 +82,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: stock-options-participation-${{ inputs.phase }}-${{ github.run_id }}
-          path: diagnostic_artifacts/stock_options_participation/
+          path: diagnostic_artifacts/stock_options_participation*/
           if-no-files-found: error
           retention-days: 10
