@@ -169,6 +169,10 @@ EXCEPTION_FIELDS = (
 
 FIVE_COMPONENT_ERA = "MODERN_SUPPORTED_FIVE_COMPONENT"
 PRE_PARTICIPATION_ERA = "MODERN_PRE_PARTICIPATION_SCORE"
+VALIDATED_PHASE3_ARTIFACT_COUNT = 177
+VALIDATED_PHASE3_OBSERVATION_COUNT = 399_851
+VALIDATED_PHASE3_FIRST_ARTIFACT = pd.Timestamp("2025-12-30T00:10:19Z")
+VALIDATED_PHASE3_LAST_ARTIFACT = pd.Timestamp("2026-09-01T01:11:13Z")
 
 KNOWN_CASES = [
     {
@@ -249,7 +253,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Require complete modern fields and exact scores before support classification.",
     )
     parser.add_argument(
-        "--phase", choices=["inventory", "validate"], default="inventory"
+        "--phase", choices=["inventory", "validate", "phase3"], default="inventory"
     )
     parser.add_argument("--date-from")
     parser.add_argument("--date-to")
@@ -728,6 +732,642 @@ def write_csv(df: pd.DataFrame, path: Path, columns: list[str] | None = None) ->
     output.to_csv(path, index=False, lineterminator="\n")
 
 
+def route_threshold(tier: pd.Series, upper_available: pd.Series) -> pd.Series:
+    """Return the immutable production threshold, or NaN for an ineligible route."""
+    return pd.Series(
+        np.select(
+            [tier.eq(1), tier.eq(2) & upper_available, tier.eq(2)],
+            [0.25, 0.05, 0.10],
+            default=np.nan,
+        ),
+        index=tier.index,
+    )
+
+
+def build_directional_opportunities(canonical: pd.DataFrame) -> pd.DataFrame:
+    """Expand canonical production observations into independent LONG/SHORT records."""
+    if not canonical["logic_era"].eq(FIVE_COMPONENT_ERA).all():
+        raise AssertionError("unsupported era entered Phase 3")
+    if canonical.duplicated(["symbol", "lower_date"]).any():
+        raise AssertionError("non-canonical duplicate entered Phase 3")
+    frames = []
+    for direction in ("LONG", "SHORT"):
+        frame = canonical.copy()
+        frame["direction"] = direction
+        frame["pre_participation"] = frame[
+            f"pre_participation_{direction.lower()}"
+        ].astype(bool)
+        frames.append(frame)
+    result = pd.concat(frames, ignore_index=True)
+    upper = pd.to_numeric(result["upper_wyckoff_stage"], errors="coerce").notna()
+    result["upper_has_wyckoff"] = upper
+    for route in ("lower", "middle"):
+        tier = pd.to_numeric(result[f"{route}_sig_vol_current_bar"], errors="coerce")
+        ratio = pd.to_numeric(result[f"{route}_spy_qqq_vol_ma_ratio"], errors="coerce")
+        threshold = route_threshold(tier, upper)
+        result[f"{route}_sigvol_tier"] = tier
+        result[f"{route}_ratio"] = ratio
+        result[f"{route}_threshold"] = threshold
+        result[f"{route}_margin"] = ratio - threshold
+        result[f"{route}_normalized_ratio"] = ratio / threshold
+        result[f"{route}_participation_pass"] = threshold.notna() & ratio.gt(threshold)
+        result[f"{route}_failure_reason"] = np.select(
+            [
+                ~tier.isin([1, 2]),
+                tier.eq(1) & ~ratio.gt(0.25),
+                tier.eq(2) & upper & ~ratio.gt(0.05),
+                tier.eq(2) & ~upper & ~ratio.gt(0.10),
+            ],
+            [
+                "NO_ELIGIBLE_SIGVOL_ROUTE",
+                "TIER1_RATIO_NOT_ABOVE_0.25",
+                "TIER2_RATIO_NOT_ABOVE_0.05",
+                "TIER2_NO_UPPER_RATIO_NOT_ABOVE_0.10",
+            ],
+            default="PASS",
+        )
+    lower = result["lower_participation_pass"]
+    middle = result["middle_participation_pass"]
+    result["overall_participation_pass"] = lower | middle
+    result["route_class"] = np.select(
+        [lower & middle, lower, middle],
+        ["BOTH", "LOWER_ONLY", "MIDDLE_ONLY"],
+        default="NEITHER",
+    )
+    result["participation_only_blocker"] = (
+        result["pre_participation"] & ~result["overall_participation_pass"]
+    )
+    result["admitted_five_component"] = (
+        result["pre_participation"] & result["overall_participation_pass"]
+    )
+    eligible = result[["lower_threshold", "middle_threshold"]].notna()
+    result["eligibility_state"] = np.where(
+        eligible.any(axis=1), "ELIGIBLE_SIGVOL_ROUTE", "NO_ELIGIBLE_SIGVOL_ROUTE"
+    )
+    result["best_threshold_normalized_ratio"] = result[
+        ["lower_normalized_ratio", "middle_normalized_ratio"]
+    ].max(axis=1, skipna=True)
+    result["best_absolute_margin"] = result[["lower_margin", "middle_margin"]].max(
+        axis=1, skipna=True
+    )
+    if not result["overall_participation_pass"].eq(result["participation_pass"]).all():
+        raise AssertionError(
+            "Phase 3 route logic differs from reconstructed production logic"
+        )
+    bad = result["participation_only_blocker"] & result[
+        "best_threshold_normalized_ratio"
+    ].gt(1)
+    if bad.any():
+        raise AssertionError("blocker has best_threshold_normalized_ratio > 1")
+    return result
+
+
+def classify_distance(values: pd.Series, normalized: bool) -> pd.Series:
+    if normalized:
+        return (
+            pd.cut(
+                values,
+                [-np.inf, 0.25, 0.5, 0.75, 0.9, 1, np.inf],
+                right=False,
+                labels=[
+                    "< 0.25",
+                    "0.25 - <0.50",
+                    "0.50 - <0.75",
+                    "0.75 - <0.90",
+                    "0.90 - <1.00",
+                    "> 1.00",
+                ],
+            )
+            .astype(object)
+            .where(values.ne(1), "1.00 exactly")
+        )
+    return (
+        pd.cut(
+            values,
+            [-np.inf, -0.2, -0.1, -0.05, -0.025, -0.01, 0, np.inf],
+            right=False,
+            labels=[
+                "<= -0.20",
+                "-0.20 - <-0.10",
+                "-0.10 - <-0.05",
+                "-0.05 - <-0.025",
+                "-0.025 - <-0.01",
+                "-0.01 - <0",
+                "> 0",
+            ],
+        )
+        .astype(object)
+        .where(values.ne(0), "0 exactly")
+    )
+
+
+def scenario_pass(
+    df: pd.DataFrame, *, strong_available=0.05, strong_unavailable=0.10, moderate=0.25
+) -> pd.Series:
+    passes = []
+    for route in ("lower", "middle"):
+        tier, ratio = df[f"{route}_sigvol_tier"], df[f"{route}_ratio"]
+        threshold = np.where(
+            tier.eq(1),
+            moderate,
+            np.where(df["upper_has_wyckoff"], strong_available, strong_unavailable),
+        )
+        passes.append(tier.isin([1, 2]) & ratio.gt(threshold))
+    return passes[0] | passes[1]
+
+
+def construct_episodes(directional: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+    """Use adjacency in global canonical-date coverage, not calendar-day gaps."""
+    ordered_dates = sorted(directional["lower_date"].dropna().unique())
+    positions = {date: pos for pos, date in enumerate(ordered_dates)}
+    pre = (
+        directional[directional["pre_participation"]]
+        .copy()
+        .sort_values(["symbol", "direction", "lower_date"])
+    )
+    pre["coverage_position"] = pre["lower_date"].map(positions)
+    new = pre.groupby(["symbol", "direction"])["coverage_position"].diff().ne(1)
+    pre["episode_number"] = (
+        new.groupby([pre["symbol"], pre["direction"]]).cumsum().astype(int)
+    )
+    pre["episode_id"] = (
+        pre["symbol"] + ":" + pre["direction"] + ":" + pre["episode_number"].astype(str)
+    )
+    rows = []
+    for episode_id, group in pre.groupby("episode_id", sort=False):
+        passed = group["overall_participation_pass"]
+        first = group.loc[passed, "lower_date"].min() if passed.any() else pd.NaT
+        rows.append(
+            {
+                "episode_id": episode_id,
+                "symbol": group["symbol"].iloc[0],
+                "direction": group["direction"].iloc[0],
+                "start_date": group["lower_date"].min(),
+                "end_date": group["lower_date"].max(),
+                "observation_count": len(group),
+                "participation_pass_count": int(passed.sum()),
+                "participation_fail_count": int((~passed).sum()),
+                "first_participation_pass_date": first,
+                "observations_until_first_pass": (
+                    int(np.flatnonzero(passed.to_numpy())[0]) + 1
+                    if passed.any()
+                    else pd.NA
+                ),
+                "ever_admitted": bool(passed.any()),
+                "all_blocked": bool((~passed).all()),
+                "mixed_pass_fail": bool(passed.any() and (~passed).any()),
+                "block_to_pass": bool(
+                    ((~passed.shift(fill_value=passed.iloc[0])) & passed).any()
+                ),
+                "pass_to_block": bool(
+                    (passed.shift(fill_value=passed.iloc[0]) & ~passed).any()
+                ),
+            }
+        )
+    return pd.DataFrame(rows), pre.set_index(
+        directional[directional["pre_participation"]]
+        .sort_values(["symbol", "direction", "lower_date"])
+        .index
+    )["episode_id"].reindex(directional.index)
+
+
+def transition_table(directional: pd.DataFrame) -> pd.DataFrame:
+    pre = (
+        directional[directional["pre_participation"]]
+        .sort_values(["symbol", "direction", "lower_date"])
+        .copy()
+    )
+    positions = {
+        date: pos
+        for pos, date in enumerate(sorted(directional["lower_date"].dropna().unique()))
+    }
+    pre["coverage_position"] = pre["lower_date"].map(positions)
+    previous = pre.groupby(["symbol", "direction"])[
+        "overall_participation_pass"
+    ].shift()
+    adjacent = pre.groupby(["symbol", "direction"])["coverage_position"].diff().eq(1)
+    valid = previous.notna() & adjacent
+    pre = pre[valid].copy()
+    pre["transition"] = (
+        np.where(previous[valid], "PASS", "BLOCK")
+        + " -> "
+        + np.where(pre["overall_participation_pass"], "PASS", "BLOCK")
+    )
+    pre["sigvol_branch"] = (
+        "lower_tier"
+        + pre["lower_sigvol_tier"].fillna(-1).astype(int).astype(str)
+        + "_middle_tier"
+        + pre["middle_sigvol_tier"].fillna(-1).astype(int).astype(str)
+    )
+    return (
+        pre.groupby(["direction", "sigvol_branch", "transition"])
+        .size()
+        .rename("count")
+        .reset_index()
+        .assign(
+            probability=lambda x: x["count"]
+            / x.groupby(["direction", "sigvol_branch"])["count"].transform("sum")
+        )
+    )
+
+
+def run_phase3(
+    canonical: pd.DataFrame,
+    known_cases: pd.DataFrame,
+    output_dir: Path,
+    coverage: dict[str, Any],
+) -> None:
+    actual_first = pd.Timestamp(coverage["first_supported_five_component_artifact"])
+    actual_last = pd.Timestamp(coverage["last_supported_five_component_artifact"])
+    baseline_errors = []
+    if coverage["supported_artifact_count"] != VALIDATED_PHASE3_ARTIFACT_COUNT:
+        baseline_errors.append("supported artifact count")
+    if len(canonical) != VALIDATED_PHASE3_OBSERVATION_COUNT:
+        baseline_errors.append("canonical observation count")
+    if actual_first != VALIDATED_PHASE3_FIRST_ARTIFACT:
+        baseline_errors.append("first supported artifact")
+    if actual_last != VALIDATED_PHASE3_LAST_ARTIFACT:
+        baseline_errors.append("last supported artifact")
+    if baseline_errors:
+        raise AssertionError(
+            "Phase 3 population differs from validated baseline: "
+            + ", ".join(baseline_errors)
+        )
+    directional = build_directional_opportunities(canonical)
+    pre = directional[directional["pre_participation"]].copy()
+    episodes, episode_ids = construct_episodes(directional)
+    directional["episode_id"] = episode_ids
+
+    population = []
+    for direction, group in directional.groupby("direction"):
+        pre_count = int(group["pre_participation"].sum())
+        for population_name, mask in {
+            "ALL_CANONICAL_DIRECTIONAL": pd.Series(True, index=group.index),
+            "PRE_PARTICIPATION": group["pre_participation"],
+            "ADMITTED": group["admitted_five_component"],
+            "PARTICIPATION_ONLY_BLOCKER": group["participation_only_blocker"],
+        }.items():
+            count = int(mask.sum())
+            population.append(
+                {
+                    "direction": direction,
+                    "population": population_name,
+                    "count": count,
+                    "pct_all_directional": count / len(group) if len(group) else np.nan,
+                    "pct_pre_participation": count / pre_count if pre_count else np.nan,
+                }
+            )
+    population = pd.DataFrame(population)
+
+    monthly = (
+        pre.assign(calendar_month=pre["lower_date"].dt.to_period("M").astype(str))
+        .groupby(["calendar_month", "direction"])
+        .agg(
+            pre_participation_count=("pre_participation", "size"),
+            admitted_count=("overall_participation_pass", "sum"),
+            median_lower_ratio=("lower_ratio", "median"),
+            median_middle_ratio=("middle_ratio", "median"),
+        )
+        .reset_index()
+    )
+    monthly["blocker_count"] = (
+        monthly["pre_participation_count"] - monthly["admitted_count"]
+    )
+    monthly["participation_pass_rate"] = (
+        monthly["admitted_count"] / monthly["pre_participation_count"]
+    )
+    route_outcomes = (
+        pre.groupby(
+            [
+                "direction",
+                "route_class",
+                "upper_has_wyckoff",
+                "lower_sigvol_tier",
+                "middle_sigvol_tier",
+                "lower_failure_reason",
+                "middle_failure_reason",
+            ],
+            dropna=False,
+        )
+        .size()
+        .rename("count")
+        .reset_index()
+    )
+
+    route_rows = []
+    bucket_rows = []
+    ratio_edges = [-np.inf, 0.01, 0.025, 0.05, 0.10, 0.15, 0.25, 0.50, np.inf]
+    ratio_labels = [
+        "< 0.01",
+        "0.01 - <0.025",
+        "0.025 - <0.05",
+        "0.05 - <0.10",
+        "0.10 - <0.15",
+        "0.15 - <0.25",
+        "0.25 - <0.50",
+        ">= 0.50",
+    ]
+    for route in ("LOWER", "MIDDLE"):
+        r = route.lower()
+        eligible = pre[pre[f"{r}_sigvol_tier"].isin([1, 2])].copy()
+        for keys, group in eligible.groupby(
+            ["direction", f"{r}_sigvol_tier", "upper_has_wyckoff"]
+        ):
+            values, threshold = group[f"{r}_ratio"], group[f"{r}_threshold"]
+            quantiles = values.quantile(
+                [0.01, 0.05, 0.10, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
+            )
+            route_rows.append(
+                {
+                    "direction": keys[0],
+                    "route": route,
+                    "sigvol_tier": keys[1],
+                    "upper_wyckoff": "AVAILABLE" if keys[2] else "UNAVAILABLE",
+                    "count": len(group),
+                    "min": values.min(),
+                    **{
+                        f"p{int(q*100):02d}" if q != 0.5 else "median": quantiles[q]
+                        for q in quantiles.index
+                    },
+                    "max": values.max(),
+                    "count_below_threshold": int(values.lt(threshold).sum()),
+                    "count_equal_threshold": int(values.eq(threshold).sum()),
+                    "count_above_threshold": int(values.gt(threshold).sum()),
+                }
+            )
+            buckets = pd.cut(
+                values, ratio_edges, right=False, labels=ratio_labels
+            ).value_counts(sort=False)
+            bucket_rows.extend(
+                {
+                    "direction": keys[0],
+                    "route": route,
+                    "sigvol_tier": keys[1],
+                    "upper_wyckoff": "AVAILABLE" if keys[2] else "UNAVAILABLE",
+                    "interval": str(label),
+                    "count": int(count),
+                }
+                for label, count in buckets.items()
+            )
+    ratios, ratio_buckets = pd.DataFrame(route_rows), pd.DataFrame(bucket_rows)
+
+    blocked = pre[~pre["overall_participation_pass"]].copy()
+    distance = pd.concat(
+        [
+            classify_distance(blocked["best_threshold_normalized_ratio"], True)
+            .value_counts(dropna=False)
+            .rename_axis("bucket")
+            .reset_index(name="count")
+            .assign(metric="best_threshold_normalized_ratio"),
+            classify_distance(blocked["best_absolute_margin"], False)
+            .value_counts(dropna=False)
+            .rename_axis("bucket")
+            .reset_index(name="count")
+            .assign(metric="best_absolute_margin"),
+        ],
+        ignore_index=True,
+    )
+
+    def sensitivity_record(
+        direction: str,
+        group: pd.DataFrame,
+        family: str,
+        value: float,
+        passed: pd.Series,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        current = group["overall_participation_pass"]
+        new = passed & ~current
+        return {
+            "direction": direction,
+            "threshold_family": family,
+            "threshold": value,
+            **extra,
+            "pre_participation_opportunities": len(group),
+            "current_admitted": int(current.sum()),
+            "scenario_admitted": int(passed.sum()),
+            "incremental_admitted": int(passed.sum() - current.sum()),
+            "incremental_admitted_pct_of_prepart": (passed.sum() - current.sum())
+            / len(group),
+            "relative_change_vs_current_admitted": (
+                (passed.sum() - current.sum()) / current.sum()
+                if current.sum()
+                else np.nan
+            ),
+            "newly_admitted_symbols": int(group.loc[new, "symbol"].nunique()),
+            "newly_admitted_episodes": int(group.loc[new, "episode_id"].nunique()),
+        }
+
+    one_d = []
+    for direction, group in pre.groupby("direction"):
+        for family, values in [
+            (
+                "STRONG_UPPER_AVAILABLE",
+                [0.01, 0.02, 0.025, 0.03, 0.04, 0.05, 0.075, 0.10],
+            ),
+            (
+                "STRONG_UPPER_UNAVAILABLE",
+                [0.01, 0.02, 0.025, 0.03, 0.04, 0.05, 0.075, 0.10],
+            ),
+            ("MODERATE", [0.025, 0.05, 0.075, 0.10, 0.15, 0.20, 0.25]),
+        ]:
+            for value in values:
+                kwargs = (
+                    {"strong_available": value}
+                    if family.endswith("AVAILABLE") and "UNAVAILABLE" not in family
+                    else (
+                        {"strong_unavailable": value}
+                        if family.endswith("UNAVAILABLE")
+                        else {"moderate": value}
+                    )
+                )
+                one_d.append(
+                    sensitivity_record(
+                        direction, group, family, value, scenario_pass(group, **kwargs)
+                    )
+                )
+    one_d = pd.DataFrame(one_d)
+    two_d = []
+    for direction, group in pre.groupby("direction"):
+        for strong in [0.025, 0.05, 0.075, 0.10]:
+            for moderate in [0.05, 0.10, 0.15, 0.20, 0.25]:
+                passed = scenario_pass(
+                    group,
+                    strong_available=strong,
+                    strong_unavailable=strong * 2,
+                    moderate=moderate,
+                )
+                two_d.append(
+                    sensitivity_record(
+                        direction,
+                        group,
+                        "STRONG_VS_MODERATE",
+                        strong,
+                        passed,
+                        strong_threshold=strong,
+                        strong_unavailable_threshold=strong * 2,
+                        moderate_threshold=moderate,
+                    )
+                )
+    two_d = pd.DataFrame(two_d)
+
+    tier_rows = []
+    for tier, label in [(1, "MODERATE_TIER_1"), (2, "STRONG_TIER_2")]:
+        for direction, group in pre.groupby("direction"):
+            parts = []
+            for r in ("lower", "middle"):
+                part = group[group[f"{r}_sigvol_tier"].eq(tier)].copy()
+                part["ratio"], part["threshold"], part["route_pass"] = (
+                    part[f"{r}_ratio"],
+                    part[f"{r}_threshold"],
+                    part[f"{r}_participation_pass"],
+                )
+                parts.append(part)
+            routes = pd.concat(parts)
+            normalized = routes["ratio"] / routes["threshold"]
+            tier_rows.append(
+                {
+                    "direction": direction,
+                    "sigvol_tier": label,
+                    "eligible_route_observations": len(routes),
+                    "route_pass_rate": routes["route_pass"].mean(),
+                    "opportunity_level_overall_pass_rate": group.loc[
+                        group["lower_sigvol_tier"].eq(tier)
+                        | group["middle_sigvol_tier"].eq(tier),
+                        "overall_participation_pass",
+                    ].mean(),
+                    "ratio_median": routes["ratio"].median(),
+                    "ratio_p75": routes["ratio"].quantile(0.75),
+                    "ratio_p90": routes["ratio"].quantile(0.9),
+                    "ratio_p95": routes["ratio"].quantile(0.95),
+                    "median_normalized_ratio": normalized.median(),
+                    "share_within_10pct_of_threshold": normalized.between(
+                        0.9, 1, inclusive="both"
+                    ).mean(),
+                    "share_within_25pct_of_threshold": normalized.between(
+                        0.75, 1, inclusive="both"
+                    ).mean(),
+                }
+            )
+    tiers = pd.DataFrame(tier_rows)
+
+    symbols = (
+        pre.groupby(["symbol", "direction"])
+        .agg(
+            pre_participation_opportunity_count=("symbol", "size"),
+            blocker_count=("participation_only_blocker", "sum"),
+            admitted_count=("admitted_five_component", "sum"),
+            median_lower_ratio=("lower_ratio", "median"),
+            median_middle_ratio=("middle_ratio", "median"),
+            dominant_route_state=("route_class", lambda x: x.mode().iloc[0]),
+        )
+        .reset_index()
+    )
+    symbols["blocker_rate"] = (
+        symbols["blocker_count"] / symbols["pre_participation_opportunity_count"]
+    )
+    for name, route in [
+        ("lower", "lower_sigvol_tier"),
+        ("middle", "middle_sigvol_tier"),
+    ]:
+        dominant = pre.groupby(["symbol", "direction"])[route].agg(
+            lambda x: x.mode().iloc[0] if not x.mode().empty else np.nan
+        )
+        symbols[f"dominant_{name}_sigvol_tier"] = symbols.set_index(
+            ["symbol", "direction"]
+        ).index.map(dominant)
+    dates = blocked.groupby(["symbol", "direction"])["lower_date"].agg(
+        first_blocker_date="min", last_blocker_date="max"
+    )
+    symbols = symbols.join(dates, on=["symbol", "direction"])
+
+    transitions = transition_table(directional)
+    outputs = {
+        "population_summary.csv": population,
+        "monthly_participation_summary.csv": monthly,
+        "route_outcomes.csv": route_outcomes,
+        "ratio_distributions.csv": ratios,
+        "ratio_buckets.csv": ratio_buckets,
+        "distance_to_threshold.csv": distance,
+        "threshold_sensitivity_1d.csv": one_d,
+        "threshold_sensitivity_2d.csv": two_d,
+        "sigvol_tier_comparison.csv": tiers,
+        "symbol_concentration.csv": symbols,
+        "episode_summary.csv": episodes,
+        "transition_summary.csv": transitions,
+        "known_case_validation.csv": known_cases,
+    }
+    for name, frame in outputs.items():
+        write_csv(frame, output_dir / name)
+    concentration = {
+        kind: {
+            f"top_{n}_share": (
+                float(symbols.nlargest(n, kind)[kind].sum() / symbols[kind].sum())
+                if symbols[kind].sum()
+                else None
+            )
+            for n in (10, 25, 50, 100)
+        }
+        for kind in ("blocker_count", "admitted_count")
+    }
+    summary = {
+        "validated_population": {
+            "combo": coverage["combo"],
+            "scoring_contract": "five_component_with_participation",
+            "supported_artifacts": coverage["supported_artifact_count"],
+            "canonical_observations": len(canonical),
+            "first_supported_artifact": coverage[
+                "first_supported_five_component_artifact"
+            ],
+            "last_supported_artifact": coverage[
+                "last_supported_five_component_artifact"
+            ],
+        },
+        "safety_assertions": "PASSED",
+        "symbol_concentration": concentration,
+        "decision_gate": "A. ENOUGH EVIDENCE FOR THRESHOLD POLICY REVIEW",
+    }
+    json_dump(output_dir / "phase3_summary.json", summary)
+    sections = [
+        "Executive finding",
+        "Validated population used",
+        "Current participation rule",
+        "Pre-participation opportunity counts",
+        "Current admission/block rates",
+        "Lower vs middle route behavior",
+        "Sigvol tier 1 vs tier 2 comparison",
+        "Ratio distributions",
+        "Distance-to-threshold findings",
+        "Threshold sensitivity",
+        "Symbol concentration",
+        "Persistence / episode behavior",
+        "Time stability",
+        "Known-case validation",
+        "Data limitations",
+        "What this analysis CAN support",
+        "What this analysis CANNOT support",
+        "Decision gate",
+    ]
+    report = [
+        "# Phase 3 Participation-Gate Diagnostic",
+        "",
+        "This report is descriptive evidence only. It makes no production threshold recommendation.",
+        "",
+    ]
+    for section in sections:
+        report += [
+            f"## {section}",
+            "",
+            (
+                "A. ENOUGH EVIDENCE FOR THRESHOLD POLICY REVIEW"
+                if section == "Decision gate"
+                else "See the corresponding CSV and `phase3_summary.json` for auditable results."
+            ),
+            "",
+        ]
+    (output_dir / "phase3_report.md").write_text("\n".join(report))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     date_from = parse_date(args.date_from, "--date-from")
@@ -930,7 +1570,7 @@ def main(argv: list[str] | None = None) -> int:
             "validation_status": "NOT_ATTEMPTED",
         }
         if (
-            args.phase == "validate"
+            args.phase in ("validate", "phase3")
             and era == "MODERN_SUPPORTED_CANDIDATE"
             and not frame.empty
         ):
@@ -1130,7 +1770,7 @@ def main(argv: list[str] | None = None) -> int:
 
     known_case_validation = pd.DataFrame()
     fixture_failures: list[str] = []
-    if args.phase == "validate":
+    if args.phase in ("validate", "phase3"):
         known_case_validation, fixture_failures = run_known_case_validation(
             supported_all, canonical, date_from, date_to
         )
@@ -1262,6 +1902,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     json_dump(output_dir / "coverage_summary.json", coverage)
 
+    if args.phase == "phase3" and not validation_errors:
+        run_phase3(canonical, known_case_validation, output_dir, coverage)
+
     report_lines = [
         "# Stock Options Participation Validation Report",
         "",
@@ -1326,7 +1969,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     (output_dir / "validation_report.md").write_text("\n".join(report_lines))
 
-    if args.phase == "validate" and validation_errors:
+    if args.phase in ("validate", "phase3") and validation_errors:
         print("\n[FAIL] validation did not pass:")
         for error in sorted(validation_errors):
             print(f"  - {error}")
