@@ -994,9 +994,22 @@ def run_phase3(
             + ", ".join(baseline_errors)
         )
     directional = build_directional_opportunities(canonical)
-    pre = directional[directional["pre_participation"]].copy()
     episodes, episode_ids = construct_episodes(directional)
+    if not episode_ids.index.equals(directional.index):
+        raise AssertionError(
+            "Phase 3 episode identifiers are not aligned to the directional population"
+        )
     directional["episode_id"] = episode_ids
+    pre = directional[directional["pre_participation"]].copy()
+    if pre["episode_id"].isna().any():
+        raise AssertionError(
+            "Phase 3 episode identifiers are missing from pre-participation rows"
+        )
+    episode_owners = pre.groupby("episode_id")[["symbol", "direction"]].nunique()
+    if episode_owners.gt(1).any(axis=None):
+        raise AssertionError(
+            "Phase 3 episode identifiers are not globally unique by symbol and direction"
+        )
 
     population = []
     for direction, group in directional.groupby("direction"):
