@@ -169,10 +169,12 @@ EXCEPTION_FIELDS = (
 
 FIVE_COMPONENT_ERA = "MODERN_SUPPORTED_FIVE_COMPONENT"
 PRE_PARTICIPATION_ERA = "MODERN_PRE_PARTICIPATION_SCORE"
-VALIDATED_PHASE3_ARTIFACT_COUNT = 177
-VALIDATED_PHASE3_OBSERVATION_COUNT = 399_851
+# These are regression floors from the validated 2026-09-01 snapshot, not an
+# expected current-state snapshot.  Production history is immutable and grows.
+VALIDATED_PHASE3_MIN_ARTIFACT_COUNT = 177
+VALIDATED_PHASE3_MIN_OBSERVATION_COUNT = 399_851
 VALIDATED_PHASE3_FIRST_ARTIFACT = pd.Timestamp("2025-12-30T00:10:19Z")
-VALIDATED_PHASE3_LAST_ARTIFACT = pd.Timestamp("2026-09-01T01:11:13Z")
+VALIDATED_PHASE3_MIN_LAST_ARTIFACT = pd.Timestamp("2026-09-01T01:11:13Z")
 
 KNOWN_CASES = [
     {
@@ -971,28 +973,59 @@ def transition_table(directional: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def assert_phase3_population(canonical: pd.DataFrame, coverage: dict[str, Any]) -> None:
+    """Fail closed on contract regressions while permitting a validated tail."""
+    actual_first = pd.Timestamp(coverage["first_supported_five_component_artifact"])
+    actual_last = pd.Timestamp(coverage["last_supported_five_component_artifact"])
+    errors = []
+    if coverage["combo"] != "stocks_c_dwm_all":
+        errors.append("combo is not stocks_c_dwm_all")
+    if coverage.get("scoring_contract") != "five_component_with_participation":
+        errors.append("scoring contract is not five_component_with_participation")
+    if coverage["supported_artifact_count"] < VALIDATED_PHASE3_MIN_ARTIFACT_COUNT:
+        errors.append("supported artifact count is below validated minimum")
+    if len(canonical) < VALIDATED_PHASE3_MIN_OBSERVATION_COUNT:
+        errors.append("canonical observation count is below validated minimum")
+    if actual_first != VALIDATED_PHASE3_FIRST_ARTIFACT:
+        errors.append("first supported artifact changed")
+    if actual_last < VALIDATED_PHASE3_MIN_LAST_ARTIFACT:
+        errors.append("last supported artifact is before validated minimum")
+    if coverage.get("validation_error_count") != 0:
+        errors.append("validation errors are present")
+    if not coverage.get("strict_schema"):
+        errors.append("strict schema validation was not enabled")
+    if not coverage.get("supported_era_contiguous"):
+        errors.append("supported five-component era is not contiguous")
+    if errors:
+        raise AssertionError(
+            "Phase 3 population invariant failed: " + ", ".join(errors)
+        )
+
+
+def unexplained_post_boundary_mask(
+    schema_eras: pd.DataFrame, inventory: pd.DataFrame
+) -> pd.Series:
+    """Identify a gap/drift in the established supported production era."""
+    post_boundary = (
+        schema_eras["artifact_execution_utc"] >= VALIDATED_PHASE3_FIRST_ARTIFACT
+    )
+    supported = schema_eras["final_logic_era"].eq(FIVE_COMPONENT_ERA)
+    suspicious_lookup = inventory.set_index("source_s3_key")[
+        "suspiciously_incomplete"
+    ].to_dict()
+    understood_outlier = (
+        schema_eras["source_s3_key"].map(suspicious_lookup).fillna(False).astype(bool)
+    )
+    return post_boundary & ~supported & ~understood_outlier
+
+
 def run_phase3(
     canonical: pd.DataFrame,
     known_cases: pd.DataFrame,
     output_dir: Path,
     coverage: dict[str, Any],
 ) -> None:
-    actual_first = pd.Timestamp(coverage["first_supported_five_component_artifact"])
-    actual_last = pd.Timestamp(coverage["last_supported_five_component_artifact"])
-    baseline_errors = []
-    if coverage["supported_artifact_count"] != VALIDATED_PHASE3_ARTIFACT_COUNT:
-        baseline_errors.append("supported artifact count")
-    if len(canonical) != VALIDATED_PHASE3_OBSERVATION_COUNT:
-        baseline_errors.append("canonical observation count")
-    if actual_first != VALIDATED_PHASE3_FIRST_ARTIFACT:
-        baseline_errors.append("first supported artifact")
-    if actual_last != VALIDATED_PHASE3_LAST_ARTIFACT:
-        baseline_errors.append("last supported artifact")
-    if baseline_errors:
-        raise AssertionError(
-            "Phase 3 population differs from validated baseline: "
-            + ", ".join(baseline_errors)
-        )
+    assert_phase3_population(canonical, coverage)
     directional = build_directional_opportunities(canonical)
     episodes, episode_ids = construct_episodes(directional)
     if not episode_ids.index.equals(directional.index):
@@ -1335,6 +1368,13 @@ def run_phase3(
             "last_supported_artifact": coverage[
                 "last_supported_five_component_artifact"
             ],
+            "run_timestamp_utc": coverage["run_timestamp_utc"],
+            "unique_market_dates": int(canonical["lower_date"].nunique()),
+            "unique_symbols": int(canonical["symbol"].nunique()),
+            "population_statement": (
+                "Analysis uses the complete validated five-component production "
+                "history available at this run."
+            ),
         },
         "safety_assertions": "PASSED",
         "symbol_concentration": concentration,
@@ -1368,14 +1408,22 @@ def run_phase3(
         "",
     ]
     for section in sections:
-        report += [
-            f"## {section}",
-            "",
-            (
+        if section == "Validated population used":
+            detail = (
+                "Analysis uses the complete validated five-component production "
+                "history available at this run. Population metadata is recorded in "
+                "`phase3_summary.json`."
+            )
+        else:
+            detail = (
                 "A. ENOUGH EVIDENCE FOR THRESHOLD POLICY REVIEW"
                 if section == "Decision gate"
                 else "See the corresponding CSV and `phase3_summary.json` for auditable results."
-            ),
+            )
+        report += [
+            f"## {section}",
+            "",
+            detail,
             "",
         ]
     (output_dir / "phase3_report.md").write_text("\n".join(report))
@@ -1678,6 +1726,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     schema_eras.loc[supported_mask, "validation_status"] = "EXACT"
 
+    # Once the pinned five-component boundary has been reached, every normal
+    # artifact must remain on that exact schema/scoring contract.  The existing
+    # suspicious-incomplete rule is the sole operational-outlier exception.
+    unexplained_post_boundary = unexplained_post_boundary_mask(schema_eras, inventory)
+    for _, artifact in schema_eras.loc[unexplained_post_boundary].iterrows():
+        validation_errors.append(
+            f"{artifact['source_s3_key']}: post-boundary artifact is "
+            f"{artifact['final_logic_era']} ({artifact['validation_status']})"
+        )
+
     for key in schema_eras.loc[supported_mask, "source_s3_key"]:
         reconstructed = reconstructed_by_key[str(key)]
         reconstructed["logic_era"] = FIVE_COMPONENT_ERA
@@ -1797,6 +1855,7 @@ def main(argv: list[str] | None = None) -> int:
         else pd.Series(dtype="int64")
     )
     coverage = {
+        "run_timestamp_utc": pd.Timestamp.now(tz="UTC").isoformat(),
         "source_mode": source_mode,
         "phase": args.phase,
         "bucket": args.bucket if source_mode == "s3_read_only" else None,
@@ -1862,6 +1921,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "supported_observation_count": int(len(canonical)),
         "supported_artifact_count": int(supported_mask.sum()),
+        "scoring_contract": "five_component_with_participation",
+        "supported_era_contiguous": not bool(unexplained_post_boundary.any()),
+        "unexplained_post_boundary_artifact_count": int(
+            unexplained_post_boundary.sum()
+        ),
         "first_supported_five_component_artifact": stable_value(
             first_supported_artifact
         ),
