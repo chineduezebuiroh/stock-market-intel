@@ -63,8 +63,10 @@ def test_all_known_case_assertions_still_pass():
                 "lower_date": pd.Timestamp(fixture["lower_date"]),
                 "source_s3_key": f"fixture/{fixture['case_id']}",
                 "artifact_execution_utc": pd.Timestamp("2026-09-01", tz="UTC"),
-                "reconstructed_long_score": 0,
-                "mtf_long_score": 0,
+                "reconstructed_long_score": fixture["expected"][
+                    "reconstructed_long_score"
+                ],
+                "mtf_long_score": fixture["expected"]["reconstructed_long_score"],
                 "reconstructed_short_score": 0,
                 "mtf_short_score": 0,
                 "long_score_match": True,
