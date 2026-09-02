@@ -5,6 +5,7 @@ from diagnostics.analyze_stock_options_participation import (
     FIVE_COMPONENT_ERA,
     build_directional_opportunities,
     construct_episodes,
+    run_phase3,
     scenario_pass,
     transition_table,
 )
@@ -130,6 +131,87 @@ def test_episode_construction_and_transition_classification():
     assert long.iloc[0]["mixed_pass_fail"]
     transitions = transition_table(directional)
     assert "BLOCK -> PASS" in set(transitions["transition"])
+
+
+def test_run_phase3_assigns_global_episode_ids_before_sensitivity(
+    tmp_path, monkeypatch
+):
+    canonical = pd.DataFrame(
+        [
+            canonical_row(
+                symbol="ALPHA",
+                lower_spy_qqq_vol_ma_ratio=0.041,
+                participation_pass=False,
+            ),
+            canonical_row(
+                symbol="BETA",
+                lower_spy_qqq_vol_ma_ratio=0.041,
+                participation_pass=False,
+            ),
+            canonical_row(
+                symbol="GAMMA",
+                pre_participation_long=False,
+                pre_participation_short=True,
+                lower_spy_qqq_vol_ma_ratio=0.041,
+                participation_pass=False,
+            ),
+        ]
+    )
+    directional = build_directional_opportunities(canonical)
+    expected_episodes, episode_ids = construct_episodes(directional)
+    assert episode_ids.index.equals(directional.index)
+    assert episode_ids[directional["pre_participation"]].notna().all()
+    assert episode_ids[~directional["pre_participation"]].isna().all()
+    assert episode_ids[directional["pre_participation"]].is_unique
+    expected_transitions = transition_table(directional)
+
+    first = pd.Timestamp("2026-01-01T00:00:00Z")
+    last = pd.Timestamp("2026-01-02T00:00:00Z")
+    monkeypatch.setattr(
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_ARTIFACT_COUNT",
+        2,
+    )
+    monkeypatch.setattr(
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_OBSERVATION_COUNT",
+        len(canonical),
+    )
+    monkeypatch.setattr(
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_FIRST_ARTIFACT",
+        first,
+    )
+    monkeypatch.setattr(
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_LAST_ARTIFACT",
+        last,
+    )
+    coverage = {
+        "combo": "D_W_M",
+        "supported_artifact_count": 2,
+        "first_supported_five_component_artifact": first,
+        "last_supported_five_component_artifact": last,
+    }
+
+    run_phase3(canonical, pd.DataFrame(), tmp_path, coverage)
+
+    one_d = pd.read_csv(tmp_path / "threshold_sensitivity_1d.csv")
+    relaxed_long = one_d.query(
+        "direction == 'LONG' and threshold_family == 'STRONG_UPPER_AVAILABLE' "
+        "and threshold == 0.04"
+    ).iloc[0]
+    assert relaxed_long["newly_admitted_symbols"] == 2
+    assert relaxed_long["newly_admitted_episodes"] == 2
+    two_d = pd.read_csv(tmp_path / "threshold_sensitivity_2d.csv")
+    assert not two_d.empty
+    expected_episodes.to_csv(tmp_path / "expected_episode_summary.csv", index=False)
+    pd.testing.assert_frame_equal(
+        pd.read_csv(tmp_path / "episode_summary.csv"),
+        pd.read_csv(tmp_path / "expected_episode_summary.csv"),
+        check_dtype=False,
+    )
+    pd.testing.assert_frame_equal(
+        pd.read_csv(tmp_path / "transition_summary.csv"),
+        expected_transitions,
+        check_dtype=False,
+    )
 
 
 def test_unsupported_era_and_duplicate_exclusion():
