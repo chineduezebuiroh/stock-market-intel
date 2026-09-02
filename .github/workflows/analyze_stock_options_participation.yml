@@ -6,12 +6,20 @@ on:
       phase:
         description: "Diagnostic phase"
         required: true
-        default: "inventory"
+        default: "validate"
         type: choice
         options:
           - inventory
           - validate
           - phase3
+      validation_scope:
+        description: "Combo validation scope"
+        required: true
+        default: "cross_combo_phase3b"
+        type: choice
+        options:
+          - cross_combo_phase3b
+          - dwm_control
       date_from:
         description: "Optional first lower market date (YYYY-MM-DD); leave blank for all"
         required: false
@@ -58,30 +66,49 @@ jobs:
           echo "NO S3 WRITES"
           echo "NO PRODUCTION CHANGES"
 
-          args=(
-            --bucket "$S3_BUCKET_DATA"
-            --prefix "$S3_PREFIX_DATA"
-            --combo stocks_c_dwm_all
-            --output-dir "diagnostic_artifacts/stock_options_participation${{ inputs.phase == 'phase3' && '_phase3' || '' }}"
-            --dedupe latest-same-market-date
-            --strict-schema
-            --phase "${{ inputs.phase }}"
-          )
-
-          if [[ -n "${{ inputs.date_from }}" ]]; then
-            args+=(--date-from "${{ inputs.date_from }}")
-          fi
-          if [[ -n "${{ inputs.date_to }}" ]]; then
-            args+=(--date-to "${{ inputs.date_to }}")
+          if [[ "${{ inputs.validation_scope }}" == "cross_combo_phase3b" ]]; then
+            if [[ "${{ inputs.phase }}" != "validate" ]]; then
+              echo "cross_combo_phase3b requires phase=validate" >&2
+              exit 2
+            fi
+            combos=(stocks_b_wmq_all stocks_a_mqy_all)
+          else
+            combos=(stocks_c_dwm_all)
           fi
 
-          python diagnostics/analyze_stock_options_participation.py "${args[@]}"
+          overall_status=0
+          for combo in "${combos[@]}"; do
+            args=(
+              --bucket "$S3_BUCKET_DATA"
+              --prefix "$S3_PREFIX_DATA"
+              --combo "$combo"
+              --output-dir "diagnostic_artifacts/$combo"
+              --dedupe latest-same-market-date
+              --strict-schema
+              --phase "${{ inputs.phase }}"
+              --include-unsupported-era-in-inventory
+            )
+            if [[ -n "${{ inputs.date_from }}" ]]; then
+              args+=(--date-from "${{ inputs.date_from }}")
+            fi
+            if [[ -n "${{ inputs.date_to }}" ]]; then
+              args+=(--date-to "${{ inputs.date_to }}")
+            fi
+            python diagnostics/analyze_stock_options_participation.py "${args[@]}" || overall_status=$?
+          done
+
+          if [[ "${{ inputs.validation_scope }}" == "cross_combo_phase3b" ]]; then
+            python diagnostics/summarize_phase3b_validation.py \
+              --root diagnostic_artifacts \
+              --output diagnostic_artifacts/overall_decision.json
+          fi
+          exit "$overall_status"
 
       - name: Upload local diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stock-options-participation-${{ inputs.phase }}-${{ github.run_id }}
-          path: diagnostic_artifacts/stock_options_participation*/
+          name: stock-options-participation-${{ inputs.validation_scope }}-${{ github.run_id }}
+          path: diagnostic_artifacts/
           if-no-files-found: error
           retention-days: 10

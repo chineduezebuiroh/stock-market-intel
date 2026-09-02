@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only inventory and score validation for stock-options D/W/M history.
+"""Read-only inventory and score validation for immutable stock-options history.
 
 The program deliberately bypasses ``core.storage``.  Production input is read
 with the S3 ListObjectsV2 and GetObject APIs, and every output is written to a
@@ -24,6 +24,68 @@ from typing import Any, Iterable
 import boto3
 import numpy as np
 import pandas as pd
+
+
+@dataclass(frozen=True)
+class ComboSpec:
+    """Versioned routing contract used to reconstruct one options combo."""
+
+    combo_id: str
+    lower_timeframe: str
+    middle_timeframe: str
+    upper_timeframe: str
+    lower_price_action_field: str
+    lower_sigvol_field: str
+    middle_sigvol_field: str = "middle_sig_vol_current_bar"
+    lower_ratio_field: str = "lower_spy_qqq_vol_ma_ratio"
+    middle_ratio_field: str = "middle_spy_qqq_vol_ma_ratio"
+    upper_availability_field: str = "upper_wyckoff_stage"
+    strong_with_upper: float = 0.05
+    strong_without_upper: float = 0.10
+    moderate: float = 0.25
+    expected_admission_score: int = 5
+
+
+COMBO_SPECS = {
+    spec.combo_id: spec
+    for spec in (
+        ComboSpec(
+            "stocks_c_dwm_all",
+            "daily",
+            "weekly",
+            "monthly",
+            "lower_exh_abs_pa_current_bar",
+            "lower_sig_vol_current_bar",
+        ),
+        ComboSpec(
+            "stocks_b_wmq_all",
+            "weekly",
+            "monthly",
+            "quarterly",
+            "lower_exh_abs_pa_current_bar",
+            "lower_sig_vol_current_bar",
+        ),
+        ComboSpec(
+            "stocks_a_mqy_all",
+            "monthly",
+            "quarterly",
+            "yearly",
+            "lower_exh_abs_pa_prior_bar",
+            "lower_sig_vol_prior_bar",
+        ),
+    )
+}
+
+ETF_SCORE_FIELDS = [
+    "etf_lower_primary_long_score",
+    "etf_lower_primary_short_score",
+    "etf_lower_secondary_long_score",
+    "etf_lower_secondary_short_score",
+    "etf_primary_long_score",
+    "etf_primary_short_score",
+    "etf_secondary_long_score",
+    "etf_secondary_short_score",
+]
 
 MODERN_REQUIRED_FIELDS = [
     "symbol",
@@ -182,6 +244,7 @@ KNOWN_CASES = [
         "symbol": "BBY",
         "lower_date": "2026-07-08",
         "expected": {
+            "reconstructed_long_score": 4,
             "pre_participation_long": True,
             "participation_pass": False,
         },
@@ -196,7 +259,11 @@ KNOWN_CASES = [
         "case_id": "CAKE_2026-05-20",
         "symbol": "CAKE",
         "lower_date": "2026-05-20",
-        "expected": {"pre_participation_long": False},
+        "expected": {
+            "reconstructed_long_score": 1,
+            "pre_participation_long": False,
+            "participation_pass": False,
+        },
         "approx": {},
     },
     {
@@ -204,8 +271,10 @@ KNOWN_CASES = [
         "symbol": "CAKE",
         "lower_date": "2026-06-02",
         "expected": {
+            "reconstructed_long_score": 3,
             "price_action_long_pass": False,
             "pre_participation_long": False,
+            "participation_pass": False,
         },
         "approx": {},
     },
@@ -214,6 +283,7 @@ KNOWN_CASES = [
         "symbol": "CAKE",
         "lower_date": "2026-07-24",
         "expected": {
+            "reconstructed_long_score": 4,
             "pre_participation_long": True,
             "participation_pass": False,
         },
@@ -359,9 +429,47 @@ def schema_signature(columns: Iterable[Any]) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
-def provisional_era(columns: Iterable[Any]) -> tuple[str, list[str]]:
+def required_fields(spec: ComboSpec) -> list[str]:
+    """Return the modern immutable-history contract for ``spec``."""
+    routed = [
+        spec.lower_price_action_field,
+        spec.lower_sigvol_field,
+        spec.middle_sigvol_field,
+        spec.lower_ratio_field,
+        spec.middle_ratio_field,
+        spec.upper_availability_field,
+    ]
+    fields = list(dict.fromkeys(MODERN_REQUIRED_FIELDS + routed))
+    if spec.lower_price_action_field != "lower_exh_abs_pa_current_bar":
+        fields.remove("lower_exh_abs_pa_current_bar")
+    if spec.lower_sigvol_field != "lower_sig_vol_current_bar":
+        fields.remove("lower_sig_vol_current_bar")
+    return fields
+
+
+def numeric_fields(spec: ComboSpec) -> list[str]:
+    routed = [
+        spec.lower_price_action_field,
+        spec.lower_sigvol_field,
+        spec.middle_sigvol_field,
+        spec.lower_ratio_field,
+        spec.middle_ratio_field,
+        spec.upper_availability_field,
+    ]
+    fields = list(dict.fromkeys(SCORING_NUMERIC_FIELDS + routed))
+    if spec.lower_price_action_field != "lower_exh_abs_pa_current_bar":
+        fields.remove("lower_exh_abs_pa_current_bar")
+    if spec.lower_sigvol_field != "lower_sig_vol_current_bar":
+        fields.remove("lower_sig_vol_current_bar")
+    return fields
+
+
+def provisional_era(
+    columns: Iterable[Any], spec: ComboSpec | None = None
+) -> tuple[str, list[str]]:
+    spec = spec or COMBO_SPECS["stocks_c_dwm_all"]
     column_set = {str(column) for column in columns}
-    missing = sorted(set(MODERN_REQUIRED_FIELDS) - column_set)
+    missing = sorted(set(required_fields(spec)) - column_set)
     if not missing:
         return "MODERN_SUPPORTED_CANDIDATE", []
     has_combined = "lower_macdv_core" in column_set
@@ -380,21 +488,27 @@ def normalize_dates(series: pd.Series) -> tuple[pd.Series, int]:
     return parsed.dt.tz_convert(None).dt.normalize(), malformed
 
 
-def numeric_frame(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
+def numeric_frame(
+    df: pd.DataFrame, spec: ComboSpec | None = None
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    spec = spec or COMBO_SPECS["stocks_c_dwm_all"]
     numbers = pd.DataFrame(index=df.index)
     malformed: dict[str, int] = {}
-    for field in SCORING_NUMERIC_FIELDS:
+    for field in numeric_fields(spec):
         converted = pd.to_numeric(df[field], errors="coerce")
         malformed[field] = int((df[field].notna() & converted.isna()).sum())
         numbers[field] = converted
     return numbers, malformed
 
 
-def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
-    numbers, malformed = numeric_frame(df)
+def reconstruct_scores(
+    df: pd.DataFrame, spec: ComboSpec | None = None
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    spec = spec or COMBO_SPECS["stocks_c_dwm_all"]
+    numbers, malformed = numeric_frame(df, spec)
     result = df.copy()
 
-    u = numbers["upper_wyckoff_stage"]
+    u = numbers[spec.upper_availability_field]
     upper_available = u.notna()
     ue = numbers["upper_exh_abs_pa_prior_bar"]
     mw = numbers["middle_wyckoff_stage"]
@@ -410,7 +524,7 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     result["ma_long_pass"] = numbers["lower_ma_trend_bullish"] > 0
     result["ma_short_pass"] = numbers["lower_ma_trend_bearish"] < 0
 
-    price_action = numbers["lower_exh_abs_pa_current_bar"]
+    price_action = numbers[spec.lower_price_action_field]
     result["price_action_long_pass"] = price_action.isin([1.0, 2.0])
     result["price_action_short_pass"] = price_action.isin([-1.0, -2.0])
 
@@ -441,16 +555,19 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         ]
     ].all(axis=1)
 
-    strong_threshold = pd.Series(np.where(upper_available, 0.05, 0.10), index=df.index)
-    ls = numbers["lower_sig_vol_current_bar"]
-    lr = numbers["lower_spy_qqq_vol_ma_ratio"]
-    ms = numbers["middle_sig_vol_current_bar"]
-    mr = numbers["middle_spy_qqq_vol_ma_ratio"]
+    strong_threshold = pd.Series(
+        np.where(upper_available, spec.strong_with_upper, spec.strong_without_upper),
+        index=df.index,
+    )
+    ls = numbers[spec.lower_sigvol_field]
+    lr = numbers[spec.lower_ratio_field]
+    ms = numbers[spec.middle_sigvol_field]
+    mr = numbers[spec.middle_ratio_field]
     result["lower_route_pass"] = ((ls == 2) & (lr > strong_threshold)) | (
-        (ls == 1) & (lr > 0.25)
+        (ls == 1) & (lr > spec.moderate)
     )
     result["middle_route_pass"] = ((ms == 2) & (mr > strong_threshold)) | (
-        (ms == 1) & (mr > 0.25)
+        (ms == 1) & (mr > spec.moderate)
     )
     result["participation_pass"] = (
         result["lower_route_pass"] | result["middle_route_pass"]
@@ -484,6 +601,61 @@ def reconstruct_scores(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
         result["long_score_match"] & result["short_score_match"]
     )
     return result, malformed
+
+
+def reconstruct_final_signals(df: pd.DataFrame) -> pd.DataFrame:
+    """Reconstruct options admission and the post-admission ETF guardrail."""
+    result = df.copy()
+    pre_long_score = (
+        result[
+            [
+                "regime_long_pass",
+                "ma_long_pass",
+                "price_action_long_pass",
+                "momentum_long_pass",
+            ]
+        ]
+        .astype(int)
+        .sum(axis=1)
+    )
+    pre_short_score = (
+        result[
+            [
+                "regime_short_pass",
+                "ma_short_pass",
+                "price_action_short_pass",
+                "momentum_short_pass",
+            ]
+        ]
+        .astype(int)
+        .sum(axis=1)
+    )
+    base = pd.Series("none", index=result.index, dtype=object)
+    base.loc[pre_long_score >= 4] = "long"
+    base.loc[pre_short_score >= 4] = "short"
+    admitted = base.copy()
+    admitted.loc[(base == "long") & (result["reconstructed_long_score"] < 5)] = "none"
+    admitted.loc[(base == "short") & (result["reconstructed_short_score"] < 5)] = "none"
+    result["reconstructed_pre_etf_signal"] = admitted
+
+    def aggregate(fields: list[str]) -> pd.Series:
+        values = result[fields].apply(pd.to_numeric, errors="coerce")
+        return values.max(axis=1, skipna=True).where(values.notna().any(axis=1))
+
+    long_fields = [field for field in ETF_SCORE_FIELDS if "long" in field]
+    short_fields = [field for field in ETF_SCORE_FIELDS if "short" in field]
+    etf_long = aggregate(long_fields)
+    etf_short = aggregate(short_fields)
+    final = admitted.copy()
+    final.loc[(admitted == "long") & etf_short.notna() & (etf_short >= 4)] = "anti"
+    final.loc[(admitted == "short") & etf_long.notna() & (etf_long >= 4)] = "anti"
+    final.loc[(final == "long") & etf_long.notna() & (etf_long < 4)] = "watch"
+    final.loc[(final == "short") & etf_short.notna() & (etf_short < 4)] = "watch"
+    result["reconstructed_final_signal"] = final
+    result["final_signal_match"] = (
+        result["signal"].astype(str).str.strip().str.lower() == final
+    )
+    return result
 
 
 def score_pattern_summary(reconstructed: pd.DataFrame) -> dict[str, Any]:
@@ -671,9 +843,15 @@ def run_known_case_validation(
             assertion_messages: list[str] = []
             if is_canonical:
                 for field, expected in fixture["expected"].items():
-                    if bool(row[field]) != bool(expected):
+                    actual = row[field]
+                    matches = (
+                        bool(actual) == expected
+                        if isinstance(expected, bool)
+                        else values_equal(actual, expected)
+                    )
+                    if not matches:
                         assertion_messages.append(
-                            f"{field}: expected {expected}, got {row[field]}"
+                            f"{field}: expected {expected}, got {actual}"
                         )
                 for field, (expected, tolerance) in fixture["approx"].items():
                     actual = pd.to_numeric(
@@ -732,6 +910,69 @@ def write_csv(df: pd.DataFrame, path: Path, columns: list[str] | None = None) ->
                 output[column] = pd.NA
         output = output[columns]
     output.to_csv(path, index=False, lineterminator="\n")
+
+
+def build_etf_coverage(
+    artifact_frames: dict[str, pd.DataFrame], schema_eras: pd.DataFrame
+) -> pd.DataFrame:
+    """Inventory stored ETF inputs without making them score prerequisites."""
+    era_by_key = schema_eras.set_index("source_s3_key")["final_logic_era"].to_dict()
+    records: list[dict[str, Any]] = []
+    for key, frame in artifact_frames.items():
+        for field in ETF_SCORE_FIELDS:
+            present = field in frame
+            records.append(
+                {
+                    "source_s3_key": key,
+                    "logic_era": era_by_key.get(key, "UNKNOWN"),
+                    "field": field,
+                    "field_present": present,
+                    "row_count": len(frame),
+                    "non_null_count": int(frame[field].notna().sum()) if present else 0,
+                    "null_count": (
+                        int(frame[field].isna().sum()) if present else len(frame)
+                    ),
+                    "null_fraction": (
+                        float(frame[field].isna().mean())
+                        if present and len(frame)
+                        else None
+                    ),
+                }
+            )
+    return pd.DataFrame(records)
+
+
+def readiness_decision(
+    *,
+    supported_artifacts: int,
+    canonical_dates: int,
+    errors: list[str],
+    post_etf_reconstructable: bool,
+) -> tuple[str, str]:
+    if supported_artifacts == 0:
+        return (
+            "D — NOT SUPPORTABLE FROM CURRENT IMMUTABLE HISTORY",
+            "No exactly reconstructable modern five-component artifact was found.",
+        )
+    if errors:
+        return (
+            "B — REQUIRES BOUNDED CORRECTIVE VALIDATION",
+            f"{len(errors)} fail-closed validation error(s) require resolution.",
+        )
+    if canonical_dates == 0:
+        return (
+            "C — PARTIAL / DESCRIPTIVE ONLY",
+            "Supported artifacts exist but no canonical lower market date survived.",
+        )
+    if not post_etf_reconstructable:
+        return (
+            "C — PARTIAL / DESCRIPTIVE ONLY",
+            "Participation reconstructs, but stored ETF fields cannot fully explain final signals.",
+        )
+    return (
+        "A — READY FOR PHASE 3B ANALYSIS",
+        "The modern supported era is contiguous and exact reconstruction passed.",
+    )
 
 
 def route_threshold(tier: pd.Series, upper_available: pd.Series) -> pd.Series:
@@ -1003,12 +1244,12 @@ def assert_phase3_population(canonical: pd.DataFrame, coverage: dict[str, Any]) 
 
 
 def unexplained_post_boundary_mask(
-    schema_eras: pd.DataFrame, inventory: pd.DataFrame
+    schema_eras: pd.DataFrame,
+    inventory: pd.DataFrame,
+    boundary: pd.Timestamp = VALIDATED_PHASE3_FIRST_ARTIFACT,
 ) -> pd.Series:
     """Identify a gap/drift in the established supported production era."""
-    post_boundary = (
-        schema_eras["artifact_execution_utc"] >= VALIDATED_PHASE3_FIRST_ARTIFACT
-    )
+    post_boundary = schema_eras["artifact_execution_utc"] >= boundary
     supported = schema_eras["final_logic_era"].eq(FIVE_COMPONENT_ERA)
     suspicious_lookup = inventory.set_index("source_s3_key")[
         "suspiciously_incomplete"
@@ -1431,6 +1672,15 @@ def run_phase3(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.combo not in COMBO_SPECS:
+        raise ValueError(
+            f"unsupported options combo {args.combo!r}; choose from "
+            f"{', '.join(sorted(COMBO_SPECS))}"
+        )
+    spec = COMBO_SPECS[args.combo]
+    if args.phase == "phase3" and args.combo != "stocks_c_dwm_all":
+        raise ValueError("Phase 3 analysis remains restricted to stocks_c_dwm_all")
+    combo_required_fields = required_fields(spec)
     date_from = parse_date(args.date_from, "--date-from")
     date_to = parse_date(args.date_to, "--date-to")
     if date_from is not None and date_to is not None and date_from > date_to:
@@ -1463,21 +1713,29 @@ def main(argv: list[str] | None = None) -> int:
         raw.columns = raw.columns.astype(str)
         signature = schema_signature(raw.columns)
         schema_columns.setdefault(signature, tuple(sorted(raw.columns)))
-        era, missing = provisional_era(raw.columns)
+        era, missing = provisional_era(raw.columns, spec)
 
         fundamental_missing = [
             field for field in ("symbol", "lower_date") if field not in raw
         ]
         malformed_lower_dates = 0
+        malformed_date_counts = {
+            field: 0 for field in ("lower_date", "middle_date", "upper_date")
+        }
         filtered = raw.copy()
         if not fundamental_missing:
             filtered["lower_date"], malformed_lower_dates = normalize_dates(
                 filtered["lower_date"]
             )
+            malformed_date_counts["lower_date"] = malformed_lower_dates
             if "middle_date" in filtered:
-                filtered["middle_date"], _ = normalize_dates(filtered["middle_date"])
+                filtered["middle_date"], malformed_date_counts["middle_date"] = (
+                    normalize_dates(filtered["middle_date"])
+                )
             if "upper_date" in filtered:
-                filtered["upper_date"], _ = normalize_dates(filtered["upper_date"])
+                filtered["upper_date"], malformed_date_counts["upper_date"] = (
+                    normalize_dates(filtered["upper_date"])
+                )
             if date_from is not None:
                 filtered = filtered[filtered["lower_date"] >= date_from]
             if date_to is not None:
@@ -1499,7 +1757,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         required_nan_counts = {
             field: int(filtered[field].isna().sum())
-            for field in MODERN_REQUIRED_FIELDS
+            for field in combo_required_fields
             if field in filtered.columns
         }
         inventory_records.append(
@@ -1531,6 +1789,10 @@ def main(argv: list[str] | None = None) -> int:
                 "missing_modern_fields": "|".join(missing),
                 "missing_modern_field_count": len(missing),
                 "malformed_lower_dates": malformed_lower_dates,
+                "malformed_required_date_values": sum(malformed_date_counts.values()),
+                "malformed_required_date_counts": json.dumps(
+                    malformed_date_counts, sort_keys=True, separators=(",", ":")
+                ),
                 "required_field_nan_count": sum(required_nan_counts.values()),
                 "required_field_nan_counts": json.dumps(
                     required_nan_counts, sort_keys=True, separators=(",", ":")
@@ -1538,7 +1800,7 @@ def main(argv: list[str] | None = None) -> int:
                 "fundamental_schema_error": bool(fundamental_missing),
                 **{
                     f"has_{field}": field in raw.columns
-                    for field in MODERN_REQUIRED_FIELDS
+                    for field in combo_required_fields
                 },
             }
         )
@@ -1623,10 +1885,13 @@ def main(argv: list[str] | None = None) -> int:
             "short_score_mismatches": 0,
             "either_score_mismatches": 0,
             "malformed_numeric_values": 0,
+            "malformed_date_values": int(artifact["malformed_required_date_values"]),
             "participation_true_rows": 0,
             "participation_false_rows": 0,
             "delta_pattern_counts": "{}",
             "nonparticipation_mismatch_count": 0,
+            "final_signal_rows_checked": 0,
+            "final_signal_mismatches": 0,
             "scoring_contract": "",
             "validation_status": "NOT_ATTEMPTED",
         }
@@ -1634,8 +1899,9 @@ def main(argv: list[str] | None = None) -> int:
             args.phase in ("validate", "phase3")
             and era == "MODERN_SUPPORTED_CANDIDATE"
             and not frame.empty
+            and not record["malformed_date_values"]
         ):
-            reconstructed, malformed = reconstruct_scores(frame)
+            reconstructed, malformed = reconstruct_scores(frame, spec)
             malformed_total = sum(malformed.values())
             mismatches = reconstructed[reconstructed["either_score_mismatch"]].copy()
             pattern = score_pattern_summary(reconstructed)
@@ -1689,8 +1955,30 @@ def main(argv: list[str] | None = None) -> int:
                     ignore_index=True,
                 )
             else:
+                if all(field in reconstructed for field in ETF_SCORE_FIELDS):
+                    reconstructed = reconstruct_final_signals(reconstructed)
+                    reconstructed_by_key[key] = reconstructed
+                    final_mismatches = int((~reconstructed["final_signal_match"]).sum())
+                    record["final_signal_rows_checked"] = len(reconstructed)
+                    record["final_signal_mismatches"] = final_mismatches
+                    if final_mismatches:
+                        record["final_logic_era"] = (
+                            "MODERN_QUARANTINED_FINAL_SIGNAL_MISMATCH"
+                        )
+                        record["validation_status"] = "QUARANTINED_UNEXPLAINED"
+                        validation_errors.append(
+                            f"{key}: {final_mismatches} unexplained final signal mismatches"
+                        )
+                        era_records.append(record)
+                        continue
                 record["final_logic_era"] = "MODERN_EXACT_CANDIDATE"
                 record["validation_status"] = "EXACT_CANDIDATE"
+        elif era == "MODERN_SUPPORTED_CANDIDATE" and record["malformed_date_values"]:
+            record["final_logic_era"] = "MODERN_QUARANTINED_MALFORMED_DATE"
+            record["validation_status"] = "QUARANTINED"
+            validation_errors.append(
+                f"{key}: {record['malformed_date_values']} malformed required date values"
+            )
         elif era == "MODERN_SUPPORTED_CANDIDATE" and frame.empty:
             record["validation_status"] = "NO_ROWS_IN_DATE_RANGE"
         elif era != "MODERN_SUPPORTED_CANDIDATE":
@@ -1729,7 +2017,20 @@ def main(argv: list[str] | None = None) -> int:
     # Once the pinned five-component boundary has been reached, every normal
     # artifact must remain on that exact schema/scoring contract.  The existing
     # suspicious-incomplete rule is the sole operational-outlier exception.
-    unexplained_post_boundary = unexplained_post_boundary_mask(schema_eras, inventory)
+    combo_boundary = (
+        VALIDATED_PHASE3_FIRST_ARTIFACT
+        if args.combo == "stocks_c_dwm_all"
+        else (
+            schema_eras.loc[supported_mask, "artifact_execution_utc"].min()
+            if supported_mask.any()
+            else None
+        )
+    )
+    unexplained_post_boundary = (
+        unexplained_post_boundary_mask(schema_eras, inventory, combo_boundary)
+        if combo_boundary is not None
+        else pd.Series(False, index=schema_eras.index)
+    )
     for _, artifact in schema_eras.loc[unexplained_post_boundary].iterrows():
         validation_errors.append(
             f"{artifact['source_s3_key']}: post-boundary artifact is "
@@ -1842,10 +2143,16 @@ def main(argv: list[str] | None = None) -> int:
     known_case_validation = pd.DataFrame()
     fixture_failures: list[str] = []
     if args.phase in ("validate", "phase3"):
-        known_case_validation, fixture_failures = run_known_case_validation(
-            supported_all, canonical, date_from, date_to
+        if args.combo == "stocks_c_dwm_all":
+            known_case_validation, fixture_failures = run_known_case_validation(
+                supported_all, canonical, date_from, date_to
+            )
+            validation_errors.extend(fixture_failures)
+
+    if args.phase == "validate" and not supported_mask.any():
+        validation_errors.append(
+            "no exactly reconstructable modern five-component artifact was found"
         )
-        validation_errors.extend(fixture_failures)
 
     market_date_counts = (
         row_counts_by_date.groupby("lower_date", dropna=True)[
@@ -1861,6 +2168,9 @@ def main(argv: list[str] | None = None) -> int:
         "bucket": args.bucket if source_mode == "s3_read_only" else None,
         "prefix": args.prefix if source_mode == "s3_read_only" else None,
         "combo": args.combo,
+        "combo_spec": {
+            key: stable_value(value) for key, value in spec.__dict__.items()
+        },
         "date_from": str(date_from.date()) if date_from is not None else None,
         "date_to": str(date_to.date()) if date_to is not None else None,
         "artifact_count": len(inventory),
@@ -1873,6 +2183,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "unique_lower_market_dates": (
             int(all_rows["lower_date"].nunique()) if "lower_date" in all_rows else 0
+        ),
+        "canonical_lower_market_dates": (
+            int(canonical["lower_date"].nunique()) if "lower_date" in canonical else 0
+        ),
+        "canonical_observations_before_deduplication": int(len(supported_all)),
+        "canonical_observations_after_deduplication": int(len(canonical)),
+        "symbol_union_count": (
+            int(all_rows["symbol"].nunique()) if "symbol" in all_rows else 0
         ),
         "raw_row_count": int(inventory["source_row_count"].sum()),
         "rows_in_requested_range": int(len(all_rows)),
@@ -1941,8 +2259,58 @@ def main(argv: list[str] | None = None) -> int:
         ),
     }
 
+    modern_candidates = schema_eras[
+        schema_eras["provisional_logic_era"] == "MODERN_SUPPORTED_CANDIDATE"
+    ]
+    coverage["first_modern_candidate_artifact"] = stable_value(
+        modern_candidates["artifact_execution_utc"].min()
+        if not modern_candidates.empty
+        else None
+    )
+    coverage["raw_artifact_executions"] = len(inventory)
+    coverage["duplicate_same_market_date_groups"] = sum(
+        int(record.get("artifact_execution_count", 0) > 1)
+        for record in market_execution_records
+    )
+
+    etf_coverage = build_etf_coverage(artifact_frames, schema_eras)
+    supported_keys = set(schema_eras.loc[supported_mask, "source_s3_key"].astype(str))
+    supported_etf = etf_coverage[etf_coverage["source_s3_key"].isin(supported_keys)]
+    all_etf_fields_present = bool(
+        supported_keys
+        and not supported_etf.empty
+        and supported_etf.groupby("source_s3_key")["field_present"].all().all()
+    )
+    coverage["etf_fields_complete_in_supported_era"] = all_etf_fields_present
+    coverage["post_etf_signal_reconstructable"] = all_etf_fields_present
+
+    decision, decision_reason = readiness_decision(
+        supported_artifacts=int(supported_mask.sum()),
+        canonical_dates=int(coverage["canonical_lower_market_dates"]),
+        errors=validation_errors,
+        post_etf_reconstructable=all_etf_fields_present,
+    )
+    coverage["readiness_decision"] = decision
+    coverage["readiness_reason"] = decision_reason
+
     write_csv(inventory, output_dir / "artifact_inventory.csv")
     write_csv(schema_eras, output_dir / "schema_eras.csv")
+    schema_era_summary = (
+        schema_eras.groupby(
+            ["schema_signature", "final_logic_era", "validation_status"],
+            dropna=False,
+        )
+        .agg(
+            artifact_count=("source_s3_key", "size"),
+            first_artifact=("artifact_execution_utc", "min"),
+            last_artifact=("artifact_execution_utc", "max"),
+            rows_checked=("rows_checked", "sum"),
+            score_mismatches=("either_score_mismatches", "sum"),
+            final_signal_mismatches=("final_signal_mismatches", "sum"),
+        )
+        .reset_index()
+    )
+    write_csv(schema_era_summary, output_dir / "schema_era_summary.csv")
     write_csv(
         dedupe_audit,
         output_dir / "deduplication_audit.csv",
@@ -1968,6 +2336,57 @@ def main(argv: list[str] | None = None) -> int:
     )
     write_csv(
         exceptions, output_dir / "score_reconstruction_exceptions.csv", EXCEPTION_FIELDS
+    )
+    score_summary_columns = [
+        "source_s3_key",
+        "artifact_execution_utc",
+        "final_logic_era",
+        "validation_status",
+        "rows_checked",
+        "long_score_mismatches",
+        "short_score_mismatches",
+        "either_score_mismatches",
+        "malformed_numeric_values",
+        "participation_true_rows",
+        "participation_false_rows",
+        "delta_pattern_counts",
+        "final_signal_rows_checked",
+        "final_signal_mismatches",
+    ]
+    write_csv(
+        schema_eras,
+        output_dir / "score_reconstruction_summary.csv",
+        score_summary_columns,
+    )
+    write_csv(etf_coverage, output_dir / "etf_coverage_summary.csv")
+    write_csv(
+        pd.DataFrame(
+            [
+                {"combo": args.combo, "error_number": index, "error": error}
+                for index, error in enumerate(validation_errors, start=1)
+            ],
+            columns=["combo", "error_number", "error"],
+        ),
+        output_dir / "validation_errors.csv",
+    )
+    canonicalization = {
+        "combo": args.combo,
+        "raw_artifact_executions": len(inventory),
+        "duplicate_same_market_date_groups": coverage[
+            "duplicate_same_market_date_groups"
+        ],
+        "canonical_market_dates": coverage["canonical_lower_market_dates"],
+        "observations_before_canonicalization": len(supported_all),
+        "observations_after_canonicalization": len(canonical),
+        "suspiciously_incomplete_artifacts": coverage[
+            "suspiciously_incomplete_artifacts"
+        ],
+        "rule": "latest valid execution per symbol/lower_date",
+    }
+    json_dump(output_dir / "canonicalization_summary.json", canonicalization)
+    write_csv(
+        pd.DataFrame([canonicalization]),
+        output_dir / "canonicalization_summary.csv",
     )
     write_csv(
         known_case_validation,
@@ -2009,6 +2428,7 @@ def main(argv: list[str] | None = None) -> int:
         f"- Excluded historical-era observations: {int(historical['rows_checked'].sum())}",
         f"- Score reconstruction exceptions: {len(exceptions)}",
         f"- Validation errors: {len(validation_errors)}",
+        f"- ETF fields complete in supported era: {all_etf_fields_present}",
         "",
         "## Logic eras",
         "",
@@ -2042,6 +2462,12 @@ def main(argv: list[str] | None = None) -> int:
             "and (for validate phase) exact score reconstruction only. It does not perform "
             "threshold sensitivity, calibration, outcome analysis, or any production write.",
             "",
+            "## Readiness decision",
+            "",
+            f"**{decision}**",
+            "",
+            decision_reason,
+            "",
         ]
     )
     (output_dir / "validation_report.md").write_text("\n".join(report_lines))
@@ -2051,7 +2477,7 @@ def main(argv: list[str] | None = None) -> int:
         for error in sorted(validation_errors):
             print(f"  - {error}")
         return 2
-    print(f"[OK] wrote eight local artifacts to {output_dir}")
+    print(f"[OK] wrote local validation artifacts to {output_dir}")
     return 0
 
 
