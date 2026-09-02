@@ -3,11 +3,15 @@ import pytest
 
 from diagnostics.analyze_stock_options_participation import (
     FIVE_COMPONENT_ERA,
+    VALIDATED_PHASE3_FIRST_ARTIFACT,
+    VALIDATED_PHASE3_MIN_LAST_ARTIFACT,
+    assert_phase3_population,
     build_directional_opportunities,
     construct_episodes,
     run_phase3,
     scenario_pass,
     transition_table,
+    unexplained_post_boundary_mask,
 )
 
 
@@ -168,11 +172,11 @@ def test_run_phase3_assigns_global_episode_ids_before_sensitivity(
     first = pd.Timestamp("2026-01-01T00:00:00Z")
     last = pd.Timestamp("2026-01-02T00:00:00Z")
     monkeypatch.setattr(
-        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_ARTIFACT_COUNT",
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_MIN_ARTIFACT_COUNT",
         2,
     )
     monkeypatch.setattr(
-        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_OBSERVATION_COUNT",
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_MIN_OBSERVATION_COUNT",
         len(canonical),
     )
     monkeypatch.setattr(
@@ -180,14 +184,19 @@ def test_run_phase3_assigns_global_episode_ids_before_sensitivity(
         first,
     )
     monkeypatch.setattr(
-        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_LAST_ARTIFACT",
+        "diagnostics.analyze_stock_options_participation.VALIDATED_PHASE3_MIN_LAST_ARTIFACT",
         last,
     )
     coverage = {
-        "combo": "D_W_M",
+        "combo": "stocks_c_dwm_all",
         "supported_artifact_count": 2,
         "first_supported_five_component_artifact": first,
         "last_supported_five_component_artifact": last,
+        "scoring_contract": "five_component_with_participation",
+        "validation_error_count": 0,
+        "strict_schema": True,
+        "supported_era_contiguous": True,
+        "run_timestamp_utc": "2026-09-02T12:00:00+00:00",
     }
 
     run_phase3(canonical, pd.DataFrame(), tmp_path, coverage)
@@ -229,3 +238,100 @@ def test_unsupported_era_and_duplicate_exclusion():
         pass
     else:
         raise AssertionError("duplicate was accepted")
+
+
+def phase3_coverage(**overrides):
+    coverage = {
+        "combo": "stocks_c_dwm_all",
+        "supported_artifact_count": 177,
+        "first_supported_five_component_artifact": VALIDATED_PHASE3_FIRST_ARTIFACT,
+        "last_supported_five_component_artifact": VALIDATED_PHASE3_MIN_LAST_ARTIFACT,
+        "scoring_contract": "five_component_with_participation",
+        "validation_error_count": 0,
+        "strict_schema": True,
+        "supported_era_contiguous": True,
+    }
+    coverage.update(overrides)
+    return coverage
+
+
+def observation_population(size):
+    # The population guard only needs cardinality; avoid manufacturing scoring rows.
+    return pd.DataFrame(index=pd.RangeIndex(size))
+
+
+def test_original_validated_population_passes():
+    assert_phase3_population(observation_population(399_851), phase3_coverage())
+
+
+@pytest.mark.parametrize(
+    ("artifact_count", "observation_count", "tail"),
+    [
+        (178, 401_833, "2026-09-02T02:38:57Z"),
+        (181, 407_000, "2026-09-05T02:38:57Z"),
+    ],
+)
+def test_exact_appended_artifacts_advance_population(
+    artifact_count, observation_count, tail
+):
+    assert_phase3_population(
+        observation_population(observation_count),
+        phase3_coverage(
+            supported_artifact_count=artifact_count,
+            last_supported_five_component_artifact=pd.Timestamp(tail),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "final_era",
+    ["MODERN_QUARANTINED_SCORE_MISMATCH", "UNKNOWN_OR_MIXED"],
+)
+def test_unexplained_post_boundary_artifact_fails_closed(final_era):
+    schema_eras = pd.DataFrame(
+        {
+            "source_s3_key": ["new-artifact"],
+            "artifact_execution_utc": [pd.Timestamp("2026-09-02T02:38:57Z")],
+            "final_logic_era": [final_era],
+        }
+    )
+    inventory = pd.DataFrame(
+        {"source_s3_key": ["new-artifact"], "suspiciously_incomplete": [False]}
+    )
+    assert unexplained_post_boundary_mask(schema_eras, inventory).all()
+    with pytest.raises(AssertionError, match="not contiguous"):
+        assert_phase3_population(
+            observation_population(401_833),
+            phase3_coverage(
+                supported_artifact_count=178,
+                last_supported_five_component_artifact=pd.Timestamp(
+                    "2026-09-02T02:38:57Z"
+                ),
+                supported_era_contiguous=False,
+            ),
+        )
+
+
+def test_first_supported_boundary_change_fails():
+    with pytest.raises(AssertionError, match="first supported artifact changed"):
+        assert_phase3_population(
+            observation_population(399_851),
+            phase3_coverage(
+                first_supported_five_component_artifact=pd.Timestamp(
+                    "2025-12-31T00:10:19Z"
+                )
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("artifact_count", "observation_count"), [(176, 399_851), (177, 399_850)]
+)
+def test_population_shrink_below_validated_floors_fails(
+    artifact_count, observation_count
+):
+    with pytest.raises(AssertionError, match="below validated minimum"):
+        assert_phase3_population(
+            observation_population(observation_count),
+            phase3_coverage(supported_artifact_count=artifact_count),
+        )
