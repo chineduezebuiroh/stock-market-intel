@@ -12,6 +12,7 @@ on:
           - inventory
           - validate
           - phase3
+          - phase3b
       validation_scope:
         description: "Combo validation scope"
         required: true
@@ -67,11 +68,11 @@ jobs:
           echo "NO PRODUCTION CHANGES"
 
           if [[ "${{ inputs.validation_scope }}" == "cross_combo_phase3b" ]]; then
-            if [[ "${{ inputs.phase }}" != "validate" ]]; then
-              echo "cross_combo_phase3b requires phase=validate" >&2
+            if [[ "${{ inputs.phase }}" != "validate" && "${{ inputs.phase }}" != "phase3b" ]]; then
+              echo "cross_combo_phase3b requires phase=validate or phase3b" >&2
               exit 2
             fi
-            combos=(stocks_b_wmq_all stocks_a_mqy_all)
+            combos=(stocks_c_dwm_all stocks_b_wmq_all stocks_a_mqy_all)
           else
             combos=(stocks_c_dwm_all)
           fi
@@ -85,7 +86,7 @@ jobs:
               --output-dir "diagnostic_artifacts/$combo"
               --dedupe latest-same-market-date
               --strict-schema
-              --phase "${{ inputs.phase }}"
+              --phase "$([[ '${{ inputs.phase }}' == phase3b ]] && echo validate || echo '${{ inputs.phase }}')"
               --include-unsupported-era-in-inventory
             )
             if [[ -n "${{ inputs.date_from }}" ]]; then
@@ -101,6 +102,11 @@ jobs:
             python diagnostics/summarize_phase3b_validation.py \
               --root diagnostic_artifacts \
               --output diagnostic_artifacts/overall_decision.json
+            if [[ "${{ inputs.phase }}" == "phase3b" ]]; then
+              python diagnostics/analyze_stock_options_phase3b.py \
+                --validated-root diagnostic_artifacts \
+                --output-dir diagnostic_artifacts/phase3b
+            fi
           fi
           exit "$overall_status"
 

@@ -982,15 +982,26 @@ def route_threshold(tier: pd.Series, upper_available: pd.Series) -> pd.Series:
     )
 
 
-def build_directional_opportunities(canonical: pd.DataFrame) -> pd.DataFrame:
+def build_directional_opportunities(
+    canonical: pd.DataFrame, combo: str = "stocks_c_dwm_all"
+) -> pd.DataFrame:
     """Expand canonical production observations into independent LONG/SHORT records."""
     if not canonical["logic_era"].eq(FIVE_COMPONENT_ERA).all():
         raise AssertionError("unsupported era entered Phase 3")
+    if combo not in COMBO_SPECS:
+        raise ValueError(f"unknown ComboSpec: {combo}")
+    spec = COMBO_SPECS[combo]
     if canonical.duplicated(["symbol", "lower_date"]).any():
         raise AssertionError("non-canonical duplicate entered Phase 3")
+    canonical = canonical.copy()
+    # Phase 3 originally analyzed D/W/M, whose routed fields are the current
+    # fields.  Materialize those route aliases for slower combos rather than
+    # duplicating or approximating production routing logic.
+    canonical["lower_sig_vol_current_bar"] = canonical[spec.lower_sigvol_field]
     frames = []
     for direction in ("LONG", "SHORT"):
         frame = canonical.copy()
+        frame["combo"] = combo
         frame["direction"] = direction
         frame["pre_participation"] = frame[
             f"pre_participation_{direction.lower()}"
