@@ -13,6 +13,7 @@ on:
           - validate
           - phase3
           - phase3b
+          - phase4a_coverage
       validation_scope:
         description: "Combo validation scope"
         required: true
@@ -68,8 +69,8 @@ jobs:
           echo "NO PRODUCTION CHANGES"
 
           if [[ "${{ inputs.validation_scope }}" == "cross_combo_phase3b" ]]; then
-            if [[ "${{ inputs.phase }}" != "validate" && "${{ inputs.phase }}" != "phase3b" ]]; then
-              echo "cross_combo_phase3b requires phase=validate or phase3b" >&2
+            if [[ "${{ inputs.phase }}" != "validate" && "${{ inputs.phase }}" != "phase3b" && "${{ inputs.phase }}" != "phase4a_coverage" ]]; then
+              echo "cross_combo_phase3b requires phase=validate, phase3b, or phase4a_coverage" >&2
               exit 2
             fi
             combos=(stocks_c_dwm_all stocks_b_wmq_all stocks_a_mqy_all)
@@ -86,7 +87,7 @@ jobs:
               --output-dir "diagnostic_artifacts/$combo"
               --dedupe latest-same-market-date
               --strict-schema
-              --phase "$([[ '${{ inputs.phase }}' == phase3b ]] && echo validate || echo '${{ inputs.phase }}')"
+              --phase "$([[ '${{ inputs.phase }}' == phase3b || '${{ inputs.phase }}' == phase4a_coverage ]] && echo validate || echo '${{ inputs.phase }}')"
               --include-unsupported-era-in-inventory
             )
             if [[ -n "${{ inputs.date_from }}" ]]; then
@@ -106,6 +107,17 @@ jobs:
               python diagnostics/analyze_stock_options_phase3b.py \
                 --validated-root diagnostic_artifacts \
                 --output-dir diagnostic_artifacts/phase3b
+            fi
+            if [[ "${{ inputs.phase }}" == "phase4a_coverage" ]]; then
+              if [[ -n "${{ inputs.date_from }}" || -n "${{ inputs.date_to }}" ]]; then
+                echo "phase4a_coverage requires blank date_from/date_to so maturity denominators remain complete" >&2
+                exit 2
+              fi
+              python diagnostics/analyze_stock_options_phase4a_coverage.py \
+                --validated-root diagnostic_artifacts \
+                --output-dir diagnostic_artifacts/phase4a_coverage \
+                --bucket "$S3_BUCKET_DATA" \
+                --prefix "$S3_PREFIX_DATA"
             fi
           fi
           exit "$overall_status"
