@@ -87,7 +87,10 @@ ETF_SCORE_FIELDS = [
     "etf_secondary_short_score",
 ]
 
-MODERN_REQUIRED_FIELDS = [
+# Fields shared by every supported modern scoring contract.  Combo-routed
+# fields are deliberately added by ``required_fields`` below rather than
+# keeping every possible route in this base schema.
+MODERN_BASE_REQUIRED_FIELDS = [
     "symbol",
     "lower_date",
     "middle_date",
@@ -98,15 +101,10 @@ MODERN_REQUIRED_FIELDS = [
     "middle_exh_abs_pa_prior_bar",
     "lower_ma_trend_bullish",
     "lower_ma_trend_bearish",
-    "lower_exh_abs_pa_current_bar",
     "lower_macdv_core_bull",
     "lower_macdv_core_bear",
     "lower_ttm_squeeze_pro",
-    "lower_sig_vol_current_bar",
-    "lower_sig_vol_prior_bar",
     "lower_spy_qqq_vol_ma_ratio",
-    "middle_sig_vol_current_bar",
-    "middle_sig_vol_prior_bar",
     "middle_spy_qqq_vol_ma_ratio",
     "mtf_long_score",
     "mtf_short_score",
@@ -119,25 +117,32 @@ MODERN_REQUIRED_FIELDS = [
     "lower_volume",
 ]
 
-SCORING_NUMERIC_FIELDS = [
+SCORING_BASE_NUMERIC_FIELDS = [
     "upper_wyckoff_stage",
     "upper_exh_abs_pa_prior_bar",
     "middle_wyckoff_stage",
     "middle_exh_abs_pa_prior_bar",
     "lower_ma_trend_bullish",
     "lower_ma_trend_bearish",
-    "lower_exh_abs_pa_current_bar",
     "lower_macdv_core_bull",
     "lower_macdv_core_bear",
     "lower_ttm_squeeze_pro",
-    "lower_sig_vol_current_bar",
-    "lower_sig_vol_prior_bar",
     "lower_spy_qqq_vol_ma_ratio",
-    "middle_sig_vol_current_bar",
-    "middle_sig_vol_prior_bar",
     "middle_spy_qqq_vol_ma_ratio",
     "mtf_long_score",
     "mtf_short_score",
+]
+
+# Preserve all possible routing inputs in mismatch evidence.  Unlike the base
+# list above, this is an output/audit inventory and does not impose a schema
+# or numeric-validation requirement on any combo.
+SCORING_AUDIT_FIELDS = SCORING_BASE_NUMERIC_FIELDS + [
+    "lower_exh_abs_pa_current_bar",
+    "lower_exh_abs_pa_prior_bar",
+    "lower_sig_vol_current_bar",
+    "lower_sig_vol_prior_bar",
+    "middle_sig_vol_current_bar",
+    "middle_sig_vol_prior_bar",
 ]
 
 LOWER_OHLCV = [
@@ -226,7 +231,7 @@ EXCEPTION_FIELDS = (
         "reconstructed_short_score",
         "mtf_short_score",
     ]
-    + SCORING_NUMERIC_FIELDS
+    + SCORING_AUDIT_FIELDS
 )
 
 FIVE_COMPONENT_ERA = "MODERN_SUPPORTED_FIVE_COMPONENT"
@@ -439,12 +444,7 @@ def required_fields(spec: ComboSpec) -> list[str]:
         spec.middle_ratio_field,
         spec.upper_availability_field,
     ]
-    fields = list(dict.fromkeys(MODERN_REQUIRED_FIELDS + routed))
-    if spec.lower_price_action_field != "lower_exh_abs_pa_current_bar":
-        fields.remove("lower_exh_abs_pa_current_bar")
-    if spec.lower_sigvol_field != "lower_sig_vol_current_bar":
-        fields.remove("lower_sig_vol_current_bar")
-    return fields
+    return list(dict.fromkeys(MODERN_BASE_REQUIRED_FIELDS + routed))
 
 
 def numeric_fields(spec: ComboSpec) -> list[str]:
@@ -456,12 +456,7 @@ def numeric_fields(spec: ComboSpec) -> list[str]:
         spec.middle_ratio_field,
         spec.upper_availability_field,
     ]
-    fields = list(dict.fromkeys(SCORING_NUMERIC_FIELDS + routed))
-    if spec.lower_price_action_field != "lower_exh_abs_pa_current_bar":
-        fields.remove("lower_exh_abs_pa_current_bar")
-    if spec.lower_sigvol_field != "lower_sig_vol_current_bar":
-        fields.remove("lower_sig_vol_current_bar")
-    return fields
+    return list(dict.fromkeys(SCORING_BASE_NUMERIC_FIELDS + routed))
 
 
 def provisional_era(

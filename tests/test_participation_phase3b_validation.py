@@ -1,6 +1,7 @@
 import json
 
 import pandas as pd
+import pytest
 
 from diagnostics.analyze_stock_options_participation import (
     COMBO_SPECS,
@@ -8,6 +9,7 @@ from diagnostics.analyze_stock_options_participation import (
     classify_modern_scores,
     main,
     provisional_era,
+    required_fields,
     reconstruct_scores,
 )
 
@@ -126,6 +128,100 @@ def test_score_mismatch_is_quarantined_and_schema_is_combo_specific():
     era, missing = provisional_era(fields, COMBO_SPECS["stocks_a_mqy_all"])
     assert era == "UNKNOWN_OR_MIXED"
     assert "lower_exh_abs_pa_prior_bar" in missing
+
+
+def test_mqy_schema_uses_only_its_combo_routed_sigvol_fields():
+    spec = COMBO_SPECS["stocks_a_mqy_all"]
+    fields = set(scored_row()) - {
+        "lower_exh_abs_pa_current_bar",
+        "lower_sig_vol_current_bar",
+        "middle_sig_vol_prior_bar",
+    }
+
+    era, missing = provisional_era(fields, spec)
+
+    assert era == "MODERN_SUPPORTED_CANDIDATE"
+    assert missing == []
+    assert "lower_exh_abs_pa_prior_bar" in required_fields(spec)
+    assert "lower_sig_vol_prior_bar" in required_fields(spec)
+    assert "middle_sig_vol_current_bar" in required_fields(spec)
+    assert "middle_sig_vol_prior_bar" not in required_fields(spec)
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    ["lower_sig_vol_prior_bar", "middle_sig_vol_current_bar"],
+)
+def test_mqy_schema_rejects_missing_routed_sigvol_field(missing_field):
+    spec = COMBO_SPECS["stocks_a_mqy_all"]
+    fields = set(scored_row()) - {missing_field}
+
+    era, missing = provisional_era(fields, spec)
+
+    assert era == "UNKNOWN_OR_MIXED"
+    assert missing == [missing_field]
+
+
+@pytest.mark.parametrize("combo", ["stocks_c_dwm_all", "stocks_b_wmq_all"])
+@pytest.mark.parametrize(
+    "missing_field",
+    ["lower_sig_vol_current_bar", "middle_sig_vol_current_bar"],
+)
+def test_current_bar_combos_require_their_routed_sigvol_fields(combo, missing_field):
+    era, missing = provisional_era(
+        set(scored_row()) - {missing_field}, COMBO_SPECS[combo]
+    )
+
+    assert era == "UNKNOWN_OR_MIXED"
+    assert missing == [missing_field]
+
+
+def test_mqy_reconstructs_without_unused_alternate_routing_fields():
+    frame = pd.DataFrame([scored_row()]).drop(
+        columns=[
+            "lower_exh_abs_pa_current_bar",
+            "lower_sig_vol_current_bar",
+            "middle_sig_vol_prior_bar",
+        ]
+    )
+
+    reconstructed, malformed = reconstruct_scores(
+        frame, COMBO_SPECS["stocks_a_mqy_all"]
+    )
+
+    assert sum(malformed.values()) == 0
+    assert reconstructed.iloc[0].long_score_match
+    assert classify_modern_scores(reconstructed) == FIVE_COMPONENT_ERA
+
+
+def test_mqy_exact_score_reconstruction_remains_required_after_schema_acceptance():
+    frame = pd.DataFrame([scored_row(mtf_long_score=4.0)]).drop(
+        columns=[
+            "lower_exh_abs_pa_current_bar",
+            "lower_sig_vol_current_bar",
+            "middle_sig_vol_prior_bar",
+        ]
+    )
+    era, missing = provisional_era(frame.columns, COMBO_SPECS["stocks_a_mqy_all"])
+
+    reconstructed, _ = reconstruct_scores(frame, COMBO_SPECS["stocks_a_mqy_all"])
+
+    assert era == "MODERN_SUPPORTED_CANDIDATE"
+    assert missing == []
+    assert classify_modern_scores(reconstructed) == "MODERN_QUARANTINED_SCORE_MISMATCH"
+
+
+def test_mqy_wrong_current_bar_lower_routing_is_not_a_valid_schema_substitute():
+    spec = COMBO_SPECS["stocks_a_mqy_all"]
+    fields = set(scored_row()) - {
+        "lower_exh_abs_pa_prior_bar",
+        "lower_sig_vol_prior_bar",
+    }
+
+    era, missing = provisional_era(fields, spec)
+
+    assert era == "UNKNOWN_OR_MIXED"
+    assert missing == ["lower_exh_abs_pa_prior_bar", "lower_sig_vol_prior_bar"]
 
 
 def test_validation_canonicalizes_latest_and_marks_incomplete(tmp_path):
