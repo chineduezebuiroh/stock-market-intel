@@ -108,6 +108,8 @@ def audit_horizon(
         "mae": np.nan,
         "elapsed_calendar_days": pd.NA,
         "elapsed_trading_sessions": pd.NA,
+        "dataset_asof": dataset_asof,
+        "symbol_history_asof": None,
     }
     if target > dataset_asof:
         return base | {"coverage_status": CoverageStatus.IMMATURE.value}
@@ -118,6 +120,8 @@ def audit_horizon(
 
     normalized = frame.copy()
     normalized.index = pd.to_datetime(normalized.index).normalize()
+    symbol_asof = normalized.index.max().date()
+    base["symbol_history_asof"] = symbol_asof
     valid_close = pd.to_numeric(normalized.get("close"), errors="coerce")
     close_dates = [value.date() for value in normalized.index[valid_close.gt(0)]]
     resolution = resolve_target_date(
@@ -127,8 +131,12 @@ def audit_horizon(
         first = normalized.index.min().date()
         status = (
             CoverageStatus.ENTRY_PREDATES_RETAINED_HISTORY
-            if target < first
-            else CoverageStatus.UNRESOLVABLE_TARGET_DATE
+            if entry_date < first
+            else (
+                CoverageStatus.SYMBOL_HISTORY_STALE_BEFORE_TARGET
+                if symbol_asof < target
+                else CoverageStatus.UNRESOLVABLE_TARGET_DATE
+            )
         )
         return base | {"coverage_status": status.value}
 
@@ -213,6 +221,11 @@ def summarize_coverage(observations: pd.DataFrame, groups: list[str]) -> pd.Data
                 "unresolvable_count": int(
                     statuses.eq(CoverageStatus.UNRESOLVABLE_TARGET_DATE.value).sum()
                 ),
+                "stale_symbol_history_count": int(
+                    statuses.eq(
+                        CoverageStatus.SYMBOL_HISTORY_STALE_BEFORE_TARGET.value
+                    ).sum()
+                ),
                 "invalid_price_count": int(
                     statuses.eq(CoverageStatus.INVALID_PRICE_DATA.value).sum()
                 ),
@@ -226,6 +239,26 @@ def summarize_coverage(observations: pd.DataFrame, groups: list[str]) -> pd.Data
                 ),
                 "path_coverage_of_theoretically_mature": (
                     part["path_covered"].sum() / denominator if denominator else np.nan
+                ),
+                "stale_history_rate_of_theoretically_mature": (
+                    statuses.eq(
+                        CoverageStatus.SYMBOL_HISTORY_STALE_BEFORE_TARGET.value
+                    ).sum()
+                    / denominator
+                    if denominator
+                    else np.nan
+                ),
+                "other_censoring_rate_of_theoretically_mature": (
+                    (
+                        denominator
+                        - part["terminal_covered"].sum()
+                        - statuses.eq(
+                            CoverageStatus.SYMBOL_HISTORY_STALE_BEFORE_TARGET.value
+                        ).sum()
+                    )
+                    / denominator
+                    if denominator
+                    else np.nan
                 ),
             }
         )

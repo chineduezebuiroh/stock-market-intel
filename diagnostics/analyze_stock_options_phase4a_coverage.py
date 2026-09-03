@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Production-S3 read-only Phase 4A.1 outcome coverage and integrity audit."""
+"""Production-S3 read-only Phase 4A.2 outcome coverage and integrity audit."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from diagnostics.outcomes.coverage import (
     revision_measures,
     summarize_coverage,
 )
+from diagnostics.outcomes.entry_dates import resolve_effective_entry_date
 from diagnostics.outcomes.price_source import CachedPriceSource, RollingDailyPriceSource
 from diagnostics.outcomes.regimes import assign_engine_regime
 from diagnostics.outcomes.specs import Direction, HORIZON_SPECS
@@ -44,6 +45,7 @@ OUTPUT_FILES = (
     "outcome_coverage_observations.parquet",
     "outcome_coverage_summary.csv",
     "outcome_coverage_by_entry_month.csv",
+    "outcome_coverage_by_participation.csv",
     "corporate_action_flags.csv",
     "corporate_action_summary.csv",
     "phase4a_real_data_smoke.csv",
@@ -191,13 +193,14 @@ def _markdown_table(frame: pd.DataFrame) -> str:
 def _write_report(
     output: Path,
     summary: pd.DataFrame,
+    participation: pd.DataFrame,
     revisions: pd.DataFrame,
     corporate: pd.DataFrame,
     decisions: dict[str, str],
     asof: date,
 ) -> None:
     lines = [
-        "# Phase 4A.1 outcome coverage and integrity audit",
+        "# Phase 4A.2 outcome coverage and integrity audit",
         "",
         "> Evidence-only, read-only audit. No participation threshold recommendation.",
         "",
@@ -208,6 +211,12 @@ def _write_report(
         _markdown_table(summary),
         "",
         "Coverage denominators contain only theoretically mature targets. `IMMATURE` means NOT YET MATURE; all other uncovered theoretically mature rows mean MATURE BUT DATA UNAVAILABLE.",
+        "",
+        "## PASS/BLOCK selection-bias coverage audit",
+        "",
+        _markdown_table(participation),
+        "",
+        "PASS and BLOCK use separate theoretically-mature denominators. Differences are reported as censoring evidence only; no statistical correction or threshold optimization is performed.",
         "",
         "## Entry-price revision audit",
         "",
@@ -232,6 +241,16 @@ def _write_report(
         "M/Q/Y is **LIMITED HISTORY**. Its immature rows are not missing-data failures.",
         "",
         "Classification rules: A requires >=95% terminal and path coverage; B requires >=80% terminal and >=70% path coverage; C has some mature terminal evidence below B; D has no mature terminal evidence.",
+        "",
+        "## Phase 4A.2 readiness questions",
+        "",
+        f"1. D/W/M supportability: **{decisions['stocks_c_dwm_all']}**.",
+        "2. Corrected W/M/Q 90/180-day terminal and path rates are reported in the coverage table above.",
+        f"3. W/M/Q supportability after correction: **{decisions['stocks_b_wmq_all']}**; horizon-specific evidence remains visible rather than being pooled away.",
+        "4. PASS/BLOCK censoring disparities are reported in the selection-bias table above; no correction is applied.",
+        f"5. Outcomes unavailable because of stale symbol history: **{int(summary['stale_symbol_history_count'].sum())}** observation/horizons.",
+        "6. The entry-revision table now compares each immutable close with its resolved effective daily session, eliminating bar-start comparisons; any remaining differences are descriptive provider/corporate-action evidence.",
+        f"7. M/Q/Y theoretically mature observation/horizons: **{int(summary.loc[summary.combo.eq('stocks_a_mqy_all'), 'theoretically_mature_count'].sum())}**.",
         "",
         "## Long-term archive decision",
         "",
@@ -277,15 +296,26 @@ def run(
             "no production daily stock histories were readable; failing closed"
         )
     dataset_asof = available_last.max().date()
+    inventory["dataset_asof"] = dataset_asof
+    inventory["symbol_history_asof"] = inventory["last_available_market_date"]
 
     revisions, observations, corporate_rows = [], [], []
     for row in candidates.itertuples(index=False):
         symbol = str(row.symbol).upper()
         history = histories[symbol]
-        entry_ts = pd.Timestamp(row.lower_date)
+        lower_bar_ts = pd.Timestamp(row.lower_date)
         entry_close = float(row.lower_close)
+        effective = resolve_effective_entry_date(
+            combo=row.combo,
+            lower_bar_date=lower_bar_ts.date(),
+            execution_timestamp=row.artifact_execution_utc,
+            frame=history.frame,
+        )
+        entry_ts = pd.Timestamp(effective.date) if effective.date else None
         rolling = (
-            history.frame.loc[entry_ts] if entry_ts in history.frame.index else None
+            history.frame.loc[entry_ts]
+            if entry_ts is not None and entry_ts in history.frame.index
+            else None
         )
         measures = (
             revision_measures(entry_close, float(rolling.close))
@@ -296,7 +326,10 @@ def run(
             "combo": row.combo,
             "direction": row.direction,
             "symbol": symbol,
-            "entry_market_date": entry_ts.date(),
+            "entry_market_date": effective.date,
+            "lower_bar_date": lower_bar_ts.date(),
+            "effective_entry_date": effective.date,
+            "effective_entry_date_resolution_method": effective.method,
             "entry_execution_timestamp": row.artifact_execution_utc,
             "source_combo_history_key": row.source_s3_key,
             "immutable_entry_close": entry_close,
@@ -319,20 +352,49 @@ def run(
             row.combo, pd.Timestamp(row.artifact_execution_utc).to_pydatetime()
         )
         for horizon in HORIZON_SPECS[row.combo].horizons:
-            result = audit_horizon(
-                direction=Direction(row.direction),
-                entry_date=entry_ts.date(),
-                immutable_entry_close=entry_close,
-                horizon=horizon,
-                frame=None if history.source_key in reader.missing else history.frame,
-                dataset_asof=dataset_asof,
-                tolerance_days=HORIZON_SPECS[row.combo].alignment_tolerance_days,
+            result = (
+                audit_horizon(
+                    direction=Direction(row.direction),
+                    entry_date=effective.date,
+                    immutable_entry_close=entry_close,
+                    horizon=horizon,
+                    frame=(
+                        None if history.source_key in reader.missing else history.frame
+                    ),
+                    dataset_asof=dataset_asof,
+                    tolerance_days=HORIZON_SPECS[row.combo].alignment_tolerance_days,
+                )
+                if effective.date is not None
+                else {
+                    "target_calendar_date": None,
+                    "theoretically_mature": False,
+                    "coverage_status": (
+                        "MISSING_SYMBOL_HISTORY"
+                        if history.source_key in reader.missing
+                        else "UNRESOLVABLE_EFFECTIVE_ENTRY_DATE"
+                    ),
+                    "terminal_covered": False,
+                    "path_covered": False,
+                    "resolved_exit_date": None,
+                    "exit_close": np.nan,
+                    "directional_return": np.nan,
+                    "mfe": np.nan,
+                    "mae": np.nan,
+                    "elapsed_calendar_days": pd.NA,
+                    "elapsed_trading_sessions": pd.NA,
+                    "dataset_asof": dataset_asof,
+                    "symbol_history_asof": (
+                        history.frame.index.max().date()
+                        if not history.frame.empty
+                        else None
+                    ),
+                }
             )
             exit_date = result["resolved_exit_date"]
             event_frame = events[symbol]
             event_mask = pd.Series(False, index=event_frame.index)
             if exit_date is not None and not event_frame.empty:
-                event_mask = (event_frame.index.date > entry_ts.date()) & (
+                event_mask = (event_frame.index.date > effective.date) & (
                     event_frame.index.date <= exit_date
                 )
             flagged = bool(event_mask.any())
@@ -340,12 +402,18 @@ def run(
                 "combo": row.combo,
                 "direction": row.direction,
                 "symbol": symbol,
-                "entry_market_date": entry_ts.date(),
+                "entry_market_date": effective.date,
+                "lower_bar_date": lower_bar_ts.date(),
+                "effective_entry_date": effective.date,
+                "effective_entry_date_resolution_method": effective.method,
                 "entry_execution_timestamp": row.artifact_execution_utc,
                 "source_combo_history_key": row.source_s3_key,
                 "engine_regime_id": regime,
                 "historical_participation_pass": bool(row.overall_participation_pass),
                 "historical_participation_route": row.route_class,
+                "historical_participation_population": (
+                    "PASS" if bool(row.overall_participation_pass) else "BLOCK"
+                ),
                 "immutable_entry_close": entry_close,
                 "outcome_price_source_key": history.source_key,
                 "horizon_id": horizon.horizon_id,
@@ -361,7 +429,8 @@ def run(
                             "combo": row.combo,
                             "direction": row.direction,
                             "symbol": symbol,
-                            "entry_market_date": entry_ts.date(),
+                            "entry_market_date": effective.date,
+                            "lower_bar_date": lower_bar_ts.date(),
                             "horizon_id": horizon.horizon_id,
                             "corporate_action_flag": True,
                             **event._asdict(),
@@ -396,6 +465,18 @@ def run(
     by_month = summarize_coverage(
         observations_df, ["combo", "direction", "horizon_id", "entry_month"]
     )
+    by_participation = summarize_coverage(
+        observations_df,
+        [
+            "combo",
+            "direction",
+            "horizon_id",
+            "horizon_multiple",
+            "historical_participation_pass",
+            "historical_participation_population",
+            "historical_participation_route",
+        ],
+    )
     revision_summary = _revision_summary(revisions_df)
     corporate_summary = (
         observations_df.groupby(["combo", "direction", "horizon_id"], dropna=False)
@@ -421,6 +502,9 @@ def run(
     )
     summary.to_csv(output / "outcome_coverage_summary.csv", index=False)
     by_month.to_csv(output / "outcome_coverage_by_entry_month.csv", index=False)
+    by_participation.to_csv(
+        output / "outcome_coverage_by_participation.csv", index=False
+    )
     corporate_df.to_csv(output / "corporate_action_flags.csv", index=False)
     corporate_summary.to_csv(output / "corporate_action_summary.csv", index=False)
     smoke_groups = [
@@ -485,7 +569,13 @@ def run(
         json.dumps(machine_summary, indent=2, default=str) + "\n"
     )
     _write_report(
-        output, summary, revision_summary, observations_df, decisions, dataset_asof
+        output,
+        summary,
+        by_participation,
+        revision_summary,
+        observations_df,
+        decisions,
+        dataset_asof,
     )
     if any(count != 1 for count in reader.calls.values()):
         raise AssertionError("one-load-per-symbol invariant failed")
