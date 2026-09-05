@@ -14,6 +14,7 @@ on:
           - phase3
           - phase3b
           - phase4a_coverage
+          - phase4b
       validation_scope:
         description: "Combo validation scope"
         required: true
@@ -69,8 +70,8 @@ jobs:
           echo "NO PRODUCTION CHANGES"
 
           if [[ "${{ inputs.validation_scope }}" == "cross_combo_phase3b" ]]; then
-            if [[ "${{ inputs.phase }}" != "validate" && "${{ inputs.phase }}" != "phase3b" && "${{ inputs.phase }}" != "phase4a_coverage" ]]; then
-              echo "cross_combo_phase3b requires phase=validate, phase3b, or phase4a_coverage" >&2
+            if [[ "${{ inputs.phase }}" != "validate" && "${{ inputs.phase }}" != "phase3b" && "${{ inputs.phase }}" != "phase4a_coverage" && "${{ inputs.phase }}" != "phase4b" ]]; then
+              echo "cross_combo_phase3b requires phase=validate, phase3b, phase4a_coverage, or phase4b" >&2
               exit 2
             fi
             combos=(stocks_c_dwm_all stocks_b_wmq_all stocks_a_mqy_all)
@@ -87,7 +88,7 @@ jobs:
               --output-dir "diagnostic_artifacts/$combo"
               --dedupe latest-same-market-date
               --strict-schema
-              --phase "$([[ '${{ inputs.phase }}' == phase3b || '${{ inputs.phase }}' == phase4a_coverage ]] && echo validate || echo '${{ inputs.phase }}')"
+              --phase "$([[ '${{ inputs.phase }}' == phase3b || '${{ inputs.phase }}' == phase4a_coverage || '${{ inputs.phase }}' == phase4b ]] && echo validate || echo '${{ inputs.phase }}')"
               --include-unsupported-era-in-inventory
             )
             if [[ -n "${{ inputs.date_from }}" ]]; then
@@ -119,6 +120,23 @@ jobs:
                 --bucket "$S3_BUCKET_DATA" \
                 --prefix "$S3_PREFIX_DATA"
             fi
+            if [[ "${{ inputs.phase }}" == "phase4b" ]]; then
+              if [[ -n "${{ inputs.date_from }}" || -n "${{ inputs.date_to }}" ]]; then
+                echo "phase4b requires blank date_from/date_to" >&2
+                exit 2
+              fi
+              # Phase 4A is regenerated in the same run so Phase 4B cannot use
+              # stale or differently filtered outcome contracts.
+              python diagnostics/analyze_stock_options_phase4a_coverage.py \
+                --validated-root diagnostic_artifacts \
+                --output-dir diagnostic_artifacts/phase4a_coverage \
+                --bucket "$S3_BUCKET_DATA" \
+                --prefix "$S3_PREFIX_DATA"
+              python diagnostics/analyze_stock_options_phase4b.py \
+                --validated-root diagnostic_artifacts \
+                --phase4a-root diagnostic_artifacts/phase4a_coverage \
+                --output-dir diagnostic_artifacts/phase4b
+            fi
           fi
           exit "$overall_status"
 
@@ -126,7 +144,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stock-options-participation-${{ inputs.validation_scope }}-${{ github.run_id }}
+          name: stock-options-participation-${{ inputs.phase }}-${{ inputs.validation_scope }}-${{ github.run_id }}
           path: diagnostic_artifacts/
           if-no-files-found: error
           retention-days: 10
