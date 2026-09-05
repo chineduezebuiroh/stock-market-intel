@@ -46,10 +46,10 @@ PROJECTED_COLUMNS = (
     "episode_end_date",
     "episode_observation_count",
     "horizon_id",
-    "outcome_price_asof",
     "theoretically_mature",
     "terminal_covered",
     "coverage_status",
+    "symbol_history_asof",
     "historical_participation_pass",
     "lower_sigvol_tier",
     "middle_sigvol_tier",
@@ -95,7 +95,7 @@ def prepare(frame: pd.DataFrame) -> pd.DataFrame:
     # In-memory callers (not the parquet path) may supply performance columns to
     # prove invariance; immediately project them away before any analysis.
     allowed = [c for c in PROJECTED_COLUMNS if c in frame]
-    required = set(PROJECTED_COLUMNS) - {"outcome_price_asof"}
+    required = set(PROJECTED_COLUMNS)
     if missing := required - set(allowed):
         raise ValueError(f"episode inputs missing: {sorted(missing)}")
     result = frame.loc[:, allowed].copy()
@@ -103,13 +103,52 @@ def prepare(frame: pd.DataFrame) -> pd.DataFrame:
         "effective_entry_date",
         "episode_start_date",
         "episode_end_date",
-        "outcome_price_asof",
+        "symbol_history_asof",
     ):
         if col in result:
             result[col] = pd.to_datetime(result[col]).dt.normalize()
     result.attrs["discarded_forbidden"] = sorted(contamination)
     result = result[result.combo.isin(SUPPORTED)].copy()
     result = result[result.apply(lambda r: r.horizon_id in SUPPORTED[r.combo], axis=1)]
+    return result
+
+
+def read_dataset_asof(path: Path) -> pd.Timestamp:
+    """Read the single authoritative cutoff from the Phase 4A summary."""
+    try:
+        summary = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid Phase 4A coverage summary: {path}") from exc
+    value = summary.get("dataset_asof")
+    if not isinstance(value, str):
+        raise ValueError("Phase 4A dataset_asof must be exactly one ISO date")
+    try:
+        parsed = pd.Timestamp(value)
+    except ValueError as exc:
+        raise ValueError("Phase 4A dataset_asof is invalid") from exc
+    if (
+        parsed is pd.NaT
+        or parsed.tz is not None
+        or parsed.time() != pd.Timestamp(0).time()
+    ):
+        raise ValueError("Phase 4A dataset_asof must be exactly one ISO date")
+    if parsed.date().isoformat() != value:
+        raise ValueError("Phase 4A dataset_asof must be exactly one ISO date")
+    return parsed
+
+
+def apply_dataset_asof(frame: pd.DataFrame, dataset_asof: pd.Timestamp) -> pd.DataFrame:
+    """Apply one fixed outcome cutoff without conflating symbol availability."""
+    result = frame.copy()
+    entry = pd.to_datetime(result.effective_entry_date)
+    if entry.isna().any() or entry.gt(dataset_asof).any():
+        raise ValueError("dataset_asof is earlier than an effective_entry_date")
+    horizon_days = result.horizon_id.map(HORIZON_DAYS)
+    if horizon_days.isna().any():
+        raise ValueError("unsupported horizon in episode population")
+    result["theoretically_mature"] = entry.add(
+        pd.to_timedelta(horizon_days, unit="D")
+    ).le(dataset_asof)
     return result
 
 
@@ -458,12 +497,12 @@ def common_direction_cutoffs(feasible: pd.DataFrame) -> list[dict]:
     return rows
 
 
-def run(input_dir: Path, output: Path) -> dict:
-    source = input_dir / "phase4b_episode_population.parquet"
-    frame = prepare(read_episode_population(source))
-    asofs = frame.outcome_price_asof.dropna().unique()
-    if len(asofs) != 1:
-        raise ValueError("authoritative dataset_asof must be singular")
+def run(artifact_root: Path, output: Path) -> dict:
+    source = artifact_root / "phase4b" / "phase4b_episode_population.parquet"
+    dataset_asof = read_dataset_asof(
+        artifact_root / "phase4a_coverage" / "phase4a_coverage_summary.json"
+    )
+    frame = apply_dataset_asof(prepare(read_episode_population(source)), dataset_asof)
     cutoffs = {combo: candidate_cutoffs(frame, combo) for combo in SUPPORTED}
     counts, participation, temporal = count_matrices(frame, cutoffs)
     policies = policy_counts(frame, cutoffs)
@@ -472,7 +511,7 @@ def run(input_dir: Path, output: Path) -> dict:
     summary = {
         "phase": "phase4c_split_recon",
         "performance_blind_recon": True,
-        "dataset_asof": pd.Timestamp(asofs[0]).date().isoformat(),
+        "dataset_asof": dataset_asof.date().isoformat(),
         "forbidden_columns_checked": list(FORBIDDEN_COLUMNS),
         "projected_columns": list(PROJECTED_COLUMNS),
         "candidate_grids": CANDIDATE_GRIDS,
@@ -550,7 +589,9 @@ def _report(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--input-dir", type=Path, default=Path("diagnostic_artifacts/phase4b")
+        "--artifact-root",
+        type=Path,
+        default=Path("diagnostic_artifacts/phase4b_authoritative"),
     )
     parser.add_argument(
         "--output-dir",
@@ -558,7 +599,7 @@ def main() -> None:
         default=Path("diagnostic_artifacts/phase4c_split_recon"),
     )
     args = parser.parse_args()
-    run(args.input_dir, args.output_dir)
+    run(args.artifact_root, args.output_dir)
 
 
 if __name__ == "__main__":
