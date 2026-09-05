@@ -1,4 +1,5 @@
 import inspect
+import json
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -27,7 +28,6 @@ def population(months=12, per_month=60):
                                 "episode_end_date": entry,
                                 "episode_observation_count": 1,
                                 "horizon_id": horizon,
-                                "outcome_price_asof": pd.Timestamp("2026-06-30"),
                                 "theoretically_mature": True,
                                 "terminal_covered": number % 10 != 0,
                                 "coverage_status": (
@@ -35,6 +35,8 @@ def population(months=12, per_month=60):
                                     if number % 10 == 0
                                     else "MATURE"
                                 ),
+                                "symbol_history_asof": pd.Timestamp("2026-06-30")
+                                - pd.Timedelta(days=number % 3),
                                 "historical_participation_pass": number % 2 == 0,
                                 "lower_sigvol_tier": 1,
                                 "middle_sigvol_tier": 0,
@@ -86,6 +88,73 @@ def test_performance_columns_cannot_change_results_and_are_excluded():
     assert_frame_equal(
         recon.count_matrices(left, cuts)[0], recon.count_matrices(right, cuts)[0]
     )
+
+
+def write_authoritative_bundle(root, frame, dataset_asof="2026-06-30"):
+    phase4b = root / "phase4b"
+    phase4a = root / "phase4a_coverage"
+    phase4b.mkdir(parents=True)
+    phase4a.mkdir(parents=True)
+    frame.to_parquet(phase4b / "phase4b_episode_population.parquet", index=False)
+    (phase4a / "phase4a_coverage_summary.json").write_text(
+        json.dumps({"phase": "phase4a_coverage", "dataset_asof": dataset_asof})
+    )
+
+
+def test_authoritative_layout_reads_phase4a_asof_without_outcome_column(
+    tmp_path, monkeypatch
+):
+    frame = population(2, 3)
+    assert "outcome_price_asof" not in frame
+    write_authoritative_bundle(tmp_path, frame)
+    monkeypatch.setattr(recon, "_report", lambda *args: None)
+    summary = recon.run(tmp_path, tmp_path / "output")
+    assert summary["dataset_asof"] == "2026-06-30"
+    assert "outcome_price_asof" not in summary["projected_columns"]
+    assert "symbol_history_asof" in summary["projected_columns"]
+
+
+def test_fixed_dataset_asof_controls_maturity_not_symbol_history_asof():
+    frame = population(2, 3)
+    frame["symbol_history_asof"] = pd.date_range("2025-02-01", periods=len(frame))
+    prepared = recon.prepare(frame)
+    early = recon.apply_dataset_asof(prepared, pd.Timestamp("2025-02-15"))
+    late = recon.apply_dataset_asof(prepared, pd.Timestamp("2026-06-30"))
+    expected = (
+        prepared.effective_entry_date
+        + pd.to_timedelta(prepared.horizon_id.map(recon.HORIZON_DAYS), unit="D")
+    ).le(pd.Timestamp("2025-02-15"))
+    assert early.theoretically_mature.equals(expected)
+    assert not early.theoretically_mature.all()
+    assert late.theoretically_mature.all()
+    assert early.symbol_history_asof.nunique() > 1
+
+
+def test_phase4b_parquet_requires_only_projected_contract(tmp_path):
+    path = tmp_path / "population.parquet"
+    frame = population(1, 1).assign(directional_return=123.0)
+    frame.to_parquet(path, index=False)
+    result = recon.read_episode_population(path)
+    assert set(result) == set(recon.PROJECTED_COLUMNS)
+    assert "directional_return" not in result
+
+
+def test_dataset_asof_fails_closed_for_missing_multiple_and_invalid(tmp_path):
+    summary = tmp_path / "summary.json"
+    for value in (
+        None,
+        ["2026-01-01", "2026-02-01"],
+        "not-a-date",
+        "2026-01-01T01:00:00",
+    ):
+        payload = {} if value is None else {"dataset_asof": value}
+        summary.write_text(json.dumps(payload))
+        try:
+            recon.read_dataset_asof(summary)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted invalid dataset_asof: {value!r}")
 
 
 def test_entry_boundary_maturity_stale_participation_and_effective_date():
