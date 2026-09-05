@@ -1,5 +1,7 @@
 import inspect
+import time
 
+import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
@@ -187,3 +189,116 @@ def test_bootstrap_is_deterministic():
         phase4c.bootstrap_intervals(frame, ["group"], reps=20),
         phase4c.bootstrap_intervals(frame, ["group"], reps=20),
     )
+
+
+def _reference_bootstrap(frame, groups, reps):
+    """Original Phase 4C implementation retained as an equivalence oracle."""
+    rng = np.random.default_rng(phase4c.BOOTSTRAP_SEED)
+    rows = []
+    for keys, part in frame.groupby(groups, dropna=False):
+        usable = part[part.terminal_covered.astype(bool)]
+        symbols = usable.symbol.dropna().unique()
+        draws = []
+        for _ in range(reps if len(symbols) else 0):
+            sampled_symbols = rng.choice(symbols, len(symbols), replace=True)
+            sampled = pd.concat(
+                [usable[usable.symbol.eq(symbol)] for symbol in sampled_symbols]
+            )
+            draws.append(
+                [
+                    sampled.directional_return.mean(),
+                    sampled.directional_return.median(),
+                    sampled.directional_return.gt(0).mean(),
+                    sampled.mfe.median(),
+                    sampled.mae.median(),
+                ]
+            )
+        row = dict(zip(groups, keys if isinstance(keys, tuple) else (keys,))) | {
+            "bootstrap_seed": phase4c.BOOTSTRAP_SEED,
+            "bootstrap_replications": reps,
+            "cluster": "symbol",
+            "n_symbols": len(symbols),
+        }
+        for index, metric in enumerate(phase4c.METRICS):
+            values = np.asarray(draws)[:, index] if draws else np.array([])
+            row[f"{metric}_ci_low"] = (
+                np.quantile(values, 0.025) if len(values) else np.nan
+            )
+            row[f"{metric}_ci_high"] = (
+                np.quantile(values, 0.975) if len(values) else np.nan
+            )
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _bootstrap_fixture(groups=2, symbols=5, rows_per_symbol=3):
+    rows = []
+    for group in range(groups):
+        for symbol in range(symbols):
+            for observation in range(rows_per_symbol + symbol % 2):
+                value = (group + 1) * (symbol - 2) / 100 + observation / 1000
+                rows.append(
+                    {
+                        "group": f"g{group}",
+                        "symbol": f"s{symbol}",
+                        "terminal_covered": observation != 3,
+                        "directional_return": value,
+                        "mfe": value + 0.1,
+                        "mae": value - 0.1,
+                    }
+                )
+    # Exercise the exact pandas missing-value reduction semantics too.
+    rows[1]["directional_return"] = np.nan
+    rows[2]["mfe"] = np.nan
+    rows[3]["mae"] = np.nan
+    return pd.DataFrame(rows)
+
+
+def test_optimized_bootstrap_matches_reference_sample_and_all_intervals():
+    frame = _bootstrap_fixture()
+    expected = _reference_bootstrap(frame, ["group"], reps=137)
+    actual = phase4c.bootstrap_intervals(frame, ["group"], reps=137)
+    assert_frame_equal(actual, expected, check_exact=False, atol=1e-14, rtol=1e-14)
+    assert list(actual.filter(like="_ci_").columns) == [
+        f"{metric}_{bound}"
+        for metric in phase4c.METRICS
+        for bound in ("ci_low", "ci_high")
+    ]
+
+
+def test_bootstrap_repeated_seed_matches_reference():
+    frame = _bootstrap_fixture(groups=3)
+    first = phase4c.bootstrap_intervals(frame, ["group"], reps=51)
+    second = phase4c.bootstrap_intervals(frame, ["group"], reps=51)
+    reference = _reference_bootstrap(frame, ["group"], reps=51)
+    assert_frame_equal(first, second)
+    assert_frame_equal(first, reference, check_exact=False, atol=1e-14, rtol=1e-14)
+
+
+def test_bootstrap_nontrivial_fixture_timing_smoke():
+    """Exercise realistic nested work without a brittle wall-clock assertion."""
+    frame = _bootstrap_fixture(groups=8, symbols=20, rows_per_symbol=8)
+    started = time.perf_counter()
+    result = phase4c.bootstrap_intervals(frame, ["group"], reps=100)
+    elapsed = time.perf_counter() - started
+    assert len(result) == 8
+    assert result.bootstrap_replications.eq(100).all()
+    print(f"optimized bootstrap smoke: {elapsed:.3f}s")
+
+
+def test_bootstrap_progress_is_bounded(capsys):
+    phase4c.bootstrap_intervals(
+        _bootstrap_fixture(groups=12), ["group"], reps=2, progress=True
+    )
+    messages = capsys.readouterr().out.strip().splitlines()
+    assert messages[-1] == "[BOOTSTRAP] completed cohort 12/12"
+    assert len(messages) <= 12
+
+
+def test_atomic_writer_replaces_partial_output(tmp_path):
+    artifact = tmp_path / "artifact.csv"
+    artifact.write_text("partial")
+    expected = pd.DataFrame({"value": [1, 2]})
+    phase4c._write_csv(expected, artifact)
+    assert_frame_equal(pd.read_csv(artifact), expected)
+    assert list(tmp_path.iterdir()) == [artifact]
