@@ -9,8 +9,12 @@ isolated from holdout rows and is frozen to CSV before validation starts.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
+import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -268,30 +272,55 @@ def evaluate_frozen_candidates(
 
 
 def bootstrap_intervals(
-    frame: pd.DataFrame, groups: list[str], reps: int = BOOTSTRAP_REPS
+    frame: pd.DataFrame,
+    groups: list[str],
+    reps: int = BOOTSTRAP_REPS,
+    *,
+    progress: bool = False,
 ) -> pd.DataFrame:
+    """Return symbol-cluster intervals without pandas work inside a replicate.
+
+    The RNG call and cluster concatenation order deliberately match the original
+    implementation: each group draws its symbols ``n_symbols`` times, with
+    replacement, from the symbols in first-appearance order.
+    """
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     rows = []
-    for keys, part in frame.groupby(groups, dropna=False):
+    grouped = frame.groupby(groups, dropna=False)
+    total_groups = grouped.ngroups
+    progress_every = max(1, total_groups // 10)
+    for group_number, (keys, part) in enumerate(grouped, 1):
         usable = part[part.terminal_covered.astype(bool)]
         symbols = usable.symbol.dropna().unique()
-        draws = []
-        for _ in range(reps if len(symbols) else 0):
-            sampled = pd.concat(
+        # Build each cluster exactly once.  Previously every sampled symbol did
+        # a full-frame boolean scan and pandas concat in every replicate.
+        clusters = {
+            symbol: usable.loc[
+                usable.symbol.eq(symbol), ["directional_return", "mfe", "mae"]
+            ].to_numpy(dtype=float)
+            for symbol in symbols
+        }
+        draws = np.empty((reps, len(METRICS)), dtype=float)
+        for replicate in range(reps if len(symbols) else 0):
+            sampled = np.concatenate(
                 [
-                    usable[usable.symbol.eq(s)]
-                    for s in rng.choice(symbols, len(symbols), replace=True)
+                    clusters[symbol]
+                    for symbol in rng.choice(symbols, len(symbols), replace=True)
                 ]
             )
-            draws.append(
-                [
-                    sampled.directional_return.mean(),
-                    sampled.directional_return.median(),
-                    sampled.directional_return.gt(0).mean(),
-                    sampled.mfe.median(),
-                    sampled.mae.median(),
-                ]
-            )
+            returns = sampled[:, 0]
+            # pandas reductions skip missing metric values.  Preserve that
+            # behavior while hit-rate keeps the original ``NaN > 0 == False``.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                metrics = (
+                    np.nanmean(returns),
+                    np.nanmedian(returns),
+                    np.mean(returns > 0),
+                    np.nanmedian(sampled[:, 1]),
+                    np.nanmedian(sampled[:, 2]),
+                )
+            draws[replicate] = metrics
         row = dict(zip(groups, keys if isinstance(keys, tuple) else (keys,))) | {
             "bootstrap_seed": BOOTSTRAP_SEED,
             "bootstrap_replications": reps,
@@ -299,7 +328,7 @@ def bootstrap_intervals(
             "n_symbols": len(symbols),
         }
         for i, metric in enumerate(METRICS):
-            values = np.asarray(draws)[:, i] if draws else np.array([])
+            values = draws[:, i] if len(symbols) else np.array([])
             row[f"{metric}_ci_low"] = (
                 np.quantile(values, 0.025) if len(values) else np.nan
             )
@@ -307,7 +336,45 @@ def bootstrap_intervals(
                 np.quantile(values, 0.975) if len(values) else np.nan
             )
         rows.append(row)
+        if progress and (
+            group_number == total_groups or group_number % progress_every == 0
+        ):
+            print(
+                f"[BOOTSTRAP] completed cohort {group_number}/{total_groups}",
+                flush=True,
+            )
     return pd.DataFrame(rows)
+
+
+@contextmanager
+def _stage(name: str):
+    started = time.perf_counter()
+    print(f"[PHASE4C] START {name}", flush=True)
+    try:
+        yield
+    finally:
+        print(
+            f"[PHASE4C] END {name} elapsed={time.perf_counter() - started:.2f}s",
+            flush=True,
+        )
+
+
+def _atomic_write(path: Path, writer) -> None:
+    """Write one complete artifact then atomically replace any prior version."""
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        writer(temporary)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_csv(frame: pd.DataFrame, path: Path) -> None:
+    _atomic_write(path, lambda temporary: frame.to_csv(temporary, index=False))
+
+
+def _write_text(text: str, path: Path) -> None:
+    _atomic_write(path, lambda temporary: temporary.write_text(text))
 
 
 def _find(root: Path, name: str) -> Path:
@@ -350,173 +417,193 @@ def _baseline(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def run(artifact_root: Path, output: Path) -> None:
-    episodes, observations, dataset_asof = _load(artifact_root)
     output.mkdir(parents=True, exist_ok=True)
-    episodes = enforce_fixed_maturity(split_population(episodes), dataset_asof)
-    observations = enforce_fixed_maturity(split_population(observations), dataset_asof)
-    calibration = episodes[episodes.split.eq("CALIBRATION")]
-    cal_grid, cal_candidates = _summarize_candidates(calibration, "EPISODE")
-    cal_grid["split"] = "CALIBRATION"
-    cal_grid = _add_differences(cal_grid)
-    consistency_keys = [
-        "combo",
-        "direction",
-        "threshold_family",
-        "candidate_threshold",
-        "policy_cohort",
-    ]
-    cal_grid["horizons_reported"] = cal_grid.groupby(consistency_keys)[
-        "horizon_id"
-    ].transform("nunique")
-    # Sign agreement is descriptive, not a materiality test or policy rule.
-    for metric in ("directional_return_median", "hit_rate", "mae_median"):
-        column = f"delta_vs_current_{metric}"
-        cal_grid[f"{metric}_sign_consistent_across_horizons"] = cal_grid.groupby(
-            consistency_keys
-        )[column].transform(
-            lambda values: (
-                values.dropna().ge(0).nunique() <= 1 if len(values.dropna()) else False
-            )
+    # Never treat remnants of an interrupted Phase 4C run as current outputs.
+    for name in OUTPUTS:
+        (output / name).unlink(missing_ok=True)
+    with _stage("input loading/preparation"):
+        episodes, observations, dataset_asof = _load(artifact_root)
+        episodes = enforce_fixed_maturity(split_population(episodes), dataset_asof)
+        observations = enforce_fixed_maturity(
+            split_population(observations), dataset_asof
         )
-    cal_grid.to_csv(output / OUTPUTS[2], index=False)
-    frozen = select_calibration_candidates(cal_grid)
-    frozen.to_csv(output / OUTPUTS[3], index=False)  # freeze boundary
-    frozen = pd.read_csv(output / OUTPUTS[3])  # holdout consumes persisted provenance
-    holdout = episodes[episodes.split.eq("HOLDOUT")]
-    validation, selected_rows = evaluate_frozen_candidates(holdout, frozen)
-    validation.to_csv(output / OUTPUTS[4], index=False)
-    pd.concat(
-        [
-            _baseline(episodes),
-        ]
-    ).to_csv(output / OUTPUTS[5], index=False)
-    boot_input = pd.concat(
-        [
-            cal_candidates.assign(split="CALIBRATION"),
-            selected_rows.assign(split="HOLDOUT"),
-        ]
-    )
-    bootstrap_intervals(
-        boot_input,
-        [
+    with _stage("calibration grid"):
+        calibration = episodes[episodes.split.eq("CALIBRATION")]
+        cal_grid, cal_candidates = _summarize_candidates(calibration, "EPISODE")
+        cal_grid["split"] = "CALIBRATION"
+        cal_grid = _add_differences(cal_grid)
+        consistency_keys = [
             "combo",
             "direction",
-            "horizon_id",
-            "split",
             "threshold_family",
             "candidate_threshold",
             "policy_cohort",
-        ],
-    ).to_csv(output / OUTPUTS[6], index=False)
-    sensitivity = []
-    for excluded, data in (
-        (False, episodes),
-        (True, episodes[~episodes.corporate_action_flag.fillna(False)]),
-    ):
-        baseline = _baseline(data)
-        baseline["analysis"] = "CURRENT_PASS_BLOCK"
-        baseline["corporate_actions_excluded"] = excluded
-        sensitivity.append(baseline)
-        for split in ("CALIBRATION", "HOLDOUT"):
-            selected, _ = _summarize_candidates(data[data.split.eq(split)], "EPISODE")
-            keys = ["combo", "direction", "threshold_family"]
-            chosen = frozen[keys + ["selected_candidate_threshold"]].rename(
-                columns={"selected_candidate_threshold": "candidate_threshold"}
+        ]
+        cal_grid["horizons_reported"] = cal_grid.groupby(consistency_keys)[
+            "horizon_id"
+        ].transform("nunique")
+        # Sign agreement is descriptive, not a materiality test or policy rule.
+        for metric in ("directional_return_median", "hit_rate", "mae_median"):
+            column = f"delta_vs_current_{metric}"
+            cal_grid[f"{metric}_sign_consistent_across_horizons"] = cal_grid.groupby(
+                consistency_keys
+            )[column].transform(
+                lambda values: (
+                    values.dropna().ge(0).nunique() <= 1
+                    if len(values.dropna())
+                    else False
+                )
             )
-            selected = selected.merge(
-                chosen,
-                on=keys + ["candidate_threshold"],
-                how="inner",
-                validate="many_to_one",
-            )
-            selected["split"] = split
-            selected["analysis"] = "FROZEN_SELECTED_POLICY"
-            selected["corporate_actions_excluded"] = excluded
-            sensitivity.append(selected)
-    pd.concat(sensitivity).to_csv(output / OUTPUTS[7], index=False)
-    obs, _ = _summarize_candidates(observations, "OBSERVATION")
-    obs["selection_eligible"] = False
-    obs.to_csv(output / OUTPUTS[8], index=False)
-    regime = episodes.copy()
-    regime["chronological_subperiod"] = regime.effective_entry_date.dt.to_period(
-        "Q"
-    ).astype(str)
-    summarize_outcomes(
-        regime.assign(
-            historical_cohort=np.where(
-                regime.historical_participation_pass, "CURRENT_PASS", "CURRENT_BLOCK"
-            )
-        ),
-        [
-            "combo",
-            "direction",
-            "horizon_id",
-            "split",
-            "chronological_subperiod",
-            "historical_cohort",
-        ],
-    ).to_csv(output / OUTPUTS[9], index=False)
-    bounds = {}
-    for combo, cutoff in SPLITS.items():
-        c, h = (
-            episodes[(episodes.combo == combo) & (episodes.split == "CALIBRATION")],
-            episodes[(episodes.combo == combo) & (episodes.split == "HOLDOUT")],
+        _write_csv(cal_grid, output / OUTPUTS[2])
+    with _stage("frozen candidate selection"):
+        frozen = select_calibration_candidates(cal_grid)
+        _write_csv(frozen, output / OUTPUTS[3])  # freeze boundary
+        frozen = pd.read_csv(output / OUTPUTS[3])
+    with _stage("holdout validation"):
+        holdout = episodes[episodes.split.eq("HOLDOUT")]
+        validation, selected_rows = evaluate_frozen_candidates(holdout, frozen)
+        _write_csv(validation, output / OUTPUTS[4])
+    with _stage("current PASS/BLOCK baseline"):
+        _write_csv(_baseline(episodes), output / OUTPUTS[5])
+    with _stage("bootstrap intervals"):
+        boot_input = pd.concat(
+            [
+                cal_candidates.assign(split="CALIBRATION"),
+                selected_rows.assign(split="HOLDOUT"),
+            ]
         )
-        bounds[combo] = {
-            "cutoff": cutoff.date().isoformat(),
-            "max_calibration_date": (
-                None if c.empty else c.effective_entry_date.max().date().isoformat()
+        intervals = bootstrap_intervals(
+            boot_input,
+            [
+                "combo",
+                "direction",
+                "horizon_id",
+                "split",
+                "threshold_family",
+                "candidate_threshold",
+                "policy_cohort",
+            ],
+            progress=True,
+        )
+        _write_csv(intervals, output / OUTPUTS[6])
+    with _stage("corporate-action sensitivity"):
+        sensitivity = []
+        for excluded, data in (
+            (False, episodes),
+            (True, episodes[~episodes.corporate_action_flag.fillna(False)]),
+        ):
+            baseline = _baseline(data)
+            baseline["analysis"] = "CURRENT_PASS_BLOCK"
+            baseline["corporate_actions_excluded"] = excluded
+            sensitivity.append(baseline)
+            for split in ("CALIBRATION", "HOLDOUT"):
+                selected, _ = _summarize_candidates(
+                    data[data.split.eq(split)], "EPISODE"
+                )
+                keys = ["combo", "direction", "threshold_family"]
+                chosen = frozen[keys + ["selected_candidate_threshold"]].rename(
+                    columns={"selected_candidate_threshold": "candidate_threshold"}
+                )
+                selected = selected.merge(
+                    chosen,
+                    on=keys + ["candidate_threshold"],
+                    how="inner",
+                    validate="many_to_one",
+                )
+                selected["split"] = split
+                selected["analysis"] = "FROZEN_SELECTED_POLICY"
+                selected["corporate_actions_excluded"] = excluded
+                sensitivity.append(selected)
+        _write_csv(pd.concat(sensitivity), output / OUTPUTS[7])
+    with _stage("observation robustness"):
+        obs, _ = _summarize_candidates(observations, "OBSERVATION")
+        obs["selection_eligible"] = False
+        _write_csv(obs, output / OUTPUTS[8])
+    with _stage("chronological regime"):
+        regime = episodes.copy()
+        regime["chronological_subperiod"] = regime.effective_entry_date.dt.to_period(
+            "Q"
+        ).astype(str)
+        regime_summary = summarize_outcomes(
+            regime.assign(
+                historical_cohort=np.where(
+                    regime.historical_participation_pass,
+                    "CURRENT_PASS",
+                    "CURRENT_BLOCK",
+                )
             ),
-            "min_holdout_date": (
-                None if h.empty else h.effective_entry_date.min().date().isoformat()
-            ),
-            "no_overlap": (c.empty or c.effective_entry_date.max() <= cutoff)
-            and (h.empty or h.effective_entry_date.min() > cutoff),
+            [
+                "combo",
+                "direction",
+                "horizon_id",
+                "split",
+                "chronological_subperiod",
+                "historical_cohort",
+            ],
+        )
+        _write_csv(regime_summary, output / OUTPUTS[9])
+    with _stage("report/final outputs"):
+        bounds = {}
+        for combo, cutoff in SPLITS.items():
+            c, h = (
+                episodes[(episodes.combo == combo) & (episodes.split == "CALIBRATION")],
+                episodes[(episodes.combo == combo) & (episodes.split == "HOLDOUT")],
+            )
+            bounds[combo] = {
+                "cutoff": cutoff.date().isoformat(),
+                "max_calibration_date": (
+                    None if c.empty else c.effective_entry_date.max().date().isoformat()
+                ),
+                "min_holdout_date": (
+                    None if h.empty else h.effective_entry_date.min().date().isoformat()
+                ),
+                "no_overlap": (c.empty or c.effective_entry_date.max() <= cutoff)
+                and (h.empty or h.effective_entry_date.min() > cutoff),
+            }
+        audit = {
+            "passed": all(v["no_overlap"] for v in bounds.values()),
+            "split_bounds": bounds,
+            "no_alternative_cutoff_search": True,
+            "mqy_excluded": True,
+            "selection_input": "phase4c_calibration_grid.csv:CALIBRATION rows only",
+            "holdout_not_selection_input": True,
+            "frozen_table_drives_holdout": True,
+            "candidate_grids_unchanged": True,
+            "episode_contract_unchanged": True,
+            "outcome_contract_unchanged": True,
+            "fixed_dataset_asof": dataset_asof,
+            "production_configuration_untouched": True,
+            "observation_selection_eligible": False,
         }
-    audit = {
-        "passed": all(v["no_overlap"] for v in bounds.values()),
-        "split_bounds": bounds,
-        "no_alternative_cutoff_search": True,
-        "mqy_excluded": True,
-        "selection_input": "phase4c_calibration_grid.csv:CALIBRATION rows only",
-        "holdout_not_selection_input": True,
-        "frozen_table_drives_holdout": True,
-        "candidate_grids_unchanged": True,
-        "episode_contract_unchanged": True,
-        "outcome_contract_unchanged": True,
-        "fixed_dataset_asof": dataset_asof,
-        "production_configuration_untouched": True,
-        "observation_selection_eligible": False,
-    }
-    if not audit["passed"]:
-        raise AssertionError("leakage audit failed")
-    (output / OUTPUTS[10]).write_text(json.dumps(audit, indent=2) + "\n")
-    summary = {
-        "phase": "phase4c",
-        "read_only": True,
-        "artifact_source": str(artifact_root.resolve()),
-        "dataset_asof": dataset_asof,
-        "split_cutoffs": {k: v.date().isoformat() for k, v in SPLITS.items()},
-        "no_alternative_cutoff_search": True,
-        "mqy_excluded": True,
-        "horizons": HORIZONS,
-        "candidate_grids": CANDIDATE_GRIDS,
-        "current_thresholds": CURRENT_THRESHOLDS,
-        "bootstrap": {
-            "seed": BOOTSTRAP_SEED,
-            "replications": BOOTSTRAP_REPS,
-            "cluster": "symbol",
-        },
-        "episode_definition": "Phase 4B first observation anchor; canonical-sequence adjacency by combo/symbol/direction",
-        "outcome_definition": "Phase 4B immutable signal close; first market date on/after calendar target within 7 days; directional return/MFE/MAE/hit rate",
-        "corporate_action_primary": "included",
-        "wmq_authority": "EXPLORATORY_NOT_POLICY_AUTHORIZING",
-        "wmq_180d_warning": "holdout temporal breadth underpowered: LONG 7 and SHORT 5 mature weekly evaluation dates",
-        "production_threshold_changes": False,
-        "outputs": OUTPUTS,
-    }
-    (output / OUTPUTS[0]).write_text(json.dumps(summary, indent=2) + "\n")
-    _report(output, frozen, validation, audit)
+        if not audit["passed"]:
+            raise AssertionError("leakage audit failed")
+        _write_text(json.dumps(audit, indent=2) + "\n", output / OUTPUTS[10])
+        summary = {
+            "phase": "phase4c",
+            "read_only": True,
+            "artifact_source": str(artifact_root.resolve()),
+            "dataset_asof": dataset_asof,
+            "split_cutoffs": {k: v.date().isoformat() for k, v in SPLITS.items()},
+            "no_alternative_cutoff_search": True,
+            "mqy_excluded": True,
+            "horizons": HORIZONS,
+            "candidate_grids": CANDIDATE_GRIDS,
+            "current_thresholds": CURRENT_THRESHOLDS,
+            "bootstrap": {
+                "seed": BOOTSTRAP_SEED,
+                "replications": BOOTSTRAP_REPS,
+                "cluster": "symbol",
+            },
+            "episode_definition": "Phase 4B first observation anchor; canonical-sequence adjacency by combo/symbol/direction",
+            "outcome_definition": "Phase 4B immutable signal close; first market date on/after calendar target within 7 days; directional return/MFE/MAE/hit rate",
+            "corporate_action_primary": "included",
+            "wmq_authority": "EXPLORATORY_NOT_POLICY_AUTHORIZING",
+            "wmq_180d_warning": "holdout temporal breadth underpowered: LONG 7 and SHORT 5 mature weekly evaluation dates",
+            "production_threshold_changes": False,
+            "outputs": OUTPUTS,
+        }
+        _write_text(json.dumps(summary, indent=2) + "\n", output / OUTPUTS[0])
+        _report(output, frozen, validation, audit)
 
 
 def _report(
@@ -565,7 +652,7 @@ def _report(
     text = ["# Phase 4C — chronological calibration / holdout validation", ""]
     for title, body in sections:
         text += [f"## {title}", "", body, ""]
-    (output / OUTPUTS[1]).write_text("\n".join(text))
+    _write_text("\n".join(text), output / OUTPUTS[1])
 
 
 def main() -> int:
