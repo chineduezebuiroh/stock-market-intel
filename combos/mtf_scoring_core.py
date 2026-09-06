@@ -256,9 +256,9 @@ def evaluate_stocks_shortlist_signal(
     # ----------------------------------------------------------
     # Block 3: Volume / Participation (lower + middle)
     # ----------------------------------------------------------
-    vol_ratio_th1 = 0.05 # <-- 5%
-    vol_ratio_th2 = 0.10 # <-- 10%
-    vol_ratio_th3 = 0.25 # <-- 25%
+    vol_ratio_th1 = 0.025  # <-- 2.5%
+    vol_ratio_th2 = 0.05  # <-- 5%
+    vol_ratio_th3 = 0.125  # <-- 12.5%
 
     # Significant volume + beating SPY/QQQ volume baseline -> strong participation
     if not pd.isna(up_wyckoff) and ((md_sigvol == 2.0 and md_vol_ratio > vol_ratio_th1) or
