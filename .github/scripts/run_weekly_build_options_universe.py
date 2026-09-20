@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import time
 from pathlib import Path
 import pandas as pd
 
@@ -14,10 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.health import run_combo_health, print_results
-from core.guard import minutes_since_midnight, now_ny, run_registry_guarded
-#from core.signal_alerts import notify_on_signals
-from core.notify import notify_combo_signals
+from core.guard import now_ny, run_registry_guarded
 
 # =======================================================
 # ----- Config: Set job name constant for auidt log -----
@@ -36,14 +32,7 @@ def _count_symbols(csv_path: Path) -> int:
     df = pd.read_csv(csv_path)
     for col in ("symbol", "Symbol", "ticker", "Ticker"):
         if col in df.columns:
-            return (
-                df[col]
-                .dropna()
-                .astype(str)
-                .str.strip()
-                .str.upper()
-                .nunique()
-            )
+            return df[col].dropna().astype(str).str.strip().str.upper().nunique()
     raise ValueError(f"{csv_path} must contain a symbol/ticker column")
 
 
@@ -84,14 +73,16 @@ def validate_options_universe(root: Path) -> None:
     if not mapping_path.exists():
         raise RuntimeError(f"[FATAL] Missing ETF mapping file: {mapping_path}")
 
-    map_n = _count_symbols(mapping_path)  # counts unique 'symbol' column values if present
+    map_n = _count_symbols(
+        mapping_path
+    )  # counts unique 'symbol' column values if present
     # mapping can be slightly smaller, but shouldn’t be *wildly* smaller
     if map_n < int(0.80 * new_n):
         raise RuntimeError(
             f"[FATAL] ETF mapping too small relative to universe: mapping {map_n}, universe {new_n}."
         )
 
-    #print(f"[HEALTH] ✅ options_eligible OK — {new_n} symbols (mapping ~{map_n})")
+    # print(f"[HEALTH] ✅ options_eligible OK — {new_n} symbols (mapping ~{map_n})")
     print(
         f"[HEALTH] ✅ options_eligible OK — "
         f"{new_n} symbols ({new_n / prev_n:.0%} of previous)"
@@ -113,7 +104,7 @@ def run_profile() -> None:
             os.environ["OPTIONS_UNIVERSE_PREV_COUNT"] = ""
     else:
         os.environ["OPTIONS_UNIVERSE_PREV_COUNT"] = ""
-    
+
     cmds = [
         # ---------------------------------------------------------
         # 1) Refresh universes
@@ -137,24 +128,27 @@ def main() -> None:
     # - still mark successful execution afterward
     if event_name == "workflow_dispatch":
         print("[INFO] Triggered via workflow_dispatch; bypassing registry guard.")
-        run_registry_guarded(
+        executed = run_registry_guarded(
             job_name=JOB_NAME,
             fn=run_profile,
             bypass_registry=True,
         )
-        print("[OK] options universe build completed.")
+        if executed:
+            print("[OK] options universe build completed.")
         return
-
 
     # ✅ Scheduled runs: enforce DST-aware time window
     now_time = now_ny()
-    #weekday = now.weekday()  # Monday=0 ... Sunday=6
+    # weekday = now.weekday()  # Monday=0 ... Sunday=6
     weekday = now_time.weekday()  # Monday=0 ... Sunday=6
 
     # Require Sunday (6)
     if weekday != 6:
-        print(f"[INFO] Today ({today}) is not Sunday in NY. Skipping options-universe build.")
-        sys.exit(0)
+        print(
+            f"[INFO] Today ({now_time.date()}) is not Sunday in NY. "
+            "Skipping options-universe build."
+        )
+        return
 
     """
     now_min = minutes_since_midnight(now_time)
@@ -168,16 +162,19 @@ def main() -> None:
         )
         sys.exit(0)
     """
-    
+
     """print(f"[INFO] Within window at {now_time} NY. Running weekly stocks rollup profile...")"""
     # Scheduled runs:
     # - obey execution registry (active flag + last_execution/check_window_hours)
-    run_registry_guarded(
+    executed = run_registry_guarded(
         job_name=JOB_NAME,
         fn=run_profile,
         bypass_registry=False,
     )
-    print("[OK] options universe build completed.")
+    if executed:
+        print("[OK] options universe build completed.")
+    else:
+        print("[SKIP] options universe build was not executed.")
 
 
 if __name__ == "__main__":

@@ -19,27 +19,47 @@ from core import storage
 # -----------------------------
 NY_TZ = ZoneInfo("America/New_York")
 
+
 def now_ny() -> datetime:
     return datetime.now(NY_TZ)
 
+
 JOB_REGISTRY_DEFAULTS: dict[str, dict[str, Any]] = {
-    "stocks_eod":                    {"active": "Yes", "check_window_hours": 20,
+    "stocks_eod": {
+        "active": "Yes",
+        "check_window_hours": 20,
     },
-    "stocks_intraday_130m":          {"active": "No",  "check_window_hours": 1.8,
+    "stocks_intraday_130m": {
+        "active": "No",
+        "check_window_hours": 1.8,
     },
-    "stocks_intraday_4h":            {"active": "Yes", "check_window_hours": 3.4,
+    "stocks_intraday_4h": {
+        "active": "Yes",
+        "check_window_hours": 3.4,
     },
-    "stocks_weekly":                 {"active": "Yes", "check_window_hours": 24,
+    "stocks_weekly": {
+        "active": "Yes",
+        "check_window_hours": 24,
     },
-    "stocks_monthly":                {"active": "Yes", "check_window_hours": 24,
+    "stocks_monthly": {
+        "active": "Yes",
+        "check_window_hours": 24,
     },
-    "futures_eod":                   {"active": "Yes", "check_window_hours": 20,
+    "futures_eod": {
+        "active": "Yes",
+        "check_window_hours": 20,
     },
-    "futures_intraday_1h":           {"active": "No",  "check_window_hours": 0.85,
+    "futures_intraday_1h": {
+        "active": "No",
+        "check_window_hours": 0.85,
     },
-    "futures_intraday_4h":           {"active": "Yes", "check_window_hours": 3.4,
+    "futures_intraday_4h": {
+        "active": "Yes",
+        "check_window_hours": 3.4,
     },
-    "weekly_build_options_universe": {"active": "Yes", "check_window_hours": 24,
+    "weekly_build_options_universe": {
+        "active": "Yes",
+        "check_window_hours": 24,
     },
 }
 
@@ -77,6 +97,7 @@ def minutes_since_midnight(t: time) -> int:
 def _fmt_dt(dt: datetime) -> str:
     # Stable, filename-safe-ish timestamp (no ":" or "+")
     return dt.strftime("%Y-%m-%dT%H-%M-%S%z")
+
 
 WindowMode = Literal["after_only", "abs", "range"]
 
@@ -117,7 +138,9 @@ def check_time_window(
 
     if mode == "range":
         if range_start is None or range_end is None:
-            return WindowDecision(False, "range mode requires range_start and range_end")
+            return WindowDecision(
+                False, "range mode requires range_start and range_end"
+            )
         start_min = minutes_since_midnight(range_start)
         end_min = minutes_since_midnight(range_end)
         if start_min <= now_min <= end_min:
@@ -127,16 +150,25 @@ def check_time_window(
     if mode == "abs":
         diff = abs(now_min - target_min)
         if diff <= tolerance_min:
-            return WindowDecision(True, f"within +/-{tolerance_min} min of target {target_time}")
-        return WindowDecision(False, f"outside +/-{tolerance_min} min of target {target_time}")
+            return WindowDecision(
+                True, f"within +/-{tolerance_min} min of target {target_time}"
+            )
+        return WindowDecision(
+            False, f"outside +/-{tolerance_min} min of target {target_time}"
+        )
 
     # mode == "after_only"
     diff = now_min - target_min
     if diff < 0:
         return WindowDecision(False, f"before target {target_time}")
     if diff <= tolerance_min:
-        return WindowDecision(True, f"within {tolerance_min} min after target {target_time}")
-    return WindowDecision(False, f"more than {tolerance_min} min after target {target_time}")
+        return WindowDecision(
+            True, f"within {tolerance_min} min after target {target_time}"
+        )
+    return WindowDecision(
+        False, f"more than {tolerance_min} min after target {target_time}"
+    )
+
 
 # -----------------------------
 # Run keys (idempotency)
@@ -144,7 +176,9 @@ def check_time_window(
 RunPeriod = Literal["daily", "weekly", "monthly", "custom"]
 
 
-def make_run_key(*, period: RunPeriod, now: datetime, custom: Optional[str] = None) -> str:
+def make_run_key(
+    *, period: RunPeriod, now: datetime, custom: Optional[str] = None
+) -> str:
     """
     Produce a run_key string scoped to NY time.
 
@@ -231,22 +265,19 @@ def mark_run(
     # Ensure parent exists for local; for S3 the "dirs" are virtual (fine)
     # storage.save_parquet handles local mkdirs already.
     storage.save_parquet(df, p)
-    
+
+
 # -----------------------------
 # Execution registry (Parquet)
 # -----------------------------
 def get_job_registry_defaults(job_name: str) -> dict[str, Any]:
     """
-    Return default registry settings for a job.
-    Falls back to safe generic defaults if job not explicitly configured.
+    Return default registry settings for a known job.
+
+    Unknown jobs deliberately have no defaults: scheduled execution must fail
+    closed rather than silently activating an unconfigured job.
     """
-    return JOB_REGISTRY_DEFAULTS.get(
-        str(job_name).strip(),
-        {
-            "active": "Yes",
-            "check_window_hours": 24,
-        },
-    )
+    return JOB_REGISTRY_DEFAULTS.get(str(job_name).strip(), {})
 
 
 def _execution_registry_path() -> Path:
@@ -321,9 +352,24 @@ def should_run_from_registry(
     if now is None:
         now = now_ny()
 
-    row = get_job_registry_row(job_name)
+    normalized_job_name = str(job_name).strip()
+    row = get_job_registry_row(normalized_job_name)
     if row is None:
-        return False, f"job '{job_name}' missing from execution registry"
+        defaults = get_job_registry_defaults(normalized_job_name)
+        if not defaults:
+            return False, f"job '{job_name}' missing from execution registry"
+
+        # JOB_REGISTRY_DEFAULTS is the bootstrap configuration for known jobs.
+        # Evaluate it without writing anything; a row is persisted only after a
+        # successful execution. Existing rows always remain authoritative.
+        row = pd.Series(
+            {
+                "job": normalized_job_name,
+                "active": defaults.get("active"),
+                "last_execution": pd.NA,
+                "check_window_hours": defaults.get("check_window_hours"),
+            }
+        )
 
     active = _normalize_active(row.get("active"))
     if not active:
@@ -383,12 +429,14 @@ def mark_registry_execution(
 
     if df.empty:
         df = pd.DataFrame(
-            [{
-                "job": job_name,
-                "active": defaults.get("active", "Yes"),
-                "last_execution": now_utc_iso,
-                "check_window_hours": defaults.get("check_window_hours", 24),
-            }]
+            [
+                {
+                    "job": job_name,
+                    "active": defaults.get("active", "Yes"),
+                    "last_execution": now_utc_iso,
+                    "check_window_hours": defaults.get("check_window_hours", 24),
+                }
+            ]
         )
         save_execution_registry(df)
         return
@@ -405,18 +453,26 @@ def mark_registry_execution(
 
         if "check_window_hours" in df.columns:
             missing_window = mask & df["check_window_hours"].isna()
-            df.loc[missing_window, "check_window_hours"] = defaults.get("check_window_hours", 24)
+            df.loc[missing_window, "check_window_hours"] = defaults.get(
+                "check_window_hours", 24
+            )
 
     else:
         df = pd.concat(
             [
                 df,
-                pd.DataFrame([{
-                    "job": job_name,
-                    "active": defaults.get("active", "Yes"),
-                    "last_execution": now_utc_iso,
-                    "check_window_hours": defaults.get("check_window_hours", 24),
-                }]),
+                pd.DataFrame(
+                    [
+                        {
+                            "job": job_name,
+                            "active": defaults.get("active", "Yes"),
+                            "last_execution": now_utc_iso,
+                            "check_window_hours": defaults.get(
+                                "check_window_hours", 24
+                            ),
+                        }
+                    ]
+                ),
             ],
             ignore_index=True,
         )
@@ -431,9 +487,13 @@ def run_registry_guarded(
     now: Optional[datetime] = None,
     bypass_registry: bool = False,
     mark_on_success: bool = True,
-) -> None:
+) -> bool:
     """
-    Registry-based guard:
+    Registry-based guard. Returns True only when ``fn`` completed; returns
+    False when the guard intentionally skipped it. Exceptions from ``fn`` or
+    registry persistence propagate to represent failure.
+
+    Usage:
       - scheduled runs: bypass_registry=False
       - manual runs:    bypass_registry=True (run anytime)
     """
@@ -446,13 +506,13 @@ def run_registry_guarded(
         if mark_on_success:
             mark_registry_execution(job_name=job_name, now=now)
             print(f"[GUARD] marked success {job_name} in execution registry")
-        return
+        return True
 
     ok, reason = should_run_from_registry(job_name=job_name, now=now)
 
     if not ok:
         print(f"[GUARD] skip {job_name}: {reason}")
-        return
+        return False
 
     print(f"[GUARD] run {job_name}: {reason}")
     fn()
@@ -460,6 +520,9 @@ def run_registry_guarded(
     if mark_on_success:
         mark_registry_execution(job_name=job_name, now=now)
         print(f"[GUARD] marked success {job_name} in execution registry")
+
+    return True
+
 
 # -----------------------------
 # One-call “guard then run”
@@ -542,7 +605,13 @@ def run_guarded(
     fn()
 
     if mark_on_success:
-        mark_run(marker_name, run_key, now=now_ny() if now is None else now, status="success", meta=meta)
+        mark_run(
+            marker_name,
+            run_key,
+            now=now_ny() if now is None else now,
+            status="success",
+            meta=meta,
+        )
         print(f"[GUARD] marked success {marker_name} ({run_key})")
 
 
@@ -551,4 +620,3 @@ def _env_flag(name: str, default: bool = True) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
-    
