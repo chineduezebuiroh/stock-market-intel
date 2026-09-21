@@ -41,9 +41,13 @@ def _run_if_ready() -> None:
     # --------------------------------------------------
     if g1h.in_futures_session(now):
         if g1h.near_hour_plus_one(now) and not g4h.near_4h_grid(now):
-            ok_1h, reason_1h = should_run_from_registry(job_name="futures_intraday_1h", now=now)
+            ok_1h, reason_1h = should_run_from_registry(
+                job_name="futures_intraday_1h", now=now
+            )
             if ok_1h:
-                print(f"[ORCH] {now} 1h qualifies and registry allows run. Running standalone 1h profile...")
+                print(
+                    f"[ORCH] {now} 1h qualifies and registry allows run. Running standalone 1h profile..."
+                )
                 g1h.run_profile()
                 mark_registry_execution(job_name="futures_intraday_1h", now=now)
             else:
@@ -54,16 +58,16 @@ def _run_if_ready() -> None:
         print(f"[ORCH] {now} outside 1h futures session.")
 
     # --------------------------------------------------
-    # 2) 4h branch (registry-controlled, with 1h dependency refresh)
+    # 2) Self-contained 4h branch (registry-controlled)
     # --------------------------------------------------
     if g4h.in_futures_session(now):
         if g4h.near_4h_grid(now):
-            ok_4h, reason_4h = should_run_from_registry(job_name="futures_intraday_4h", now=now)
+            ok_4h, reason_4h = should_run_from_registry(
+                job_name="futures_intraday_4h", now=now
+            )
             if ok_4h:
                 print(f"[ORCH] {now} 4h qualifies and registry allows run.")
-                print("[ORCH] Running 1h dependency refresh before 4h...")
-                g1h.run_profile()   # dependency step, NOT standalone 1h job
-                print("[ORCH] Running 4h profile...")
+                print("[ORCH] Running self-contained 4h profile...")
                 g4h.run_profile()
                 mark_registry_execution(job_name="futures_intraday_4h", now=now)
             else:
