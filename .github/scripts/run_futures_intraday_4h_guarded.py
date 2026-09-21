@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
@@ -13,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.guard import now_ny, in_futures_session, run_registry_guarded
-
+from core.intraday_cadence import is_futures_4h_opportunity
 from core.health import run_combo_health, print_results
 
 # from core.signal_alerts import notify_on_signals
@@ -23,32 +22,6 @@ from core.notify import notify_combo_signals
 # ---- Config: eligible 4h target hours (NY time) ----
 # =======================================================
 JOB_NAME = "futures_intraday_4h"
-MINUTE_TOLERANCE = 70
-FOUR_HOUR_HOURS = {1, 5, 9, 13, 17, 21}
-
-
-def near_4h_grid(now: datetime) -> bool:
-    t = now.time()
-
-    # This is an after-only gate within a target hour. MINUTE_TOLERANCE is
-    # intentionally retained for compatibility with the current policy.
-    diff = t.minute
-    if not (0 <= diff <= MINUTE_TOLERANCE):
-        return False
-
-    dow = now.weekday()
-    h = t.hour
-
-    if dow == 6:  # Sunday: only 21:01 if you’re using 18:01 open gate; 17:01 is gone
-        return h in {21}  # or {21} only; include 17 only if you re-allow it
-
-    if dow in (0, 1, 2, 3):  # Mon–Thu: all
-        return h in FOUR_HOUR_HOURS
-
-    if dow == 4:  # Friday: up to 13:01 so only 1,5,9,13
-        return h in {1, 5, 9, 13}
-
-    return False
 
 
 def run_profile() -> None:
@@ -111,8 +84,8 @@ def main() -> None:
         print(f"[INFO] {now} NY outside 4h futures session. Skipping.")
         sys.exit(0)
 
-    if not near_4h_grid(now):
-        print(f"[INFO] {now} NY not on 4h grid. Skipping.")
+    if not is_futures_4h_opportunity(now):
+        print(f"[INFO] {now} NY not in a Futures 4h opportunity. Skipping.")
         sys.exit(0)
 
     print(f"[INFO] {now} NY inside 4h cadence window. Running profile...")

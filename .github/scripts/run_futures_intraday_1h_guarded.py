@@ -1,32 +1,28 @@
 from __future__ import annotations
+
 # .github/scripts/run_futures_intraday_1h_guarded.py
 
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.guard import NY_TZ, now_ny, in_futures_session, _env_flag, run_registry_guarded
+from core.guard import now_ny, in_futures_session, _env_flag, run_registry_guarded
+from core.intraday_cadence import is_retry_opportunity
 
 from core.health import run_combo_health, print_results
-#from core.signal_alerts import notify_on_signals
+
+# from core.signal_alerts import notify_on_signals
 from core.notify import notify_combo_signals
 
 # =======================================================
 # ---- Config: desired cadence tolerance ----
 # =======================================================
 JOB_NAME = "futures_intraday_1h"
-MINUTE_TOLERANCE = 45  # around HH:01
-
-
-def near_hour_plus_one(now: datetime) -> bool:
-    diff = now.minute
-    return 0 <= diff <= MINUTE_TOLERANCE
 
 
 def run_profile() -> None:
@@ -37,10 +33,20 @@ def run_profile() -> None:
 
     cmds = [
         # 1) Refresh futures intraday_1h + cascade (4h, daily) for shortlist only
-        [sys.executable, str(root / "jobs" / "run_timeframe.py"), "futures", "intraday_1h", "--cascade"],
-        
+        [
+            sys.executable,
+            str(root / "jobs" / "run_timeframe.py"),
+            "futures",
+            "intraday_1h",
+            "--cascade",
+        ],
         # 2) Rebuild 1h/4h/D combo
-        [sys.executable, str(root / "jobs" / "run_combo.py"), "futures", "futures_1_1h4hd_shortlist"],
+        [
+            sys.executable,
+            str(root / "jobs" / "run_combo.py"),
+            "futures",
+            "futures_1_1h4hd_shortlist",
+        ],
     ]
 
     for cmd in cmds:
@@ -51,7 +57,9 @@ def run_profile() -> None:
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
     # =======================================================
     results = []
-    results += run_combo_health(combos=["futures_1_1h4hd_shortlist"], universe_csv="shortlist_futures.csv")
+    results += run_combo_health(
+        combos=["futures_1_1h4hd_shortlist"], universe_csv="shortlist_futures.csv"
+    )
     print_results(results)
 
     if one_hour_enabled:
@@ -77,8 +85,8 @@ def main() -> None:
         print(f"[INFO] {now} NY outside futures weekly session. Skipping.")
         sys.exit(0)
 
-    if not near_hour_plus_one(now):
-        print(f"[INFO] {now} NY not near HH:01 window. Skipping.")
+    if not is_retry_opportunity(now):
+        print(f"[INFO] {now} NY not in an hourly retry opportunity. Skipping.")
         sys.exit(0)
 
     print(f"[INFO] {now} NY inside 1h futures session + cadence. Running profile...")

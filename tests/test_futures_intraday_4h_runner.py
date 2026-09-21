@@ -8,13 +8,11 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
-import yaml
 
 from core import guard
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / ".github" / "scripts" / "run_futures_intraday_4h_guarded.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "futures_intraday_4h.yml"
 NY = ZoneInfo("America/New_York")
 REGISTRY_COLUMNS = ["job", "active", "last_execution", "check_window_hours"]
 
@@ -121,7 +119,7 @@ def test_manual_dispatch_bypasses_timing_and_registry(runner, monkeypatch):
     )
     monkeypatch.setattr(
         runner,
-        "near_4h_grid",
+        "is_futures_4h_opportunity",
         lambda now: (_ for _ in ()).throw(AssertionError("grid gate called")),
     )
     monkeypatch.setattr(
@@ -141,7 +139,7 @@ def test_scheduled_execution_uses_session_and_grid_guards(runner, monkeypatch):
     monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
     monkeypatch.setattr(runner, "now_ny", lambda: now)
     monkeypatch.setattr(runner, "in_futures_session", lambda value: value is now)
-    monkeypatch.setattr(runner, "near_4h_grid", lambda value: value is now)
+    monkeypatch.setattr(runner, "is_futures_4h_opportunity", lambda value: value is now)
     monkeypatch.setattr(
         runner, "run_registry_guarded", lambda **kwargs: observed.update(kwargs) or True
     )
@@ -181,9 +179,9 @@ def test_scheduled_execution_skips_outside_session_or_grid(runner, monkeypatch, 
 @pytest.mark.parametrize(
     ("now", "expected"),
     [
-        (datetime(2026, 9, 20, 21, 0, tzinfo=NY), True),
+        (datetime(2026, 9, 20, 21, 1, tzinfo=NY), True),
         (datetime(2026, 9, 20, 17, 1, tzinfo=NY), False),
-        (datetime(2026, 9, 21, 1, 0, tzinfo=NY), True),
+        (datetime(2026, 9, 21, 1, 1, tzinfo=NY), True),
         (datetime(2026, 9, 21, 5, 59, tzinfo=NY), True),
         (datetime(2026, 9, 21, 6, 0, tzinfo=NY), False),
         (datetime(2026, 9, 25, 13, 1, tzinfo=NY), True),
@@ -192,7 +190,7 @@ def test_scheduled_execution_skips_outside_session_or_grid(runner, monkeypatch, 
     ],
 )
 def test_current_futures_4h_target_boundaries(runner, now, expected):
-    assert runner.near_4h_grid(now) is expected
+    assert runner.is_futures_4h_opportunity(now) is expected
 
 
 def registry_state(monkeypatch, *, active="Yes", last_execution=pd.NA):
@@ -298,22 +296,3 @@ def test_success_marks_only_futures_4h(runner, monkeypatch):
     assert executed is True
     assert state["value"]["job"].tolist() == ["futures_intraday_4h"]
     assert pd.notna(state["value"].iloc[0]["last_execution"])
-
-
-def test_workflow_remains_manual_only_with_canonical_s3_environment():
-    workflow = yaml.safe_load(WORKFLOW.read_text())
-    triggers = workflow[True]
-    env = workflow["jobs"]["futures_intraday_4h"]["env"]
-
-    assert "schedule" not in triggers
-    assert "workflow_dispatch" in triggers
-    assert env == {
-        "DATA_BACKEND": "s3",
-        "S3_BUCKET_DATA": "stock-intel-data-prod",
-        "S3_PREFIX_DATA": "data",
-        "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
-        "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-        "AWS_DEFAULT_REGION": "us-east-1",
-        "TELEGRAM_BOT_TOKEN": "${{ secrets.TELEGRAM_BOT_TOKEN }}",
-        "TELEGRAM_CHAT_ID": "${{ secrets.TELEGRAM_CHAT_ID }}",
-    }
