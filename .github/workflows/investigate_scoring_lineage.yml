@@ -57,7 +57,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "READ-ONLY DIAGNOSTIC: S3 LIST/GET ONLY"
-          python diagnostics/investigate_scoring_lineage.py \
+          mkdir -p diagnostic_artifacts
+          PYTHONPATH=. python diagnostics/investigate_scoring_lineage.py \
             --bucket "$S3_BUCKET_DATA" \
             --prefix "$S3_PREFIX_DATA" \
             --market-date "${{ inputs.market_date }}" \

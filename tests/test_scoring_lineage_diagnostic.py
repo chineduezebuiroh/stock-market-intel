@@ -197,6 +197,19 @@ def test_workflow_has_production_read_configuration_and_local_upload():
     assert upload["with"]["path"] == "diagnostic_artifacts/"
 
 
+def test_workflow_initializes_artifact_directory_and_repo_root_import_path():
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    collect_step = workflow["jobs"]["investigate"]["steps"][-2]
+    commands = collect_step["run"]
+    mkdir_command = "mkdir -p diagnostic_artifacts"
+    diagnostic_command = (
+        "PYTHONPATH=. python diagnostics/investigate_scoring_lineage.py"
+    )
+    assert mkdir_command in commands
+    assert diagnostic_command in commands
+    assert commands.index(mkdir_command) < commands.index(diagnostic_command)
+
+
 def test_workflow_inputs_and_defaults_are_forwarded_to_script():
     text = WORKFLOW.read_text()
     for name, default in {
