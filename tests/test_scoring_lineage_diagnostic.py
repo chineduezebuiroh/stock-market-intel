@@ -199,7 +199,11 @@ def test_workflow_has_production_read_configuration_and_local_upload():
 
 def test_workflow_initializes_artifact_directory_and_repo_root_import_path():
     workflow = yaml.safe_load(WORKFLOW.read_text())
-    collect_step = workflow["jobs"]["investigate"]["steps"][-2]
+    collect_step = next(
+        step
+        for step in workflow["jobs"]["investigate"]["steps"]
+        if step.get("name") == "Collect read-only historical lineage evidence"
+    )
     commands = collect_step["run"]
     mkdir_command = "mkdir -p diagnostic_artifacts"
     diagnostic_command = (

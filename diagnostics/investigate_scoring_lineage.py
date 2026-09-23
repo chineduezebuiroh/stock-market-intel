@@ -710,6 +710,9 @@ def run(args: argparse.Namespace, client: Any | None = None) -> Path:
     inventory_df.to_csv(output / "artifact_inventory.csv", index=False)
     if combo is not None:
         combo.to_csv(output / f"{stock.lower()}_historical_combo_row.csv", index=False)
+        # Local hand-off to provider reconstruction; the immutable schema
+        # distinguishes absent fields from present-but-null fields.
+        combo.to_parquet(output / f"{stock.lower()}_historical_combo_row.parquet")
 
     classifications = _classification(close_df, indicator_df)
     metadata = {
