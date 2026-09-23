@@ -67,6 +67,20 @@ jobs:
             --secondary-etf "${{ inputs.secondary_etf }}" \
             --output-dir diagnostic_artifacts
 
+      - name: Reconstruct provider state with strict historical cutoff
+        run: |
+          set -euo pipefail
+          combo="diagnostic_artifacts/$(printf '%s' '${{ inputs.stock_symbol }}' | tr '[:upper:]' '[:lower:]')_historical_combo_row.parquet"
+          args=()
+          if [[ -f "$combo" ]]; then
+            args+=(--persisted-combo "$combo")
+          fi
+          PYTHONPATH=. python diagnostics/reconstruct_stock_asof.py \
+            --symbol "${{ inputs.stock_symbol }}" \
+            --market-date "${{ inputs.market_date }}" \
+            --output-dir diagnostic_artifacts \
+            "${args[@]}"
+
       - name: Upload local diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
