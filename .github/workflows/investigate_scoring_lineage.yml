@@ -1,0 +1,76 @@
+name: Investigate Scoring Data Lineage
+
+on:
+  workflow_dispatch:
+    inputs:
+      market_date:
+        description: "Historical market date (YYYY-MM-DD)"
+        required: true
+        default: "2026-09-21"
+        type: string
+      stock_symbol:
+        description: "Stock symbol"
+        required: true
+        default: "CRWD"
+        type: string
+      primary_etf:
+        description: "Primary ETF"
+        required: true
+        default: "IGV"
+        type: string
+      secondary_etf:
+        description: "Secondary ETF"
+        required: true
+        default: "XLK"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+      S3_BUCKET_DATA: stock-intel-data-prod
+      S3_PREFIX_DATA: data
+      DATA_BACKEND: s3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Collect read-only historical lineage evidence
+        run: |
+          set -euo pipefail
+          echo "READ-ONLY DIAGNOSTIC: S3 LIST/GET ONLY"
+          python diagnostics/investigate_scoring_lineage.py \
+            --bucket "$S3_BUCKET_DATA" \
+            --prefix "$S3_PREFIX_DATA" \
+            --market-date "${{ inputs.market_date }}" \
+            --stock-symbol "${{ inputs.stock_symbol }}" \
+            --primary-etf "${{ inputs.primary_etf }}" \
+            --secondary-etf "${{ inputs.secondary_etf }}" \
+            --output-dir diagnostic_artifacts
+
+      - name: Upload local diagnostic artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoring-lineage-${{ inputs.stock_symbol }}-${{ inputs.market_date }}-${{ github.run_id }}
+          path: diagnostic_artifacts/
+          if-no-files-found: error
+          retention-days: 14
