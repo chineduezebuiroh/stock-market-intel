@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import time
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -35,8 +36,15 @@ def json_safe(value: Any) -> Any:
     """Convert provider metadata (including timestamps/numpy values) to JSON."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    if isinstance(value, dict):
-        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, Mapping):
+        try:
+            return {str(k): json_safe(v) for k, v in value.items()}
+        except Exception as exc:
+            # Lazy provider mappings may fail while materializing an optional key.
+            return {
+                "metadata_serialization_error": f"{type(exc).__name__}: {exc}",
+                "metadata_repr": str(value),
+            }
     if isinstance(value, (list, tuple)):
         return [json_safe(v) for v in value]
     if isinstance(value, (datetime, pd.Timestamp)):
@@ -89,13 +97,29 @@ def payload_hash(frame: pd.DataFrame) -> str:
     return hashlib.sha256(frame.to_json(date_format="iso", orient="split").encode()).hexdigest()
 
 
-def price_tolerance(metadata: dict[str, Any]) -> float:
-    """Half of the provider's displayed price unit, with a tiny float floor."""
+def _price_precision(metadata: Any) -> tuple[int, str]:
+    """Return bounded display precision and an auditable selection reason."""
+    if not isinstance(metadata, Mapping):
+        return 4, f"fallback: metadata type {type(metadata).__name__} is not a mapping"
+    if "priceHint" not in metadata:
+        return 4, "fallback: priceHint is missing"
+    value = metadata.get("priceHint")
     try:
-        hint = int(metadata.get("priceHint", 4))
-    except (TypeError, ValueError):
-        hint = 4
-    hint = min(max(hint, 0), 12)
+        # Reject truncation (e.g. 2.5 -> 2), booleans, and non-finite values.
+        number = float(value)
+        hint = int(number)
+        if isinstance(value, bool) or not math.isfinite(number) or number != hint:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        return 4, f"fallback: priceHint is not an integer precision ({value!r})"
+    if not 0 <= hint <= 12:
+        return 4, f"fallback: priceHint is outside the supported range 0..12 ({hint})"
+    return hint, "provider priceHint"
+
+
+def price_tolerance(metadata: Any) -> float:
+    """Half of the provider's displayed price unit, with a tiny float floor."""
+    hint, _ = _price_precision(metadata)
     return max(1e-12, 0.5 * 10 ** (-hint))
 
 
@@ -159,7 +183,7 @@ def _terminal_dict(frame: pd.DataFrame) -> dict[str, float | None]:
     return {key: _finite_number(value) for key, value in frame.iloc[-1].items()}
 
 
-def _fetch_native(symbol: str, interval: str, lookback_days: int) -> tuple[pd.DataFrame, dict[str, Any], dict[str, str]]:
+def _fetch_native(symbol: str, interval: str, lookback_days: int) -> tuple[pd.DataFrame, Any, dict[str, str]]:
     """Fetch independently with the same start/end style as production load_eod."""
     started = datetime.now(timezone.utc)
     end = pd.Timestamp(started)
@@ -184,7 +208,7 @@ def _fetch_native(symbol: str, interval: str, lookback_days: int) -> tuple[pd.Da
         "fetch_started_at_et": started.astimezone(ET).isoformat(),
         "fetch_completed_at_et": completed.astimezone(ET).isoformat(),
     }
-    return canonicalize(raw), json_safe(metadata), timing
+    return canonicalize(raw), metadata, timing
 
 
 def compare_symbol(symbol: str, *, lookback_days: int = 400) -> dict[str, Any]:
@@ -208,10 +232,16 @@ def compare_symbol(symbol: str, *, lookback_days: int = 400) -> dict[str, Any]:
             result["intervals"][interval] = {"status": "fetch_error", "error": f"{type(exc).__name__}: {exc}"}
             continue
         frames[interval] = frame
-        entry: dict[str, Any] = {**timing, "provider_metadata": metadata}
+        serialized_metadata = json_safe(metadata)
+        entry: dict[str, Any] = {
+            **timing,
+            "provider_metadata": serialized_metadata,
+            "provider_metadata_python_type": f"{type(metadata).__module__}.{type(metadata).__qualname__}",
+        }
         if frame.empty:
             entry.update(status="empty", row_count=0)
         else:
+            precision, precision_source = _price_precision(metadata)
             entry.update(
                 status="ok",
                 row_count=len(frame),
@@ -223,6 +253,8 @@ def compare_symbol(symbol: str, *, lookback_days: int = 400) -> dict[str, Any]:
                 ),
                 payload_sha256=payload_hash(frame),
                 price_tolerance=price_tolerance(metadata),
+                price_tolerance_precision=precision,
+                price_tolerance_source=precision_source,
             )
         result["intervals"][interval] = entry
 
@@ -256,14 +288,17 @@ def _flatten_observation(observation: dict[str, Any]) -> tuple[list[dict[str, An
     symbol = observation["symbol"]
     for interval in INTERVALS:
         entry = observation["intervals"].get(interval, {})
+        provider_metadata = entry.get("provider_metadata")
+        if not isinstance(provider_metadata, Mapping):
+            provider_metadata = {}
         terminal_rows.append(
             {
                 "observation": observation["observation"], "symbol": symbol,
                 "requested_interval": interval, "status": entry.get("status"),
                 "interval_label": entry.get("interval_label"), **entry.get("terminal", {}),
-                "provider_timezone": entry.get("provider_metadata", {}).get("exchangeTimezoneName"),
-                "exchange": entry.get("provider_metadata", {}).get("exchangeName"),
-                "instrument_type": entry.get("provider_metadata", {}).get("instrumentType"),
+                "provider_timezone": provider_metadata.get("exchangeTimezoneName"),
+                "exchange": provider_metadata.get("exchangeName"),
+                "instrument_type": provider_metadata.get("instrumentType"),
                 "fetch_started_at_utc": entry.get("fetch_started_at_utc"),
                 "fetch_started_at_et": entry.get("fetch_started_at_et"),
                 "completion_corroboration": entry.get("completion_corroboration"),
@@ -302,7 +337,7 @@ def _report(bundle: dict[str, Any]) -> str:
         "## INFERRED", "",
         "* A daily terminal label is treated as the latest incorporated daily session for this diagnostic. Whether that session is final is assessed from fetch time and Yahoo trading-period metadata by the reviewer.",
         "* Matching native W/M O/H/L/V to the same-run daily aggregate is strong corroboration that they share the daily information set, but is not a provider guarantee.",
-        "* `priceHint` supplies a deterministic display-precision tolerance (half one displayed unit); exact float equality is reported separately.", "",
+        "* A usable `priceHint` supplies a deterministic display-precision tolerance (half one displayed unit); otherwise precision 4 is used and the reason is recorded per interval. Exact float equality is reported separately.", "",
         "## NOT PROVEN", "",
         "* Yahoo's native W/M bucket-start labels and history metadata do not state the last trading session incorporated into a partial aggregate.",
         "* `regularMarketTime`/`currentTradingPeriod` describe quote/market state, not per-bar W/M completion. Same-run timing alone is not proof.",
@@ -334,6 +369,9 @@ def write_artifacts(bundle: dict[str, Any], output_dir: Path) -> None:
                 "observation": item["observation"], "symbol": item["symbol"],
                 "requested_interval": interval,
                 "provider_metadata": item["intervals"].get(interval, {}).get("provider_metadata"),
+                "provider_metadata_python_type": item["intervals"].get(interval, {}).get(
+                    "provider_metadata_python_type"
+                ),
             })
     pd.DataFrame(terminal_rows).to_csv(output_dir / "native_terminal_rows.csv", index=False)
     comparison_frame = pd.DataFrame(comparisons)
@@ -378,16 +416,33 @@ def main() -> None:
         "symbols": symbols,
         "observations": [],
     }
+    # Guarantee an uploadable run manifest before the first provider call.
+    write_artifacts(bundle, args.output_dir)
+    failures: list[str] = []
     for number in range(1, args.observations + 1):
         for symbol in symbols:
-            item = compare_symbol(symbol, lookback_days=args.lookback_days)
+            try:
+                item = compare_symbol(symbol, lookback_days=args.lookback_days)
+            except Exception as exc:
+                message = f"{type(exc).__name__}: {exc}"
+                failures.append(f"observation {number} {symbol}: {message}")
+                item = {
+                    "symbol": symbol,
+                    "intervals": {},
+                    "close_differences": close_differences({}),
+                    "assessment": {"classification": "diagnostic error", "comparable": False},
+                    "diagnostic_error": message,
+                }
             item["observation"] = number
             bundle["observations"].append(item)
+            write_artifacts(bundle, args.output_dir)
         # Write incrementally so a later network failure still leaves auditable evidence.
         write_artifacts(bundle, args.output_dir)
         if number < args.observations:
             time.sleep(args.delay_seconds)
     print(args.output_dir)
+    if failures:
+        raise RuntimeError("diagnostic failures: " + "; ".join(failures))
 
 
 if __name__ == "__main__":
