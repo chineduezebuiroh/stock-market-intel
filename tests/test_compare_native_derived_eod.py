@@ -1,3 +1,7 @@
+import math
+import sys
+from collections.abc import Mapping
+
 import pandas as pd
 import pytest
 
@@ -10,6 +14,9 @@ from diagnostics.compare_native_derived_eod import (
     parse_symbols,
     payload_hash,
     price_tolerance,
+    compare_symbol,
+    json_safe,
+    main,
 )
 
 
@@ -75,6 +82,86 @@ def test_differences_and_provider_precision_tolerance():
     assert differences["1d_vs_1wk"]["absolute"] == pytest.approx(0.01)
     assert differences["1d_vs_1mo"] == {"absolute": None, "relative": None}
     assert price_tolerance({"priceHint": 2}) == 0.005
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"priceHint": 2}, 0.005),
+        ({"priceHint": "3"}, 0.0005),
+        ({}, 0.00005),
+        ("{'priceHint': 2}", 0.00005),
+        ('{"priceHint": 2}', 0.00005),
+        (None, 0.00005),
+        ([{"priceHint": 2}], 0.00005),
+        ({"priceHint": "nonsense"}, 0.00005),
+        ({"priceHint": math.nan}, 0.00005),
+        ({"priceHint": math.inf}, 0.00005),
+        ({"priceHint": 2.5}, 0.00005),
+        ({"priceHint": 99}, 0.00005),
+    ],
+)
+def test_price_tolerance_defensively_falls_back(metadata, expected):
+    assert price_tolerance(metadata) == expected
+
+
+class _LazyMetadata(Mapping):
+    """Representative of yfinance 1.7's dict-like HistoryMetadata wrapper."""
+
+    def __getitem__(self, key):
+        return {"priceHint": 2, "exchangeName": "NMS"}[key]
+
+    def __iter__(self):
+        return iter(("priceHint", "exchangeName"))
+
+    def __len__(self):
+        return 2
+
+
+def test_json_safe_preserves_provider_mapping_instead_of_stringifying_it():
+    assert json_safe(_LazyMetadata()) == {"priceHint": 2, "exchangeName": "NMS"}
+
+
+def test_compare_symbol_survives_exact_live_string_metadata_path(monkeypatch):
+    frame = pd.DataFrame(
+        {"open": [10.0], "high": [12.0], "low": [9.0], "close": [11.0],
+         "adj_close": [11.0], "volume": [100.0]},
+        index=pd.to_datetime(["2026-09-23"]),
+    )
+
+    def fetch(symbol, interval, lookback_days):
+        # Reproduces the value that reached price_tolerance in the failed run.
+        return frame.copy(), "{'priceHint': 2, 'exchangeName': 'NMS'}", {}
+
+    monkeypatch.setattr("diagnostics.compare_native_derived_eod._fetch_native", fetch)
+    result = compare_symbol("AAPL")
+
+    assert all(entry["status"] == "ok" for entry in result["intervals"].values())
+    assert all(entry["price_tolerance"] == 0.00005 for entry in result["intervals"].values())
+    assert all("metadata type str" in entry["price_tolerance_source"]
+               for entry in result["intervals"].values())
+    assert result["intervals"]["1d"]["provider_metadata"].startswith("{'priceHint'")
+
+
+def test_main_persists_startup_and_failure_evidence_before_nonzero_exit(monkeypatch, tmp_path):
+    def fail(*args, **kwargs):
+        raise RuntimeError("unexpected provider state")
+
+    monkeypatch.setattr("diagnostics.compare_native_derived_eod.compare_symbol", fail)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["compare_native_derived_eod.py", "--symbols", "AAPL", "--observations", "1",
+         "--output-dir", str(tmp_path)],
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected provider state"):
+        main()
+
+    raw = (tmp_path / "raw_native_observations.json").read_text()
+    assert "unexpected provider state" in raw
+    assert (tmp_path / "report.md").exists()
+    assert (tmp_path / "provider_metadata.json").exists()
 
 
 def test_payload_hash_and_symbol_validation():
