@@ -1,0 +1,33 @@
+name: Compare Native and Derived Stock EOD
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: Space-separated Yahoo symbols
+        default: AAPL MSFT SPY
+      lookback:
+        description: Yahoo lookback period
+        default: 6mo
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Fetch and compare current provider bars
+        env:
+          SYMBOLS: ${{ inputs.symbols }}
+          LOOKBACK: ${{ inputs.lookback }}
+        run: python diagnostics/compare_native_derived_eod.py --symbols $SYMBOLS --lookback "$LOOKBACK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-derived-eod-${{ github.run_id }}
+          path: artifacts/native-derived-eod.json

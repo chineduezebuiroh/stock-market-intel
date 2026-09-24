@@ -27,6 +27,11 @@ from etl.sources import (
     INTRADAY_REPAIR_TELEMETRY,
 )
 from etl.window import parquet_path, update_fixed_window
+from etl.eod_quality import (
+    StockEODDataQualityError,
+    merge_stock_eod_window,
+    require_valid_terminal_stock_eod,
+)
 from etl.universe import symbols_for_universe
 #from etl.futures_resample import load_futures_eod_from_1h 
 from etl.futures_resample import load_futures_eod_hybrid
@@ -212,6 +217,9 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
 
     
 
+    rejected_symbols: set[str] = set()
+    stock_eod = namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}
+
     for idx, sym in enumerate(symbols, start=1):
         start_sym = time.perf_counter()
         print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} ...")
@@ -243,12 +251,17 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         except Exception as e:
             elapsed = time.perf_counter() - start_sym
             print(f"[INGEST][WARN] {namespace}:{timeframe} {sym} load exception after {elapsed:.1f}s: {e}", flush=True)
+            if stock_eod:
+                rejected_symbols.add(sym)
             continue
 
         # 🔹 NEW: explicitly log empty df_new
         if df_new is None or df_new.empty:
             elapsed = time.perf_counter() - start_sym
             print(f"[INGEST][SKIP] {namespace}:{timeframe} {sym} df_new empty/None after {elapsed:.1f}s", flush=True)
+            if stock_eod:
+                rejected_symbols.add(sym)
+                print(f"[DATA_QUALITY][REJECT] {namespace}:{timeframe} {sym}: empty provider payload", flush=True)
             continue
         
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
@@ -266,7 +279,23 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         else:
             existing = pd.DataFrame()
 
-        merged = update_fixed_window(df_new, existing, window_bars)
+        if stock_eod:
+            try:
+                merge_result = merge_stock_eod_window(df_new, existing, window_bars)
+                merged = merge_result.frame
+                if merge_result.dropped_malformed_timestamps:
+                    print(
+                        f"[DATA_QUALITY][RETAIN_EXISTING] {namespace}:{timeframe} {sym} "
+                        f"timestamps={merge_result.retained_existing_timestamps} "
+                        f"dropped={merge_result.dropped_malformed_timestamps}",
+                        flush=True,
+                    )
+            except StockEODDataQualityError as e:
+                rejected_symbols.add(sym)
+                print(f"[DATA_QUALITY][REJECT] {namespace}:{timeframe} {sym}: {e}", flush=True)
+                continue
+        else:
+            merged = update_fixed_window(df_new, existing, window_bars)
 
         # --- futures intraday sanitization: drop invalid bars ---
         if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
@@ -323,6 +352,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         elapsed = time.perf_counter() - start_sym
         print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} OK in {elapsed:.1f}s", flush=True)
 
+    return rejected_symbols
+
 
 def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes: set[str] | None = None):
     """
@@ -348,7 +379,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
         return
 
     # --- 2) Ingest this timeframe (per-symbol parquet with indicators) ---
-    ingest_one(namespace, timeframe, symbols, session, window_bars)
+    rejected_symbols = ingest_one(namespace, timeframe, symbols, session, window_bars)
     if namespace == "stocks" and timeframe == "intraday_4h":
         write_intraday_repair_telemetry(namespace, timeframe)
 
@@ -357,6 +388,8 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
     rows = []
 
     for sym in symbols:
+        if sym in rejected_symbols:
+            continue
         p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
         """if not p.exists():"""
         if not storage.exists(p):
@@ -378,6 +411,15 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
             last = df_valid.iloc[-1]
         else:
             last = df.iloc[-1]
+
+        if namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
+            try:
+                require_valid_terminal_stock_eod(
+                    df, context=f"snapshot {namespace}/{timeframe}/{sym}"
+                )
+            except StockEODDataQualityError as e:
+                print(f"[DATA_QUALITY][SNAPSHOT_EXCLUDE] {e}", flush=True)
+                continue
 
         # Ensure all base columns are present
         missing = [c for c in base_cols if c not in last.index]
@@ -407,6 +449,10 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
         """snap.to_parquet(out)"""
         storage.save_parquet(snap, out)
         print(f"[OK] Wrote snapshot: {out}")
+    elif namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
+        raise RuntimeError(
+            f"[DATA_QUALITY][FATAL] no valid rows for {namespace}:{timeframe}; snapshot not published"
+        )
 
     # --- 4) Cascade to higher timeframes (if requested) ---
     if cascade:
