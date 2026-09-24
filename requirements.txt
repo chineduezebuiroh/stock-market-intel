@@ -1,6 +1,7 @@
 pandas
 numpy
-yfinance
+# EOD reconciliation relies on 1.7.0's interval-specific synthesized lastTrade.
+yfinance==1.7.0
 pyarrow
 fastparquet
 duckdb

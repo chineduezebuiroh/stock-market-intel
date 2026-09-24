@@ -67,6 +67,17 @@ def test_malformed_duplicate_retains_entire_valid_existing_row():
     assert result.retained_existing_timestamps == (existing.index[-1],)
 
 
+def test_partial_period_same_label_is_not_retained_without_freshness_proof():
+    existing = bars()
+    new = existing.iloc[[-1]].copy()
+    new.loc[:, "close"] = np.nan
+
+    with pytest.raises(StockEODDataQualityError):
+        merge_stock_eod_window(
+            new, existing, 260, allow_same_label_retention=False
+        )
+
+
 def test_valid_duplicate_replaces_existing_unchanged_as_a_whole_row():
     existing = bars()
     new = existing.iloc[[-1]].copy()
