@@ -1,33 +1,62 @@
-name: Compare Native and Derived Stock EOD
+name: Yahoo Native D-W-M EOD Evidence
 
 on:
   workflow_dispatch:
     inputs:
       symbols:
-        description: Space-separated Yahoo symbols
-        default: AAPL MSFT SPY
-      lookback:
-        description: Yahoo lookback period
-        default: 6mo
+        description: Space- or comma-separated Yahoo symbols
+        default: AAPL MSFT SPY CRWD NVDA JPM XOM
+        required: true
+      observations:
+        description: Number of observations (1-6)
+        default: "2"
+        required: true
+      delay_seconds:
+        description: Seconds between observations (0-1800)
+        default: "300"
+        required: true
+      lookback_days:
+        description: Native request lookback in calendar days
+        default: "400"
+        required: true
 
 permissions:
   contents: read
 
 jobs:
-  compare:
+  capture-yahoo-evidence:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Intentionally no DATA_BACKEND, S3, AWS, registry, or production secrets.
+      OUTPUT_DIR: artifacts/yahoo-native-dwm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - name: Fetch and compare current provider bars
+      - name: Install diagnostic dependencies
+        run: python -m pip install pandas numpy yfinance
+      - name: Capture independent native interval observations
         env:
-          SYMBOLS: ${{ inputs.symbols }}
-          LOOKBACK: ${{ inputs.lookback }}
-        run: python diagnostics/compare_native_derived_eod.py --symbols $SYMBOLS --lookback "$LOOKBACK"
-      - uses: actions/upload-artifact@v4
+          INPUT_SYMBOLS: ${{ inputs.symbols }}
+          INPUT_OBSERVATIONS: ${{ inputs.observations }}
+          INPUT_DELAY_SECONDS: ${{ inputs.delay_seconds }}
+          INPUT_LOOKBACK_DAYS: ${{ inputs.lookback_days }}
+        run: |
+          python diagnostics/compare_native_derived_eod.py \
+            --symbols "$INPUT_SYMBOLS" \
+            --observations "$INPUT_OBSERVATIONS" \
+            --delay-seconds "$INPUT_DELAY_SECONDS" \
+            --lookback-days "$INPUT_LOOKBACK_DAYS" \
+            --output-dir "$OUTPUT_DIR"
+      - name: Upload read-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: native-derived-eod-${{ github.run_id }}
-          path: artifacts/native-derived-eod.json
+          name: yahoo-native-dwm-evidence-${{ github.run_id }}
+          path: artifacts/yahoo-native-dwm/
+          if-no-files-found: error
+          retention-days: 30
