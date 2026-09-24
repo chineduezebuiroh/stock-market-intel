@@ -57,7 +57,11 @@ class StockEODMergeResult:
 
 
 def merge_stock_eod_window(
-    df_new: pd.DataFrame, existing: pd.DataFrame, window_bars: int
+    df_new: pd.DataFrame,
+    existing: pd.DataFrame,
+    window_bars: int,
+    *,
+    allow_same_label_retention: bool = True,
 ) -> StockEODMergeResult:
     """Merge without allowing malformed provider rows to replace valid observations.
 
@@ -75,7 +79,8 @@ def merge_stock_eod_window(
     terminal = df_new.index[-1]
     existing_valid = valid_stock_eod_rows(existing)
     can_retain_terminal = (
-        terminal in existing.index and bool(existing_valid.loc[terminal])
+        allow_same_label_retention
+        and terminal in existing.index and bool(existing_valid.loc[terminal])
         if existing is not None and not existing.empty and terminal in existing.index
         else False
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 # etl/sources.py
 
 import os
+import hashlib
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -380,7 +381,7 @@ def load_eod(
     """
     interval, lookback_days = _timeframe_to_interval_and_lookback(timeframe, window_bars)
     
-    end_utc = pd.Timestamp.utcnow()
+    end_utc = pd.Timestamp.now(tz="UTC")
     if end_utc.tzinfo is None:
         end_utc = end_utc.tz_localize("UTC")
     else:
@@ -468,6 +469,26 @@ def load_eod(
         df = df.iloc[-window_bars:]
 
     df = _sanitize_eod_df(df)
+    # Keep request provenance attached to the in-memory native observation.  In
+    # yfinance, ``lastTrade`` is synthesized specifically by
+    # fix_Yahoo_returning_live_separate() from a live row that it merged into the
+    # requested interval; it is not Yahoo chart metadata.  Consumers must still
+    # verify its price and session before treating it as completion evidence.
+    try:
+        metadata = dict(t.get_history_metadata() or {})
+    except Exception as exc:
+        metadata = {"metadata_error": f"{type(exc).__name__}: {exc}"}
+    df.attrs["eod_provenance"] = {
+        "source_interval": interval,
+        "provider_fetch_time": pd.Timestamp.now(tz="UTC").isoformat(),
+        "session_semantics": session,
+        "adjustment_mode": "raw_unadjusted",
+        "yfinance_version": getattr(yf, "__version__", "unknown"),
+        "provider_metadata": metadata,
+        "payload_sha256": hashlib.sha256(
+            df.to_json(date_format="iso", orient="split").encode()
+        ).hexdigest(),
+    }
     return df
 
 

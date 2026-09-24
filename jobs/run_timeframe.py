@@ -3,6 +3,10 @@ from __future__ import annotations
 # jobs/run_timeframe.py
 
 import sys
+import math
+import os
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure project root on sys.path
@@ -31,6 +35,12 @@ from etl.eod_quality import (
     StockEODDataQualityError,
     merge_stock_eod_window,
     require_valid_terminal_stock_eod,
+    valid_stock_eod_rows,
+)
+from etl.eod_reconciliation import (
+    canonical_terminal_session_close,
+    observation_from_native_frame,
+    repair_terminal_close,
 )
 from etl.universe import symbols_for_universe
 #from etl.futures_resample import load_futures_eod_from_1h 
@@ -52,6 +62,112 @@ print("[DEBUG] load_eod signature:", inspect.signature(load_eod))
 
 DEV_MAX_STOCK_SYMBOLS_PER_TF = None  # set to None to disable the cap
 EXCLUSIONS_FILE = CFG / "excluded_symbols.csv"
+EOD_RECONCILIATION_TELEMETRY: list[dict] = []
+EOD_RECONCILIATION_ATTEMPTS = 0
+EOD_RECONCILIATION_ELIGIBLE = 0
+EOD_RECONCILIATION_SKIPPED = 0
+MAX_EOD_RECONCILIATION_SYMBOLS = int(
+    os.getenv("MAX_EOD_RECONCILIATION_SYMBOLS", "100")
+)
+EOD_RECONCILIATION_SELECTION_POLICY = "daily_rotating_sha256_utc_date"
+
+
+def _price_tolerance(frame: pd.DataFrame) -> float:
+    metadata = frame.attrs.get("eod_provenance", {}).get("provider_metadata", {})
+    try:
+        hint = int(metadata.get("priceHint", 4))
+        if not 0 <= hint <= 12:
+            raise ValueError
+    except (AttributeError, TypeError, ValueError):
+        hint = 4
+    return max(1e-12, 0.5 * 10 ** (-hint))
+
+
+def _is_close_only_malformed(frame: pd.DataFrame) -> bool:
+    if frame is None or frame.empty:
+        return False
+    row = frame.iloc[-1]
+    close = pd.to_numeric(pd.Series([row.get("close")]), errors="coerce").iloc[0]
+    fields = {c: pd.to_numeric(pd.Series([row.get(c)]), errors="coerce").iloc[0]
+              for c in ("open", "high", "low", "volume")}
+    return (
+        pd.isna(close)
+        and all(math.isfinite(value) for value in fields.values())
+        and fields["volume"] >= 0
+        and fields["low"] <= fields["high"]
+    )
+
+
+def _reconcile_malformed_daily_close(
+    symbol: str, frame: pd.DataFrame, *, session: str
+) -> tuple[pd.DataFrame, dict]:
+    """Narrow production gate for the evidenced malformed-D/valid-W+M state."""
+    if not _is_close_only_malformed(frame):
+        return frame, {"data_quality_status": "malformed", "reason": "not close-only malformed"}
+
+    peers = []
+    source_statuses = {"1d": "malformed"}
+    for peer, bars in (("weekly", 8), ("monthly", 3)):
+        try:
+            fetched = safe_load_eod(
+                symbol, timeframe=peer, window_bars=bars, session=session
+            )
+        except Exception as exc:
+            # safe_load_eod already contains timeout/error isolation; keep this
+            # defensive boundary so a future/custom loader remains symbol-local.
+            print(
+                f"[DATA_QUALITY][EVIDENCE_FETCH_WARN] {symbol} {peer}: "
+                f"{type(exc).__name__}: {exc}", flush=True,
+            )
+            fetched = None
+        if fetched is not None and not fetched.empty:
+            peers.append(fetched)
+            source_statuses["1wk" if peer == "weekly" else "1mo"] = (
+                "valid" if pd.notna(pd.to_numeric(
+                    pd.Series([fetched.iloc[-1].get("close")]), errors="coerce"
+                ).iloc[0]) else "malformed"
+            )
+        else:
+            source_statuses["1wk" if peer == "weekly" else "1mo"] = "unavailable"
+    target_session = pd.Timestamp(frame.index[-1]).date()
+    observations = [observation_from_native_frame(peer) for peer in peers]
+    tolerance = max((_price_tolerance(peer) for peer in peers), default=1e-4)
+    result = canonical_terminal_session_close(
+        observations, target_session=target_session, price_tolerance=tolerance
+    )
+    repaired, provenance = repair_terminal_close(frame, result)
+    provenance.update(
+        symbol=symbol, target_interval="1d", interval_label=str(frame.index[-1]),
+        terminal_market_session_date=target_session.isoformat(),
+        terminal_close_pattern="/".join(
+            f"{interval}:{source_statuses[interval]}" for interval in ("1d", "1wk", "1mo")
+        ),
+    )
+    return repaired, provenance
+
+
+def write_eod_reconciliation_telemetry(timeframe: str) -> None:
+    if not EOD_RECONCILIATION_TELEMETRY:
+        return
+    out = DATA / "_health" / f"stocks_{timeframe}_eod_reconciliation.parquet"
+    rows = list(EOD_RECONCILIATION_TELEMETRY)
+    rows.append({
+        "record_type": "run_summary",
+        "selection_policy": EOD_RECONCILIATION_SELECTION_POLICY,
+        "eligible_count": EOD_RECONCILIATION_ELIGIBLE,
+        "attempted_count": EOD_RECONCILIATION_ATTEMPTS,
+        "skipped_budget_count": EOD_RECONCILIATION_SKIPPED,
+        "budget": MAX_EOD_RECONCILIATION_SYMBOLS,
+    })
+    try:
+        storage.save_parquet(pd.DataFrame(rows), out)
+    except Exception as exc:
+        print(
+            f"[HEALTH][WARN] EOD reconciliation telemetry write failed for {out}: "
+            f"{type(exc).__name__}: {exc}", flush=True,
+        )
+        return
+    print(f"[HEALTH] wrote EOD reconciliation telemetry: {out}", flush=True)
 
 
 # Load timeframe config (structure only)
@@ -212,6 +328,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
       - drops any legacy pivot-style columns (e.g. "('open', 'aapl')")
         from existing data before merging.
     """
+    global EOD_RECONCILIATION_ATTEMPTS, EOD_RECONCILIATION_ELIGIBLE
+    global EOD_RECONCILIATION_SKIPPED
     total = len(symbols)
     print(f"[INGEST] {namespace}:{timeframe} starting ingest for {total} symbols", flush=True)
 
@@ -219,6 +337,15 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
 
     rejected_symbols: set[str] = set()
     stock_eod = namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}
+
+    selection_date = datetime.now(timezone.utc).date().isoformat()
+    if namespace == "stocks" and timeframe == "daily":
+        symbols = sorted(
+            symbols,
+            key=lambda symbol: hashlib.sha256(
+                f"{selection_date}|{symbol}".encode()
+            ).hexdigest(),
+        )
 
     for idx, sym in enumerate(symbols, start=1):
         start_sym = time.perf_counter()
@@ -281,7 +408,39 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
 
         if stock_eod:
             try:
-                merge_result = merge_stock_eod_window(df_new, existing, window_bars)
+                # Reconciliation precedes PR #23's merge safety floor.  Only the
+                # currently evidenced daily close-only failure is activated;
+                # unsupported W/M completion states continue to fail closed.
+                if timeframe == "daily" and _is_close_only_malformed(df_new):
+                    EOD_RECONCILIATION_ELIGIBLE += 1
+                    priority = hashlib.sha256(
+                        f"{selection_date}|{sym}".encode()
+                    ).hexdigest()
+                    if EOD_RECONCILIATION_ATTEMPTS >= MAX_EOD_RECONCILIATION_SYMBOLS:
+                        EOD_RECONCILIATION_SKIPPED += 1
+                        provenance = {
+                            "symbol": sym, "target_interval": "1d",
+                            "data_quality_status": "excluded",
+                            "reason": "supplemental fetch budget exhausted",
+                        }
+                    else:
+                        EOD_RECONCILIATION_ATTEMPTS += 1
+                        df_new, provenance = _reconcile_malformed_daily_close(
+                            sym, df_new, session=session
+                        )
+                    provenance.update(
+                        record_type="symbol",
+                        selection_policy=EOD_RECONCILIATION_SELECTION_POLICY,
+                        selection_date=selection_date,
+                        selection_priority_sha256=priority,
+                    )
+                    EOD_RECONCILIATION_TELEMETRY.append(provenance)
+                merge_result = merge_stock_eod_window(
+                    df_new, existing, window_bars,
+                    # A D label identifies its session. W/M labels identify only
+                    # a bucket and cannot prove an old partial row is current.
+                    allow_same_label_retention=(timeframe == "daily"),
+                )
                 merged = merge_result.frame
                 if merge_result.dropped_malformed_timestamps:
                     print(
@@ -352,6 +511,8 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
         elapsed = time.perf_counter() - start_sym
         print(f"[INGEST] {namespace}:{timeframe} [{idx}/{total}] {sym} OK in {elapsed:.1f}s", flush=True)
 
+    if stock_eod and timeframe == "daily":
+        write_eod_reconciliation_telemetry(timeframe)
     return rejected_symbols
 
 

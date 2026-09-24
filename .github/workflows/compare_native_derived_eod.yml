@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install diagnostic dependencies
-        run: python -m pip install pandas numpy yfinance
+        run: python -m pip install pandas numpy yfinance==1.7.0
       - name: Capture independent native interval observations
         env:
           INPUT_SYMBOLS: ${{ inputs.symbols }}
