@@ -76,11 +76,11 @@ jobs:
             *) echo "::error::Unexpected validation_set"; exit 1 ;;
           esac
 
-          python jobs/run_stock_eod_family_shadow.py \
+          PYTHONPATH=. python jobs/run_stock_eod_family_shadow.py \
             --symbols "${SYMBOLS[@]}" \
             --run-id "$RUN_ID"
 
-          python diagnostics/validate_eod_family_shadow.py \
+          PYTHONPATH=. python diagnostics/validate_eod_family_shadow.py \
             --run-id "$RUN_ID" \
             --symbols "${SYMBOLS[@]}" \
             --output-dir "$ARTIFACT_DIR"
