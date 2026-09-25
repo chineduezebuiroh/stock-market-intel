@@ -57,6 +57,7 @@ from indicators.core import (
 import time
 
 import inspect
+from dataclasses import dataclass
 print("[DEBUG] load_eod signature:", inspect.signature(load_eod))
 
 
@@ -317,6 +318,98 @@ def symbols_for_timeframe(namespace: str, timeframe: str, allowed_universes: set
     return symbols
 
 
+@dataclass(frozen=True)
+class ProcessOutcome:
+    accepted: bool
+    reason: str | None = None
+
+
+def process_one_preloaded(
+    namespace: str,
+    timeframe: str,
+    symbol: str,
+    df_new: pd.DataFrame,
+    window_bars: int,
+    *,
+    progress_index: int | None = None,
+    progress_total: int | None = None,
+) -> ProcessOutcome:
+    """Merge, validate, calculate, and persist an already-acquired frame.
+
+    This is deliberately below the provider boundary: it never loads market data.
+    Both standalone ingestion and the authoritative D/W/M family runner use this
+    function so quality, rolling-window, indicator, and persistence semantics stay
+    identical.
+    """
+    stock_eod = namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}
+    parquet = parquet_path(DATA, f"{namespace}_{timeframe}", symbol)
+    parquet.parent.mkdir(parents=True, exist_ok=True)
+
+    if storage.exists(parquet):
+        existing = storage.load_parquet(parquet)
+        bad_cols = [
+            c for c in existing.columns
+            if isinstance(c, str) and c.startswith("(")
+        ]
+        if bad_cols:
+            existing = existing.drop(columns=bad_cols)
+    else:
+        existing = pd.DataFrame()
+
+    if stock_eod:
+        try:
+            merge_result = merge_stock_eod_window(
+                df_new, existing, window_bars,
+                # A D label identifies its session. W/M labels identify only
+                # a bucket and cannot prove an old partial row is current.
+                allow_same_label_retention=(timeframe == "daily"),
+            )
+            merged = merge_result.frame
+            if merge_result.dropped_malformed_timestamps:
+                print(
+                    f"[DATA_QUALITY][RETAIN_EXISTING] {namespace}:{timeframe} {symbol} "
+                    f"timestamps={merge_result.retained_existing_timestamps} "
+                    f"dropped={merge_result.dropped_malformed_timestamps}",
+                    flush=True,
+                )
+        except StockEODDataQualityError as exc:
+            print(f"[DATA_QUALITY][REJECT] {namespace}:{timeframe} {symbol}: {exc}", flush=True)
+            return ProcessOutcome(False, str(exc))
+    else:
+        merged = update_fixed_window(df_new, existing, window_bars)
+
+    if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
+        merged = merged.dropna(subset=["open", "high", "low", "close"], how="any")
+
+    if merged is None or merged.empty:
+        print(f"[INGEST][SKIP] {namespace}:{timeframe} {symbol} merged empty", flush=True)
+        return ProcessOutcome(False, "merged frame is empty")
+
+    merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
+    if merged is None or merged.empty:
+        print(f"[INGEST][SKIP] {namespace}:{timeframe} {symbol} post-indicators empty", flush=True)
+        return ProcessOutcome(False, "indicator output is empty")
+
+    storage.save_parquet(merged, parquet)
+    try:
+        ok = storage.exists(parquet)
+    except Exception as exc:
+        ok = False
+        print(f"[WRITE][ERR] exists-check failed for {parquet}: {exc}", flush=True)
+    if not ok:
+        print(f"[WRITE][MISS] {namespace}:{timeframe} {symbol} -> {parquet}", flush=True)
+    elif progress_index is None or progress_index <= 3 or progress_index % 50 == 0:
+        print(f"[WRITE][OK] {namespace}:{timeframe} {symbol} -> {parquet}", flush=True)
+
+    if progress_index == 1:
+        try:
+            df_chk = storage.load_parquet(parquet)
+            print(f"[WRITE][CHK] {namespace}:{timeframe} {symbol} saved shape={df_chk.shape}", flush=True)
+        except Exception as exc:
+            print(f"[WRITE][CHK][ERR] {namespace}:{timeframe} {symbol}: {exc}", flush=True)
+    return ProcessOutcome(True)
+
+
 def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bars: int):
     """
     Ingest bars for a single namespace+timeframe over a list of symbols,
@@ -391,121 +484,46 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
                 print(f"[DATA_QUALITY][REJECT] {namespace}:{timeframe} {sym}: empty provider payload", flush=True)
             continue
         
-        parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        parquet.parent.mkdir(parents=True, exist_ok=True)
-        
-        if storage.exists(parquet):
-            existing = storage.load_parquet(parquet)
-            # 🔹 Drop legacy tuple-ish columns left over from old experiments
-            bad_cols = [
-                c for c in existing.columns
-                if isinstance(c, str) and c.startswith("(")
-            ]
-            if bad_cols:
-                existing = existing.drop(columns=bad_cols)
-        else:
-            existing = pd.DataFrame()
-
         if stock_eod:
-            try:
-                # Reconciliation precedes PR #23's merge safety floor.  Only the
-                # currently evidenced daily close-only failure is activated;
-                # unsupported W/M completion states continue to fail closed.
-                if timeframe == "daily" and _is_close_only_malformed(df_new):
-                    EOD_RECONCILIATION_ELIGIBLE += 1
-                    priority = hashlib.sha256(
-                        f"{selection_date}|{sym}".encode()
-                    ).hexdigest()
-                    if EOD_RECONCILIATION_ATTEMPTS >= MAX_EOD_RECONCILIATION_SYMBOLS:
-                        EOD_RECONCILIATION_SKIPPED += 1
-                        provenance = {
-                            "symbol": sym, "target_interval": "1d",
-                            "data_quality_status": "excluded",
-                            "reason": "supplemental fetch budget exhausted",
-                        }
-                    else:
-                        EOD_RECONCILIATION_ATTEMPTS += 1
+            # Reconciliation precedes PR #23's merge safety floor. Only the
+            # evidenced daily close-only failure is activated for standalone runs.
+            if timeframe == "daily" and _is_close_only_malformed(df_new):
+                EOD_RECONCILIATION_ELIGIBLE += 1
+                priority = hashlib.sha256(f"{selection_date}|{sym}".encode()).hexdigest()
+                if EOD_RECONCILIATION_ATTEMPTS >= MAX_EOD_RECONCILIATION_SYMBOLS:
+                    EOD_RECONCILIATION_SKIPPED += 1
+                    provenance = {
+                        "symbol": sym, "target_interval": "1d",
+                        "data_quality_status": "excluded",
+                        "reason": "supplemental fetch budget exhausted",
+                    }
+                else:
+                    EOD_RECONCILIATION_ATTEMPTS += 1
+                    try:
                         df_new, provenance = _reconcile_malformed_daily_close(
                             sym, df_new, session=session
                         )
-                    provenance.update(
-                        record_type="symbol",
-                        selection_policy=EOD_RECONCILIATION_SELECTION_POLICY,
-                        selection_date=selection_date,
-                        selection_priority_sha256=priority,
-                    )
-                    EOD_RECONCILIATION_TELEMETRY.append(provenance)
-                merge_result = merge_stock_eod_window(
-                    df_new, existing, window_bars,
-                    # A D label identifies its session. W/M labels identify only
-                    # a bucket and cannot prove an old partial row is current.
-                    allow_same_label_retention=(timeframe == "daily"),
+                    except StockEODDataQualityError as exc:
+                        rejected_symbols.add(sym)
+                        print(
+                            f"[DATA_QUALITY][REJECT] {namespace}:{timeframe} {sym}: {exc}",
+                            flush=True,
+                        )
+                        continue
+                provenance.update(
+                    record_type="symbol", selection_policy=EOD_RECONCILIATION_SELECTION_POLICY,
+                    selection_date=selection_date, selection_priority_sha256=priority,
                 )
-                merged = merge_result.frame
-                if merge_result.dropped_malformed_timestamps:
-                    print(
-                        f"[DATA_QUALITY][RETAIN_EXISTING] {namespace}:{timeframe} {sym} "
-                        f"timestamps={merge_result.retained_existing_timestamps} "
-                        f"dropped={merge_result.dropped_malformed_timestamps}",
-                        flush=True,
-                    )
-            except StockEODDataQualityError as e:
+                EOD_RECONCILIATION_TELEMETRY.append(provenance)
+
+        outcome = process_one_preloaded(
+            namespace, timeframe, sym, df_new, window_bars,
+            progress_index=idx, progress_total=total,
+        )
+        if not outcome.accepted:
+            if stock_eod:
                 rejected_symbols.add(sym)
-                print(f"[DATA_QUALITY][REJECT] {namespace}:{timeframe} {sym}: {e}", flush=True)
-                continue
-        else:
-            merged = update_fixed_window(df_new, existing, window_bars)
-
-        # --- futures intraday sanitization: drop invalid bars ---
-        if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
-            ohlc = ["open", "high", "low", "close"]
-            
-            # Drop rows where all OHLC are NaN (your exact poison signature)
-            #merged = merged[~merged[ohlc].isna().all(axis=1)]
-            
-            # Drop rows where ANY OHLC are NaN (your exact poison signature)
-            #merged = merged.dropna(subset=["open","high","low","close"], how="any")
-            merged = merged.dropna(subset=ohlc, how="any")
-
-
-        # 🔹 NEW: log if merged goes empty
-        if merged is None or merged.empty:
-            elapsed = time.perf_counter() - start_sym
-            print(f"[INGEST][SKIP] {namespace}:{timeframe} {sym} merged empty after {elapsed:.1f}s", flush=True)
             continue
-
-        #merged = apply_core(merged, params={})
-        merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
-
-        # 🔹 NEW: log if indicators somehow wipe it out
-        if merged is None or merged.empty:
-            elapsed = time.perf_counter() - start_sym
-            print(f"[INGEST][SKIP] {namespace}:{timeframe} {sym} post-indicators empty after {elapsed:.1f}s", flush=True)
-            continue
-
-        storage.save_parquet(merged, parquet)
-        
-        # --- verify write landed where we think it did ---
-        try:
-            ok = storage.exists(parquet)
-        except Exception as e:
-            ok = False
-            print(f"[WRITE][ERR] exists-check failed for {parquet}: {e}", flush=True)
-        
-        if not ok:
-            print(f"[WRITE][MISS] {namespace}:{timeframe} {sym} -> {parquet}", flush=True)
-        else:
-            # optional: only print occasionally to avoid spam
-            if idx <= 3 or idx % 50 == 0:
-                print(f"[WRITE][OK] {namespace}:{timeframe} {sym} -> {parquet}", flush=True)
-
-
-        if idx == 1:  # only for the first symbol each timeframe
-            try:
-                df_chk = storage.load_parquet(parquet)
-                print(f"[WRITE][CHK] {namespace}:{timeframe} {sym} saved shape={df_chk.shape}", flush=True)
-            except Exception as e:
-                print(f"[WRITE][CHK][ERR] {namespace}:{timeframe} {sym}: {e}", flush=True)
 
 
         elapsed = time.perf_counter() - start_sym
@@ -514,6 +532,61 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
     if stock_eod and timeframe == "daily":
         write_eod_reconciliation_telemetry(timeframe)
     return rejected_symbols
+
+
+def build_timeframe_snapshot(
+    namespace: str,
+    timeframe: str,
+    symbols,
+    rejected_symbols: set[str] | None = None,
+) -> pd.DataFrame:
+    """Build and publish the canonical snapshot from accepted rolling frames."""
+    rejected_symbols = rejected_symbols or set()
+    base_cols = get_snapshot_base_cols(namespace, timeframe)
+    rows = []
+    for sym in symbols:
+        if sym in rejected_symbols:
+            continue
+        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
+        if not storage.exists(p):
+            continue
+        df = storage.load_parquet(p)
+        if df.empty:
+            continue
+        if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
+            df_valid = df.dropna(subset=["open", "high", "low", "close"], how="any")
+            if df_valid.empty:
+                continue
+            last = df_valid.iloc[-1]
+        else:
+            last = df.iloc[-1]
+        if namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
+            try:
+                require_valid_terminal_stock_eod(df, context=f"snapshot {namespace}/{timeframe}/{sym}")
+            except StockEODDataQualityError as exc:
+                print(f"[DATA_QUALITY][SNAPSHOT_EXCLUDE] {exc}", flush=True)
+                continue
+        missing = [c for c in base_cols if c not in last.index]
+        if missing:
+            raise KeyError(f"Snapshot missing columns {missing} for {namespace}/{timeframe}/{sym}")
+        row = last[base_cols].copy()
+        row["symbol"] = sym
+        rows.append(row)
+
+    if rows:
+        snap = pd.DataFrame(rows)[base_cols + ["symbol"]]
+        if snap.index.name is None:
+            snap.index.name = "date"
+        snap.columns = snap.columns.astype(str)
+        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+        storage.save_parquet(snap, out)
+        print(f"[OK] Wrote snapshot: {out}")
+        return snap
+    if namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
+        raise RuntimeError(
+            f"[DATA_QUALITY][FATAL] no valid rows for {namespace}:{timeframe}; snapshot not published"
+        )
+    return pd.DataFrame()
 
 
 def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes: set[str] | None = None):
@@ -527,7 +600,6 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
       - If a screen YAML exists, applies it via run_screen().
       - Otherwise, writes the raw latest-bar snapshot.
     """
-    
     # --- 1) Determine config & symbols for this timeframe ---
     cfg_tf = TF_CFG[namespace][timeframe]
     session = cfg_tf["session"]
@@ -545,75 +617,7 @@ def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes
         write_intraday_repair_telemetry(namespace, timeframe)
 
     # 3) Build single-timeframe snapshot (no screening/pivoting for now)
-    base_cols = get_snapshot_base_cols(namespace, timeframe)
-    rows = []
-
-    for sym in symbols:
-        if sym in rejected_symbols:
-            continue
-        p = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
-        """if not p.exists():"""
-        if not storage.exists(p):
-            continue
-
-        """df = pd.read_parquet(p)"""
-        df = storage.load_parquet(p)
-        if df.empty:
-            continue
-
-        # Take the last bar as a Series
-        #last = df.iloc[-1]
-
-        # Take the last bar as a Series (but futures intraday must be valid OHLC)
-        if namespace == "futures" and timeframe in ("intraday_1h", "intraday_4h"):
-            df_valid = df.dropna(subset=["open","high","low","close"], how="any")
-            if df_valid.empty:
-                continue
-            last = df_valid.iloc[-1]
-        else:
-            last = df.iloc[-1]
-
-        if namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
-            try:
-                require_valid_terminal_stock_eod(
-                    df, context=f"snapshot {namespace}/{timeframe}/{sym}"
-                )
-            except StockEODDataQualityError as e:
-                print(f"[DATA_QUALITY][SNAPSHOT_EXCLUDE] {e}", flush=True)
-                continue
-
-        # Ensure all base columns are present
-        missing = [c for c in base_cols if c not in last.index]
-        if missing:
-            raise KeyError(
-                f"Snapshot missing columns {missing} for {namespace}/{timeframe}/{sym}"
-            )
-
-        row = last[base_cols].copy()
-        row["symbol"] = sym
-        rows.append(row)
-
-    if rows:
-        snap = pd.DataFrame(rows)
-
-        # Enforce column order: base cols + symbol
-        snap = snap[base_cols + ["symbol"]]
-
-        # Optional: nice index name
-        if snap.index.name is None:
-            snap.index.name = "date"
-
-        # Ensure all columns are plain strings
-        snap.columns = snap.columns.astype(str)
-
-        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-        """snap.to_parquet(out)"""
-        storage.save_parquet(snap, out)
-        print(f"[OK] Wrote snapshot: {out}")
-    elif namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
-        raise RuntimeError(
-            f"[DATA_QUALITY][FATAL] no valid rows for {namespace}:{timeframe}; snapshot not published"
-        )
+    build_timeframe_snapshot(namespace, timeframe, symbols, rejected_symbols)
 
     # --- 4) Cascade to higher timeframes (if requested) ---
     if cascade:

@@ -2,12 +2,38 @@ from __future__ import annotations
 
 # indicators/composite_spy_qqq_volume_ma_ratio.py
 from functools import lru_cache
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Mapping
 import numpy as np
 import pandas as pd
 
 #from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
 
 from etl.sources import load_eod, load_130m_from_5m, load_quarterly_from_monthly, load_yearly_from_monthly
+
+
+REFERENCE_SYMBOLS = ("SPY", "QQQ")
+REFERENCE_EOD_WINDOW_BARS = 300
+_PRELOADED_EOD_REFERENCES: ContextVar[Mapping[tuple[str, str], pd.DataFrame] | None] = (
+    ContextVar("preloaded_eod_references", default=None)
+)
+
+
+@contextmanager
+def preloaded_eod_references(frames: Mapping[tuple[str, str], pd.DataFrame]):
+    """Use run-scoped EOD benchmark frames instead of provider-backed fallback."""
+    normalized = {
+        (str(symbol).upper(), str(timeframe)): frame.copy(deep=True)
+        for (symbol, timeframe), frame in frames.items()
+    }
+    token = _PRELOADED_EOD_REFERENCES.set(normalized)
+    _spy_qqq_vol_ma_for_timeframe.cache_clear()
+    try:
+        yield
+    finally:
+        _spy_qqq_vol_ma_for_timeframe.cache_clear()
+        _PRELOADED_EOD_REFERENCES.reset(token)
 
 
 @lru_cache(maxsize=16)
@@ -17,7 +43,17 @@ def _spy_qqq_vol_ma_for_timeframe(timeframe: str, length: int) -> tuple[pd.Serie
 
     Index will be the native index for that timeframe (daily, weekly, intraday_130m, ...).
     """
-    if timeframe == "intraday_130m":
+    preloaded = _PRELOADED_EOD_REFERENCES.get()
+    if preloaded is not None and timeframe in {"daily", "weekly", "monthly"}:
+        missing = [symbol for symbol in REFERENCE_SYMBOLS
+                   if (symbol, timeframe) not in preloaded]
+        if missing:
+            raise RuntimeError(
+                f"missing preloaded EOD references for {timeframe}: {missing}"
+            )
+        spy_df = preloaded[("SPY", timeframe)].copy(deep=True)
+        qqq_df = preloaded[("QQQ", timeframe)].copy(deep=True)
+    elif timeframe == "intraday_130m":
         spy_df = load_130m_from_5m("SPY")
         qqq_df = load_130m_from_5m("QQQ")
     elif timeframe == "quarterly":
