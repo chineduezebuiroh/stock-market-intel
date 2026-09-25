@@ -33,9 +33,9 @@ def run_profile() -> None:
     root = ROOT  # reuse global ROOT
 
     cmds = [
-        # 1) Refresh stocks daily/weekly/monthly (no Q/Y)
+        # 1) Acquire/reconcile/process the authoritative stock D/W/M family (no Q/Y)
         # ---------------------------------------------------------
-        [sys.executable, str(root / "jobs" / "run_timeframe.py"), "stocks", "daily", "--cascade"],
+        [sys.executable, str(root / "jobs" / "run_stock_eod_family.py")],
 
         # 2) Refresh ETF trends on weekly (middle) and daily (lower) timeframes
         # ----------------------------------------------------------------------
