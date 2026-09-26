@@ -9,4 +9,5 @@ PyYAML
 streamlit
 requests
 s3fs>=2024.3.0
-boto3>=1.34
+# PutObject IfMatch/IfNoneMatch are required for stock EOD pointer CAS.
+boto3>=1.43.75

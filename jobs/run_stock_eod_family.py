@@ -16,6 +16,10 @@ if str(ROOT) not in sys.path:
 
 from core import storage
 from core.paths import DATA, CFG
+from core.stock_eod_family import (
+    capture_current_pointer_state,
+    publish_stock_eod_family,
+)
 from etl.eod_family import (
     FAMILY_INTERVALS,
     TIMEFRAME_BY_INTERVAL,
@@ -33,9 +37,10 @@ from indicators.composite_spy_qqq_volume_ma_ratio import (
 from indicators.core import initialize_indicator_engine
 from jobs.run_timeframe import (
     TF_CFG,
-    build_timeframe_snapshot,
+    build_timeframe_snapshot_frame,
     process_one_preloaded,
     symbols_for_timeframe,
+    write_legacy_timeframe_snapshot,
 )
 
 
@@ -177,6 +182,7 @@ def run_family(
     run_id = run_id or (
         f"prod-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
     )
+    pointer_state = capture_current_pointer_state(DATA)
     acquire = acquire or acquire_stock_eod_family
     symbols = resolve_family_symbols()
     windows = production_window_bars()
@@ -271,8 +277,32 @@ def run_family(
             f"attempted={reference_attempted}, expected={expected_reference_attempts}"
         )
 
-    for timeframe in TIMEFRAMES:
-        build_timeframe_snapshot("stocks", timeframe, symbols, rejected[timeframe])
+    snapshots = {
+        timeframe: build_timeframe_snapshot_frame(
+            "stocks", timeframe, symbols, rejected[timeframe],
+        )
+        for timeframe in TIMEFRAMES
+    }
+    published = publish_stock_eod_family(
+        run_id, snapshots["daily"], snapshots["weekly"], snapshots["monthly"],
+        expected_pointer_revision=pointer_state.revision,
+        expected_previous_family_run_id=pointer_state.previous_family_run_id,
+        data_root=DATA,
+    )
+    print(
+        f"[FAMILY_PUBLISH][COMMIT_OK] family_run_id={published.pointer.family_run_id} "
+        f"previous={published.pointer.previous_family_run_id}", flush=True,
+    )
+    try:
+        for timeframe in TIMEFRAMES:
+            write_legacy_timeframe_snapshot("stocks", timeframe, snapshots[timeframe])
+    except Exception:
+        print(
+            "[FAMILY_PUBLISH][COMMITTED_BUT_MIRROR_FAILED] "
+            f"family_run_id={run_id} pointer_is_authoritative=true downstream_blocked=true",
+            flush=True,
+        )
+        raise
     return path
 
 

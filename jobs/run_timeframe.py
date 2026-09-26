@@ -534,13 +534,13 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
     return rejected_symbols
 
 
-def build_timeframe_snapshot(
+def build_timeframe_snapshot_frame(
     namespace: str,
     timeframe: str,
     symbols,
     rejected_symbols: set[str] | None = None,
 ) -> pd.DataFrame:
-    """Build and publish the canonical snapshot from accepted rolling frames."""
+    """Build a snapshot dataframe from accepted rolling frames without publishing it."""
     rejected_symbols = rejected_symbols or set()
     base_cols = get_snapshot_base_cols(namespace, timeframe)
     rows = []
@@ -578,15 +578,37 @@ def build_timeframe_snapshot(
         if snap.index.name is None:
             snap.index.name = "date"
         snap.columns = snap.columns.astype(str)
-        out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-        storage.save_parquet(snap, out)
-        print(f"[OK] Wrote snapshot: {out}")
         return snap
     if namespace == "stocks" and timeframe in {"daily", "weekly", "monthly"}:
         raise RuntimeError(
             f"[DATA_QUALITY][FATAL] no valid rows for {namespace}:{timeframe}; snapshot not published"
         )
     return pd.DataFrame()
+
+
+def write_legacy_timeframe_snapshot(
+    namespace: str, timeframe: str, snapshot: pd.DataFrame,
+) -> Path:
+    """Write the mutable canonical snapshot used by legacy/non-family consumers."""
+    out = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+    storage.save_parquet(snapshot, out)
+    print(f"[OK] Wrote snapshot: {out}")
+    return out
+
+
+def build_timeframe_snapshot(
+    namespace: str,
+    timeframe: str,
+    symbols,
+    rejected_symbols: set[str] | None = None,
+) -> pd.DataFrame:
+    """Preserve standalone behavior: build and publish one legacy snapshot."""
+    snapshot = build_timeframe_snapshot_frame(
+        namespace, timeframe, symbols, rejected_symbols,
+    )
+    if not snapshot.empty:
+        write_legacy_timeframe_snapshot(namespace, timeframe, snapshot)
+    return snapshot
 
 
 def run(namespace: str, timeframe: str, cascade: bool = False, allowed_universes: set[str] | None = None):
