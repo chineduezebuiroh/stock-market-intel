@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from types import SimpleNamespace
 
 from etl.eod_family import acquire_stock_eod_family
 from jobs import run_stock_eod_family as runner
@@ -133,6 +134,10 @@ def execute_family(
     calls, processed, snapshots, writes = [], [], [], []
     monkeypatch.setattr(runner, "symbols_for_timeframe", lambda *args: ["AAPL"])
     monkeypatch.setattr(runner, "initialize_indicator_engine", lambda *args: None)
+    monkeypatch.setattr(
+        runner, "capture_current_pointer_state",
+        lambda *args: SimpleNamespace(revision=None, previous_family_run_id=None),
+    )
     monkeypatch.setattr(runner.storage, "save_parquet",
                         lambda value, path: writes.append((value.copy(), path)))
     monkeypatch.setattr(
@@ -141,10 +146,17 @@ def execute_family(
         processed.append((timeframe, value.copy(), window)) or run_timeframe.ProcessOutcome(True),
     )
     monkeypatch.setattr(
-        runner, "build_timeframe_snapshot",
+        runner, "build_timeframe_snapshot_frame",
         lambda namespace, timeframe, symbols, rejected:
         snapshots.append((timeframe, set(rejected))) or pd.DataFrame({"symbol": ["AAPL"]}),
     )
+    monkeypatch.setattr(
+        runner, "publish_stock_eod_family",
+        lambda run_id, *args, **kwargs: SimpleNamespace(
+            pointer=SimpleNamespace(family_run_id=run_id, previous_family_run_id=None)
+        ),
+    )
+    monkeypatch.setattr(runner, "write_legacy_timeframe_snapshot", lambda *args: None)
 
     def loader(symbol, timeframe, **kwargs):
         calls.append((timeframe, kwargs["window_bars"]))
@@ -172,7 +184,7 @@ def execute_family(
         return family
 
     path = runner.run_family(
-        run_id="run", acquire=acquire, reference_loader=reference_loader,
+        run_id="prod-20260926T000000Z-00000001", acquire=acquire, reference_loader=reference_loader,
     )
     return path, calls, processed, snapshots, writes, reference_calls
 
@@ -185,7 +197,7 @@ def test_valid_family_uses_configured_windows_exactly_once_and_writes_telemetry(
     assert calls == [(tf, expected_windows[interval]) for interval, tf in zip(runner.FAMILY_INTERVALS, runner.TIMEFRAMES)]
     assert [item[0] for item in processed] == list(runner.TIMEFRAMES)
     assert all(not rejected for _, rejected in snapshots)
-    assert path == runner.DATA / "_health/stocks_eod_family/run/manifest.parquet"
+    assert path == runner.DATA / "_health/stocks_eod_family/prod-20260926T000000Z-00000001/manifest.parquet"
     telemetry = writes[0][0]
     summary = telemetry.loc[telemetry.record_type == "run_summary"].iloc[0]
     assert summary.requests_attempted == 3
@@ -285,3 +297,52 @@ def test_reference_failure_stops_before_primary_acquisition(monkeypatch):
             reference_loader=lambda *args, **kwargs: None,
         )
     assert not primary_calls
+
+
+def test_compatibility_mirrors_follow_commit_and_failure_is_explicit(monkeypatch, capsys):
+    events = []
+    monkeypatch.setattr(runner, "symbols_for_timeframe", lambda *args: ["AAPL"])
+    monkeypatch.setattr(runner, "initialize_indicator_engine", lambda *args: None)
+    monkeypatch.setattr(
+        runner, "capture_current_pointer_state",
+        lambda *args: SimpleNamespace(revision=None, previous_family_run_id=None),
+    )
+    monkeypatch.setattr(runner.storage, "save_parquet", lambda *args: None)
+    monkeypatch.setattr(
+        runner, "process_one_preloaded",
+        lambda *args, **kwargs: run_timeframe.ProcessOutcome(True),
+    )
+    monkeypatch.setattr(
+        runner, "build_timeframe_snapshot_frame",
+        lambda *args, **kwargs: pd.DataFrame({"symbol": ["AAPL"]}),
+    )
+    monkeypatch.setattr(
+        runner, "publish_stock_eod_family",
+        lambda run_id, *args, **kwargs: events.append("commit") or SimpleNamespace(
+            pointer=SimpleNamespace(family_run_id=run_id, previous_family_run_id=None)
+        ),
+    )
+
+    def mirror(*args):
+        events.append(f"mirror:{args[1]}")
+        raise OSError("mirror failed")
+
+    monkeypatch.setattr(runner, "write_legacy_timeframe_snapshot", mirror)
+
+    def acquire(run_id, symbol, **kwargs):
+        return acquire_stock_eod_family(
+            run_id, symbol,
+            loader=lambda symbol, timeframe, **kwargs: frame(
+                {"daily": "1d", "weekly": "1wk", "monthly": "1mo"}[timeframe]
+            ), **kwargs,
+        )
+
+    with pytest.raises(OSError, match="mirror failed"):
+        runner.run_family(
+            run_id="prod-20260926T110000Z-0000000d", acquire=acquire,
+            reference_loader=lambda symbol, timeframe, **kwargs: frame(
+                {"daily": "1d", "weekly": "1wk", "monthly": "1mo"}[timeframe]
+            ),
+        )
+    assert events == ["commit", "mirror:daily"]
+    assert "COMMITTED_BUT_MIRROR_FAILED" in capsys.readouterr().out
