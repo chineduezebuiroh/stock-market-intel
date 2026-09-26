@@ -20,12 +20,12 @@ def _score_etf_row(row: pd.Series) -> tuple[float, float]:
     Turn ETF indicator outputs into (etf_long_score, etf_short_score).
 
     This is intentionally simple and interpretable. You can tune weights later.
-    Scale is roughly 0–5 in each direction.
+    Scale is 0–7 in each direction.
     """
     wy = float(row.get("wyckoff_stage", 0) or 0)
     mac = float(row.get("macdv_guard", 0) or 0)
     #cloud = float(row.get("ma_trend_cloud", 0) or 0)
-    sigvol = float(row.get("significant_volume", 0) or 0)
+    sigvol = float(row.get("sig_vol_current_bar", 0) or 0)
 
     long_score = 0.0
     short_score = 0.0
@@ -43,7 +43,7 @@ def _score_etf_row(row: pd.Series) -> tuple[float, float]:
         short_score += 2.0
 
     # 3) Volume confirmation
-    if sigvol == 1.0:
+    if sigvol >= 1.0:
         long_score += 1.0
         short_score += 1.0
 

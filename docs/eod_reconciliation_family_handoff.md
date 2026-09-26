@@ -282,8 +282,9 @@ allocation. Do not reopen or implement it during PR A.
   - C: corrected EOD state/current participation rules.
 - No scoring or participation changes before that attribution is measured.
 - Dashboard Stage A/B remains pending.
-- ETF `significant_volume` versus `sig_vol_current_bar` mismatch remains separate
-  unless another completed change has resolved it.
+- The historical ETF `significant_volume` versus `sig_vol_current_bar` mismatch
+  was resolved separately by aligning the scorer with the canonical persisted
+  `sig_vol_current_bar` indicator-instance key.
 - W/M target repair remains deferred.
 - Provider concurrency/batching remains deferred unless needed for correctness.
 

@@ -645,10 +645,10 @@ def run(args: argparse.Namespace, client: Any | None = None) -> Path:
         # Mirror the current scorer for audit without calling any loader/writer.
         wy = _safe_value(snapshot_row, "wyckoff_stage")
         mac = _safe_value(snapshot_row, "macdv_guard")
-        wrong_volume_field = _safe_value(snapshot_row, "significant_volume")
+        scorer_volume_field = _safe_value(snapshot_row, "sig_vol_current_bar")
         expected_long = (4.0 if wy == 2 else 0.0) + (2.0 if mac == 2 else 0.0)
         expected_short = (4.0 if wy == -2 else 0.0) + (2.0 if mac == -2 else 0.0)
-        if wrong_volume_field == 1:
+        if scorer_volume_field >= 1:
             expected_long += 1.0
             expected_short += 1.0
         etf_rows.append(
@@ -681,9 +681,9 @@ def run(args: argparse.Namespace, client: Any | None = None) -> Path:
                 "snapshot_sig_vol_current_bar": _safe_value(
                     snapshot_row, "sig_vol_current_bar"
                 ),
-                "scorer_significant_volume_field": wrong_volume_field,
-                "known_volume_schema_mismatch": "significant_volume"
-                not in (snapshot_row.index if snapshot_row is not None else []),
+                "scorer_sig_vol_current_bar": scorer_volume_field,
+                "etf_volume_contract_aligned": "sig_vol_current_bar"
+                in (snapshot_row.index if snapshot_row is not None else []),
                 "score_recomputed_from_snapshot_long": expected_long,
                 "score_recomputed_from_snapshot_short": expected_short,
                 "cached_long_score": _safe_value(score_row, "etf_long_score"),
@@ -730,10 +730,10 @@ def run(args: argparse.Namespace, client: Any | None = None) -> Path:
             "market_date are excluded; latest objects are never substituted"
         ),
         "classifications": classifications,
-        "known_etf_volume_schema_mismatch": {
-            "scorer_field": "significant_volume",
+        "etf_volume_schema_contract": {
+            "scorer_field": "sig_vol_current_bar",
             "snapshot_field": "sig_vol_current_bar",
-            "repaired_by_diagnostic": False,
+            "status": "aligned",
         },
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2, default=str))
@@ -766,10 +766,10 @@ def run(args: argparse.Namespace, client: Any | None = None) -> Path:
         "",
         _markdown_table(etf_df),
         "",
-        "## Known ETF schema mismatch",
+        "## ETF significant-volume schema contract",
         "",
-        "The current ETF scorer asks for `significant_volume`; configured snapshots expose "
-        "`sig_vol_current_bar`. This diagnostic reports the mismatch and does not repair it.",
+        "The ETF scorer and configured snapshots both use the canonical "
+        "`sig_vol_current_bar` field. Tiers 1 and 2 each add one symmetric point.",
         "",
         "## Historical discipline",
         "",

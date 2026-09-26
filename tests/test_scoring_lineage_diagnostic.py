@@ -154,12 +154,12 @@ def test_timestamp_and_date_metadata_are_in_machine_readable_evidence(
     )
 
 
-def test_known_etf_volume_mismatch_is_reported_not_repaired():
+def test_aligned_etf_volume_contract_is_reported():
     source = SCRIPT.read_text()
     assert 'row.get("significant_volume"' not in source
-    assert '"scorer_field": "significant_volume"' in source
+    assert '"scorer_field": "sig_vol_current_bar"' in source
     assert '"snapshot_field": "sig_vol_current_bar"' in source
-    assert '"repaired_by_diagnostic": False' in source
+    assert '"status": "aligned"' in source
     assert "sig_vol_current_bar" in INDICATORS
 
 
