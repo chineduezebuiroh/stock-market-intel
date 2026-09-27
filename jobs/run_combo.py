@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 
 from core.paths import DATA, CFG, REF
 from core import storage
+from core.stock_eod_family import resolve_current_stock_eod_family
 
 import pandas as pd
 import yaml
@@ -68,7 +69,7 @@ def symbols_for_universe(universe: str) -> list[str]:
     return []
 
 
-def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
+def _role_frame_from_snapshot(snap: pd.DataFrame, role: str, source: str) -> pd.DataFrame:
     """
     Load the snapshot for a given namespace+timeframe and reshape it into a
     role-prefixed frame keyed by symbol.
@@ -81,14 +82,6 @@ def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
         - Preserve a per-role timestamp column (e.g. lower_date / middle_date)
           derived from either the index or an explicit 'date'/'timestamp' col.
     """
-    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
-    """if not snap_path.exists():"""
-    if not storage.exists(snap_path):
-        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
-        return pd.DataFrame()
-
-    """snap = pd.read_parquet(snap_path)"""
-    snap = storage.load_parquet(snap_path)
     if snap.empty:
         return pd.DataFrame()
 
@@ -101,6 +94,8 @@ def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
         # Use existing index name if present, otherwise call it 'date'
         time_col = snap.index.name or "date"
         snap = snap.reset_index()  # bring time into a column
+        if time_col not in snap.columns and "index" in snap.columns:
+            snap = snap.rename(columns={"index": time_col})
     else:
         # Try common column names
         for candidate in ("date", "timestamp", "datetime"):
@@ -109,7 +104,7 @@ def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
                 break
 
     if "symbol" not in snap.columns:
-        print(f"[WARN] Snapshot {snap_path} has no 'symbol' column; skipping.")
+        print(f"[WARN] Snapshot {source} has no 'symbol' column; skipping.")
         return pd.DataFrame()
 
     # Reorder columns to: symbol, time_col (if any), then rest
@@ -125,6 +120,14 @@ def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
 
     # Index is symbol, columns are role-prefixed (e.g. lower_date, middle_date)
     return snap
+
+
+def _load_role_frame(namespace: str, timeframe: str, role: str) -> pd.DataFrame:
+    snap_path = DATA / f"snapshot_{namespace}_{timeframe}.parquet"
+    if not storage.exists(snap_path):
+        print(f"[WARN] Snapshot not found for {namespace} {timeframe}: {snap_path}")
+        return pd.DataFrame()
+    return _role_frame_from_snapshot(storage.load_parquet(snap_path), role, str(snap_path))
 
 
 def build_combo_df(namespace: str, combo_name: str, mtf_cfg: dict) -> pd.DataFrame:
@@ -148,9 +151,19 @@ def build_combo_df(namespace: str, combo_name: str, mtf_cfg: dict) -> pd.DataFra
     middle_tf = cfg["middle_tf"]
     upper_tf = cfg["upper_tf"]
 
-    lower = _load_role_frame(namespace, lower_tf, "lower")
-    middle = _load_role_frame(namespace, middle_tf, "middle")
-    upper = _load_role_frame(namespace, upper_tf, "upper")
+    family_lineage = None
+    if namespace == "stocks" and (lower_tf, middle_tf, upper_tf) == (
+        "daily", "weekly", "monthly",
+    ):
+        family = resolve_current_stock_eod_family(data_root=DATA)
+        lower = _role_frame_from_snapshot(family.daily, "lower", family.pointer.family_run_id)
+        middle = _role_frame_from_snapshot(family.weekly, "middle", family.pointer.family_run_id)
+        upper = _role_frame_from_snapshot(family.monthly, "upper", family.pointer.family_run_id)
+        family_lineage = family.pointer
+    else:
+        lower = _load_role_frame(namespace, lower_tf, "lower")
+        middle = _load_role_frame(namespace, middle_tf, "middle")
+        upper = _load_role_frame(namespace, upper_tf, "upper")
 
     # 🔍 DEBUG: see what CI is actually loading
     print(
@@ -173,6 +186,9 @@ def build_combo_df(namespace: str, combo_name: str, mtf_cfg: dict) -> pd.DataFra
 
     # Bring symbol back as a column
     combo = combo.reset_index().rename(columns={"index": "symbol"})
+    if family_lineage is not None:
+        combo["stock_eod_family_run_id"] = family_lineage.family_run_id
+        combo["stock_eod_family_committed_at_utc"] = family_lineage.committed_at_utc
 
     # 🔹 NEW: filter to the combo's universe symbols
     universe = cfg.get("universe")
