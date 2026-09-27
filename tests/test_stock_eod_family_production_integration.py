@@ -96,7 +96,7 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
     )
 
     telemetry_path = runner.run_family(
-        run_id="integration",
+        run_id="prod-20260926T010000Z-00000002",
         acquire=acquire,
         reference_loader=reference_provider,
     )
@@ -134,4 +134,3 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
     assert summary.total_provider_attempts == 12
     assert summary.reconciliation_provider_requests == 0
     assert summary.downstream_provider_requests == 0
-

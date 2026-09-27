@@ -3,6 +3,9 @@ from __future__ import annotations
 # core/storage.py
 
 import os
+import hashlib
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,8 +14,20 @@ import pandas as pd
 from core.paths import DATA
 
 import s3fs
+import boto3
+from botocore.exceptions import ClientError
 
 _DATA_BACKEND = os.getenv("DATA_BACKEND", "local").lower()
+
+
+class StoragePreconditionFailed(RuntimeError):
+    """An atomic object precondition did not match current storage state."""
+
+
+@dataclass(frozen=True)
+class BytesWithRevision:
+    data: bytes | None
+    revision: str | None
 
 
 def _s3_bucket_prefix() -> tuple[str, str]:
@@ -106,6 +121,117 @@ def _s3_fs() -> s3fs.S3FileSystem:
         secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
         client_kwargs={"region_name": os.getenv("AWS_DEFAULT_REGION", "us-east-1")},
     )
+
+
+def _s3_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
+        region_name=os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+    )
+
+
+def _s3_bucket_key(path: Path) -> tuple[str, str]:
+    bucket, prefix = _s3_bucket_prefix()
+    rel = _rel_key_from_data(path)
+    return bucket, f"{prefix}/{rel}" if prefix else rel
+
+
+def _is_precondition_failure(exc: ClientError) -> bool:
+    response = exc.response
+    return response.get("ResponseMetadata", {}).get("HTTPStatusCode") in {409, 412} or str(
+        response.get("Error", {}).get("Code", "")
+    ) in {"ConditionalRequestConflict", "PreconditionFailed", "409", "412"}
+
+
+def read_bytes_with_revision(path: str | Path) -> BytesWithRevision:
+    """Read an object and its compare-and-swap revision, or return missing state."""
+    p = _ensure_path(path)
+    if _DATA_BACKEND == "local":
+        try:
+            data = p.read_bytes()
+        except FileNotFoundError:
+            return BytesWithRevision(None, None)
+        return BytesWithRevision(data, hashlib.sha256(data).hexdigest())
+    if _DATA_BACKEND == "s3":
+        bucket, key = _s3_bucket_key(p)
+        try:
+            response = _s3_client().get_object(Bucket=bucket, Key=key)
+        except ClientError as exc:
+            if str(exc.response.get("Error", {}).get("Code")) in {"NoSuchKey", "NotFound", "404"}:
+                return BytesWithRevision(None, None)
+            raise
+        return BytesWithRevision(response["Body"].read(), response["ETag"])
+    raise RuntimeError("Unreachable: DATA_BACKEND validation failed")
+
+
+def read_bytes(path: str | Path) -> bytes:
+    result = read_bytes_with_revision(path)
+    if result.data is None:
+        raise FileNotFoundError(path)
+    return result.data
+
+
+def _local_locked_update(path: Path, expected_revision: str | None, data: bytes) -> str:
+    import fcntl
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(f".{path.name}.lock")
+    with lock_path.open("a+b") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        current = path.read_bytes() if path.exists() else None
+        revision = None if current is None else hashlib.sha256(current).hexdigest()
+        if revision != expected_revision:
+            raise StoragePreconditionFailed(
+                f"object revision changed for {path}: expected={expected_revision!r} actual={revision!r}"
+            )
+        fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+            directory_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        return hashlib.sha256(data).hexdigest()
+
+
+def compare_and_swap_bytes(
+    path: str | Path, expected_revision: str | None, data: bytes,
+    *, content_type: str = "application/octet-stream",
+) -> str:
+    """Atomically create or replace an object iff its revision is unchanged."""
+    p = _ensure_path(path)
+    if _DATA_BACKEND == "local":
+        return _local_locked_update(p, expected_revision, data)
+    if _DATA_BACKEND == "s3":
+        bucket, key = _s3_bucket_key(p)
+        condition = {"IfNoneMatch": "*"} if expected_revision is None else {"IfMatch": expected_revision}
+        try:
+            response = _s3_client().put_object(
+                Bucket=bucket, Key=key, Body=data, ContentType=content_type, **condition,
+            )
+        except ClientError as exc:
+            if _is_precondition_failure(exc):
+                raise StoragePreconditionFailed(f"object revision changed for {p}") from exc
+            raise
+        return response["ETag"]
+    raise RuntimeError("Unreachable: DATA_BACKEND validation failed")
+
+
+def create_bytes_if_absent(
+    path: str | Path, data: bytes, *, content_type: str = "application/octet-stream",
+) -> str:
+    return compare_and_swap_bytes(path, None, data, content_type=content_type)
 
 
 def load_parquet(path: str | Path, **kwargs: Any) -> pd.DataFrame:
