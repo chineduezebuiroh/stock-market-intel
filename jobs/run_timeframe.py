@@ -324,6 +324,21 @@ class ProcessOutcome:
     reason: str | None = None
 
 
+def _materialize_canonical_rolling_bars(frame: pd.DataFrame) -> pd.DataFrame:
+    """Detach transient observation metadata from canonical rolling-bar state.
+
+    Provider and reconciliation ``DataFrame.attrs`` remain available through
+    acquisition, family reconciliation, and provenance extraction.  Rolling
+    parquet has a narrower contract: its durable state is the indexed bar and
+    indicator columns, while the family manifest is the durable provenance
+    record.  Copy first so materialization does not mutate the observation held
+    by the family runner.
+    """
+    canonical = frame.copy(deep=False)
+    canonical.attrs = {}
+    return canonical
+
+
 def process_one_preloaded(
     namespace: str,
     timeframe: str,
@@ -384,6 +399,10 @@ def process_one_preloaded(
     if merged is None or merged.empty:
         print(f"[INGEST][SKIP] {namespace}:{timeframe} {symbol} merged empty", flush=True)
         return ProcessOutcome(False, "merged frame is empty")
+
+    # Establish the rolling-bar storage boundary explicitly.  Do not depend on
+    # concat happening to discard non-JSON provider attrs when history exists.
+    merged = _materialize_canonical_rolling_bars(merged)
 
     merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
     if merged is None or merged.empty:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -57,6 +59,71 @@ def test_process_preloaded_uses_existing_path_and_never_fetches(monkeypatch, tmp
     assert outcome.accepted
     assert indicator_inputs[0].iloc[-1].close == 100.0
     assert saved[target].iloc[-1].close == 100.0
+
+
+def test_new_symbol_materializes_attr_free_rolling_parquet(monkeypatch, tmp_path, capsys):
+    """Provider metadata must not cross into canonical rolling-bar storage."""
+    incoming = frame("1d")
+    trading_periods = pd.DataFrame(
+        {
+            "start": [pd.Timestamp("2026-09-28 09:30", tz="America/New_York")],
+            "end": [pd.Timestamp("2026-09-28 16:00", tz="America/New_York")],
+        }
+    )
+    incoming.attrs["eod_provenance"].update(
+        provider_fetch_time="2026-09-28T22:01:02+00:00",
+        yfinance_version="1.7.0",
+        payload_sha256="0" * 64,
+    )
+    incoming.attrs["eod_provenance"]["provider_metadata"].update(
+        regularMarketTime=pd.Timestamp("2026-09-28 16:00", tz="America/New_York"),
+        currentTradingPeriod={
+            "regular": {
+                "start": pd.Timestamp("2026-09-28 09:30", tz="America/New_York"),
+                "end": pd.Timestamp("2026-09-28 16:00", tz="America/New_York"),
+            }
+        },
+        tradingPeriods=trading_periods,
+    )
+    target = tmp_path / "bars/stocks_daily/QMCO.parquet"
+
+    # This is the production failure shape before the rolling materialization
+    # boundary: pandas warns, then pyarrow rejects the Timestamp in attrs JSON.
+    unsafe_target = tmp_path / "unsafe.parquet"
+    with pytest.warns(UserWarning, match="Could not serialize pd.DataFrame.attrs"):
+        with pytest.raises(TypeError, match="Timestamp is not JSON serializable"):
+            incoming.to_parquet(unsafe_target)
+
+    indicator_attrs = []
+    real_apply_core = run_timeframe.apply_core
+
+    def indicators(value, **kwargs):
+        indicator_attrs.append(value.attrs.copy())
+        return real_apply_core(value, **kwargs)
+
+    monkeypatch.setattr(run_timeframe, "parquet_path", lambda *args: target)
+    monkeypatch.setitem(
+        run_timeframe.apply_core.__globals__["INDICATOR_FUNCS"],
+        "spy_qqq_volume_ma_ratio",
+        lambda value, **kwargs: pd.Series(index=value.index, dtype="float64"),
+    )
+    monkeypatch.setattr(run_timeframe, "apply_core", indicators)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        outcome = run_timeframe.process_one_preloaded(
+            "stocks", "daily", "QMCO", incoming, 260,
+        )
+
+    assert outcome.accepted
+    assert incoming.attrs["eod_provenance"]["provider_metadata"]["tradingPeriods"] is trading_periods
+    assert indicator_attrs == [{}]
+    assert not any("truth value of a DataFrame is ambiguous" in str(item.message) for item in caught)
+    assert target.exists()
+    persisted = pd.read_parquet(target)
+    assert persisted.attrs == {}
+    assert persisted.iloc[-1].close == incoming.iloc[-1].close
+    assert "truth value of a DataFrame is ambiguous" not in capsys.readouterr().out
 
 
 def test_process_preloaded_rejects_malformed_before_indicators_and_preserves_history(
