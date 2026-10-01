@@ -53,4 +53,4 @@ jobs:
           if [[ -n "$EXPECTED_PREVIOUS_FAMILY_RUN_ID" ]]; then
             args+=(--expected-previous-family-run-id "$EXPECTED_PREVIOUS_FAMILY_RUN_ID")
           fi
-          python diagnostics/validate_stock_eod_family_publication.py "${args[@]}"
+          PYTHONPATH=. python diagnostics/validate_stock_eod_family_publication.py "${args[@]}"
