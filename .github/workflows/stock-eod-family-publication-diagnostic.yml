@@ -1,0 +1,56 @@
+name: Stock EOD Family Publication Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_family_run_id:
+        description: Optional current family_run_id assertion
+        required: false
+        type: string
+      expected_previous_family_run_id:
+        description: Optional previous_family_run_id assertion
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-production-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATA_BACKEND: s3
+      S3_BUCKET_DATA: stock-intel-data-prod
+      S3_PREFIX_DATA: data
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate Stock EOD production publication (read-only)
+        env:
+          EXPECTED_FAMILY_RUN_ID: ${{ inputs.expected_family_run_id }}
+          EXPECTED_PREVIOUS_FAMILY_RUN_ID: ${{ inputs.expected_previous_family_run_id }}
+        run: |
+          args=()
+          if [[ -n "$EXPECTED_FAMILY_RUN_ID" ]]; then
+            args+=(--expected-family-run-id "$EXPECTED_FAMILY_RUN_ID")
+          fi
+          if [[ -n "$EXPECTED_PREVIOUS_FAMILY_RUN_ID" ]]; then
+            args+=(--expected-previous-family-run-id "$EXPECTED_PREVIOUS_FAMILY_RUN_ID")
+          fi
+          python diagnostics/validate_stock_eod_family_publication.py "${args[@]}"
