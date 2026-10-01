@@ -12,6 +12,9 @@ from core import stock_eod_family as family
 from diagnostics import validate_stock_eod_family_publication as diagnostic
 
 
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "stock-eod-family-publication-diagnostic.yml"
+
 PREVIOUS = "prod-20260927T045518Z-da16331f"
 CURRENT = "prod-20260929T035216Z-1ecf0088"
 
@@ -204,3 +207,11 @@ def test_read_only_behavior_no_write_apis_invoked(publication, monkeypatch):
     monkeypatch.setattr(storage, "compare_and_swap_bytes", forbidden)
     monkeypatch.setattr(storage, "create_bytes_if_absent", forbidden)
     _validate(publication)
+
+
+def test_workflow_invokes_diagnostic_with_repo_root_on_pythonpath():
+    workflow_text = WORKFLOW.read_text()
+    assert (
+        'PYTHONPATH=. python diagnostics/validate_stock_eod_family_publication.py "${args[@]}"'
+        in workflow_text
+    )
