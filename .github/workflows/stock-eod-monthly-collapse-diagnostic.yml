@@ -1,4 +1,4 @@
-name: Stock EOD Monthly Collapse Diagnostic
+name: Stock EOD Strict R3 Evidence Diagnostic
 
 on:
   workflow_dispatch:
@@ -32,5 +32,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Diagnose persisted monthly collapse evidence (read-only)
+      - name: Diagnose persisted strict R3 evidence (read-only)
         run: PYTHONPATH=. python diagnostics/diagnose_stock_eod_monthly_collapse.py
