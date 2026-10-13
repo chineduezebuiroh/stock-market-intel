@@ -1,0 +1,39 @@
+name: Stock EOD Timeframe Coverage Incident Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-persisted-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATA_BACKEND: s3
+      S3_BUCKET_DATA: stock-intel-data-prod
+      S3_PREFIX_DATA: data
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: Checkout diagnostic source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install required existing dependencies
+        run: python -m pip install pandas pyarrow 's3fs>=2024.3.0' 'boto3>=1.43.75'
+      - name: Analyze persisted production evidence (read-only)
+        run: PYTHONPATH=. python diagnostics/stock_eod_timeframe_coverage_incident.py --output-dir "$RUNNER_TEMP/stock-eod-coverage-incident"
+      - name: Upload diagnostic reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-eod-timeframe-coverage-incident-${{ github.run_id }}
+          path: ${{ runner.temp }}/stock-eod-coverage-incident/
+          if-no-files-found: error
+          retention-days: 30
