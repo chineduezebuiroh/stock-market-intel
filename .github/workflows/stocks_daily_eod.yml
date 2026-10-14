@@ -7,7 +7,16 @@ on:
     # - In Standard, 22:00 UTC ≈ 17:00 ET
     # - In DST, 21:00 UTC or 23:00 ≈ 17:00 ET (don't remember)
     - cron: "00 21-23 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      capture_application_boundaries:
+        description: Capture bounded B/C diagnostic evidence (separate authorization required)
+        type: boolean
+        default: false
+      request_raw_response_capture:
+        description: Evaluate raw observer safety (currently disabled; no hooks installed)
+        type: boolean
+        default: false
 
 concurrency:
   group: stocks-eod
@@ -27,6 +36,9 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
+      STOCK_EOD_CAPTURE_APPLICATION: ${{ inputs.capture_application_boundaries && '1' || '0' }}
+      STOCK_EOD_CAPTURE_RAW: ${{ inputs.request_raw_response_capture && '1' || '0' }}
+      STOCK_EOD_CAPTURE_DIR: ${{ runner.temp }}/stock-eod-acquisition-evidence
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       TELEGRAM_CHAT_ID_STOCKS_EOD: ${{ secrets.TELEGRAM_CHAT_ID_STOCKS_EOD }}
@@ -56,6 +68,16 @@ jobs:
       - name: Run stocks EOD (DST-aware guarded)
         run: |
           python .github/scripts/run_stocks_eod_guarded.py
+
+      - name: Upload optional acquisition diagnostic evidence
+        if: ${{ always() && (inputs.capture_application_boundaries || inputs.request_raw_response_capture) }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-eod-acquisition-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/stock-eod-acquisition-evidence/
+          if-no-files-found: warn
+          retention-days: 7
 
       #- name: Commit updated data snapshots
         #if: success()
