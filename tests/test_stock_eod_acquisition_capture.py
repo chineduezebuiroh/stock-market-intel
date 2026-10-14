@@ -339,3 +339,56 @@ def test_facts_dont_leak_secrets_and_snapshot_is_detached(tmp_path):
         assert r['boundaries']['B']['terminal_rows'][-1]['values']['3']['kind']=='NaN'
         assert 'SECRET-cookie-token' not in json.dumps(r)
         assert r['stage_facts']['B']=={}
+
+
+@pytest.mark.parametrize('event,application,raw,expected', [
+    ('schedule', None, None, ('0', '0', False)),
+    ('schedule', True, True, ('0', '0', False)),
+    ('workflow_dispatch', None, None, ('0', '0', False)),
+    ('workflow_dispatch', False, False, ('0', '0', False)),
+    ('workflow_dispatch', True, False, ('1', '0', True)),
+    ('workflow_dispatch', True, True, ('1', '1', True)),
+    ('workflow_dispatch', False, True, ('0', '1', True)),
+    ('push', None, None, ('0', '0', False)),
+    ('push', True, True, ('0', '0', False)),
+])
+def test_workflow_event_activation_contract(event, application, raw, expected):
+    import re
+    import yaml
+    path = Path(__file__).resolve().parents[1] / '.github/workflows/stocks_daily_eod.yml'
+    config = yaml.safe_load(path.read_text())
+    triggers = config.get('on', config.get(True))
+    assert set(triggers) == {'schedule', 'workflow_dispatch'}
+    assert triggers['schedule'] == [{'cron': '00 21-23 * * 1-5'}]
+    job = config['jobs']['daily-eod-stocks']
+    # runner is available at step level, never in job-level env.
+    assert not any('runner.' in str(v) for v in job['env'].values())
+    run = next(s for s in job['steps'] if s['name'].startswith('Run stocks EOD'))
+    assert run['env']['STOCK_EOD_CAPTURE_DIR'] == '${{ runner.temp }}/stock-eod-acquisition-evidence'
+    upload = next(s for s in job['steps'] if s.get('uses') == 'actions/upload-artifact@v4')
+
+    def evaluate(expression):
+        # Evaluate the workflow's restricted boolean expressions, including
+        # GitHub's absent-property empty-string value and short-circuit operators.
+        expression = expression.removeprefix('${{').removesuffix('}}').strip()
+        values = {'github.event_name': event,
+                  'inputs.capture_application_boundaries': '' if application is None else application,
+                  'inputs.request_raw_response_capture': '' if raw is None else raw}
+        for name, value in values.items():
+            expression = expression.replace(name, repr(value))
+        expression = expression.replace('always()', 'True').replace('&&', ' and ').replace('||', ' or ')
+        expression = re.sub(r'\btrue\b', 'True', expression)
+        assert re.fullmatch(r"[\w\s'()==]+", expression)
+        return eval(expression, {'__builtins__': {}}, {})
+
+    assert (evaluate(job['env']['STOCK_EOD_CAPTURE_APPLICATION']),
+            evaluate(job['env']['STOCK_EOD_CAPTURE_RAW']),
+            evaluate(upload['if'])) == expected
+    # Both main and feature pushes are excluded before any job exists.
+    if event == 'push':
+        for ref in ('refs/heads/main', 'refs/heads/diagnostic/test'):
+            assert 'push' not in triggers, ref
+    assert upload['continue-on-error'] is True
+    assert diag.raw_capability() in {
+        'unsupported_yfinance_version', 'unsupported_yfinance_source',
+        'get_cache_get_seam_does_not_expose_internal_retry_lineage'}

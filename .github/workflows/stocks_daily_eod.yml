@@ -36,9 +36,8 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
-      STOCK_EOD_CAPTURE_APPLICATION: ${{ inputs.capture_application_boundaries && '1' || '0' }}
-      STOCK_EOD_CAPTURE_RAW: ${{ inputs.request_raw_response_capture && '1' || '0' }}
-      STOCK_EOD_CAPTURE_DIR: ${{ runner.temp }}/stock-eod-acquisition-evidence
+      STOCK_EOD_CAPTURE_APPLICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.capture_application_boundaries == true && '1' || '0' }}
+      STOCK_EOD_CAPTURE_RAW: ${{ github.event_name == 'workflow_dispatch' && inputs.request_raw_response_capture == true && '1' || '0' }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       TELEGRAM_CHAT_ID_STOCKS_EOD: ${{ secrets.TELEGRAM_CHAT_ID_STOCKS_EOD }}
@@ -66,11 +65,13 @@ jobs:
           #echo "AWS_SECRET_ACCESS_KEY length: ${#AWS_SECRET_ACCESS_KEY}"
 
       - name: Run stocks EOD (DST-aware guarded)
+        env:
+          STOCK_EOD_CAPTURE_DIR: ${{ runner.temp }}/stock-eod-acquisition-evidence
         run: |
           python .github/scripts/run_stocks_eod_guarded.py
 
       - name: Upload optional acquisition diagnostic evidence
-        if: ${{ always() && (inputs.capture_application_boundaries || inputs.request_raw_response_capture) }}
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && (inputs.capture_application_boundaries == true || inputs.request_raw_response_capture == true) }}
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
