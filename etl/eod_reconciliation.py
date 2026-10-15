@@ -203,14 +203,18 @@ def repair_terminal_close(
         provenance.update(data_quality_status="excluded", close_status="malformed",
                           reason="target O/H/L/V is malformed")
         return frame, provenance
-    if (
-        values["high"] < values["low"]
-        or not values["low"] <= values["open"] <= values["high"]
-        or close is None
-        or not values["low"] <= close <= values["high"]
-    ):
+    # Open must be finite, but its position does not veto repair of Close.
+    if values["low"] > values["high"]:
+        reason = "target low exceeds target high"
+    elif close is None:
+        reason = "canonical close is nonfinite"
+    elif not values["low"] <= close <= values["high"]:
+        reason = "canonical close outside target low/high"
+    else:
+        reason = None
+    if reason is not None:
         provenance.update(data_quality_status="excluded", close_status="malformed",
-                          reason="canonical close violates target high/low")
+                          reason=reason)
         return frame, provenance
     repaired = frame.copy()
     repaired.iloc[-1, repaired.columns.get_loc("close")] = close

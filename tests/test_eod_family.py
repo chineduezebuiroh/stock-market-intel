@@ -137,7 +137,7 @@ def test_tier_two_conflict_and_range_rejection_match_existing_contract():
     source.daily.raw_frame.loc[SESSION, "high"] = 99.0
     rejected = reconcile_stock_eod_family(source)
     assert rejected.daily.data_quality_status == "excluded"
-    assert "high/low" in rejected.daily.repair_provenance["reason"]
+    assert rejected.daily.repair_provenance["reason"] == "canonical close outside target low/high"
 
 
 def test_weekly_and_monthly_targets_are_never_repaired():
@@ -192,3 +192,27 @@ def test_shadow_storage_path_cannot_alias_authoritative_paths(tmp_path):
                                     writer=lambda df, target: writes.append((df, target)))
     assert writes[0][1] == written == path
     assert tuple(writes[0][0].columns) == MANIFEST_SCHEMA
+
+
+@pytest.mark.parametrize('opening', [97.999, 101.001])
+@pytest.mark.parametrize('daily_close', [np.nan, 100.])
+def test_open_outside_bounds_preserves_native_and_finalized_separation(opening, daily_close):
+    from etl.eod_quality import valid_stock_eod_rows
+    source = family(d=daily_close)
+    source.daily.raw_frame.loc[SESSION, 'open'] = opening
+    before = source.daily.raw_frame.copy(deep=True)
+    result = reconcile_stock_eod_family(source)
+    pd.testing.assert_frame_equal(source.daily.raw_frame, before)
+    pd.testing.assert_frame_equal(result.daily.finalized_frame.drop(columns='close'),
+                                  before.drop(columns='close'))
+    assert valid_stock_eod_rows(result.daily.finalized_frame).all()
+    assert result.daily.data_quality_status == ('repaired' if pd.isna(daily_close) else 'valid')
+    assert result.daily.finalized_frame.iloc[-1].close == 100.
+    for interval in ('weekly', 'monthly'):
+        pd.testing.assert_frame_equal(getattr(result, interval).finalized_frame,
+                                      getattr(source, interval).raw_frame)
+    manifest = family_manifest(result)
+    daily = manifest.loc[manifest.interval.eq('1d')].iloc[0]
+    assert pd.isna(daily.raw_close) == pd.isna(daily_close)
+    assert daily.finalized_close == 100.
+    assert daily.quality_status == ('invalid' if pd.isna(daily_close) else 'valid')

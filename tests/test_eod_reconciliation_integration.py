@@ -151,3 +151,33 @@ def test_budget_selection_is_neutral_rotating_and_exhaustion_is_measurable(
     skipped = telemetry.loc[telemetry["reason"] == "supplemental fetch budget exhausted"]
     assert set(skipped.symbol) == rejected
     assert skipped.selection_priority_sha256.notna().all()
+
+
+def test_repaired_daily_open_outside_bounds_can_be_processed_without_changing_open(monkeypatch, tmp_path):
+    from etl.eod_family import acquire_stock_eod_family, reconcile_stock_eod_family
+    from etl.eod_reconciliation import observation_from_native_frame, canonical_terminal_session_close
+    daily = native_frame(np.nan, '1d')
+    daily.iloc[-1, daily.columns.get_loc('open')] = 97.999
+    weekly = native_frame(100., '1wk', last_trade=True)
+    monthly = native_frame(100., '1mo', last_trade=True)
+    source = acquire_stock_eod_family('synthetic', 'TEST', loader=lambda symbol, timeframe, **kw:
+                                     {'daily': daily, 'weekly': weekly, 'monthly': monthly}[timeframe])
+    finalized = reconcile_stock_eod_family(source)
+    repaired = finalized.daily.finalized_frame
+    assert pd.isna(source.daily.raw_frame.iloc[-1].close)
+    assert repaired.iloc[-1].open == 97.999
+    saved = []
+    monkeypatch.setattr(run_timeframe, 'parquet_path', lambda *args: tmp_path / 'daily.parquet')
+    monkeypatch.setattr(run_timeframe.storage, 'exists', lambda path: False)
+    monkeypatch.setattr(run_timeframe.storage, 'save_parquet', lambda df, path: saved.append(df.copy()))
+    monkeypatch.setattr(run_timeframe, 'apply_core', lambda df, **kwargs: df)
+    outcome = run_timeframe.process_one_preloaded('stocks', 'daily', 'TEST', repaired, 260)
+    assert outcome.accepted
+    assert saved[0].iloc[-1].open == 97.999
+    assert saved[0].iloc[-1].close == 100.
+    # Reconciliation roots remain the captured native frames, never finalized D.
+    native_d = observation_from_native_frame(source.daily.raw_frame)
+    assert native_d.close is None
+    result = canonical_terminal_session_close([native_d],
+        target_session=pd.Timestamp('2026-09-23').date(), price_tolerance=.005)
+    assert result.status == 'excluded'
