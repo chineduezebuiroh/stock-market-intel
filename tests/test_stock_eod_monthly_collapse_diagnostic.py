@@ -175,7 +175,16 @@ def test_diagnostic_uses_reads_only_and_never_calls_provider(monkeypatch, capsys
 
     result = diagnostic.run_diagnostic(data_root=Path("/read-only"))
     assert result.summary["TOTAL_AFFECTED_M"] == 1
-    assert "[PRE_NORMALIZATION_LIMITATION]" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "[PRE_NORMALIZATION_LIMITATION]" in output
+    for field in (
+        "LEGACY_OPEN_GATED_R3_REPAIRABLE", "LEGACY_OPEN_GATED_R3_NOT_REPAIRABLE",
+        "CLOSE_ONLY_R3_REPAIRABLE", "CLOSE_ONLY_R3_NOT_REPAIRABLE",
+        "OPEN_ONLY_BLOCKED_CLOSE_REPAIR", "OPEN_BELOW_LOW", "OPEN_ABOVE_HIGH",
+        "OPEN_NONFINITE", "LOW_ABOVE_HIGH", "CANDIDATE_CLOSE_OUTSIDE_LOW_HIGH",
+        "OPEN_OUTSIDE_LOW_HIGH",
+    ):
+        assert f"{field}=" in output
 
 
 def test_workflow_is_manual_only_read_only_and_has_root_import_contract():
@@ -190,3 +199,100 @@ def test_workflow_is_manual_only_read_only_and_has_root_import_contract():
         "run_stock_eod_family", "run_timeframe", "run_combo", "yfinance", "save_parquet",
         "compare_and_swap", "create_bytes", "registry",
     ))
+
+
+@pytest.mark.parametrize('opening', [98.0, 100.0, 103.0])
+@pytest.mark.parametrize('gate', ['pass', 'd_missing', 'w_missing', 'd_quality', 'w_quality',
+                                  'd_adjustment', 'w_session', 'w_evidence', 'conflict',
+                                  'period', 'currentness', 'bounds', 'candidate',
+                                  'volume', 'revision'])
+def test_open_counterfactual_changes_only_open_geometry(opening, gate):
+    rows = family(raw_open=opening, terminal_session='2026-10-01', session_evidence='evidence')
+    if gate == 'd_missing':
+        rows = rows[1:]
+    elif gate == 'w_missing':
+        rows.pop(1)
+    elif gate in {'d_quality', 'w_quality'}:
+        rows[0 if gate == 'd_quality' else 1]['quality_status'] = 'invalid'
+    elif gate == 'd_adjustment':
+        rows[0]['adjustment_mode'] = 'adjusted'
+    elif gate == 'w_session':
+        rows[1]['terminal_session'] = '2026-09-30'
+    elif gate == 'w_evidence':
+        rows[1]['session_evidence'] = 'weekly_interval_label'
+    elif gate == 'conflict':
+        rows[1]['raw_close'] = 101.006
+    elif gate == 'period':
+        rows[2]['terminal_session'] = '2026-09-30'
+    elif gate == 'currentness':
+        rows[2]['session_evidence'] = None
+    elif gate == 'bounds':
+        rows[2].update(raw_low=102.0, raw_high=99.0)
+    elif gate == 'candidate':
+        rows[0]['raw_close'] = rows[1]['raw_close'] = 104.0
+    elif gate == 'volume':
+        rows[2]['raw_volume'] = -1.0
+    elif gate == 'revision':
+        rows[0]['revision_ambiguous'] = True
+    result = analyze_rows(rows)
+    legacy = gate == 'pass' and 99 <= opening <= 102
+    close_only = gate == 'pass'
+    detail = result.detail.loc['AAPL']
+    assert bool(detail.strict_r3_repairable) == legacy
+    assert bool(detail.legacy_open_gated_r3_repairable) == legacy
+    assert bool(detail.close_only_r3_repairable) == close_only
+    assert bool(detail.open_only_blocked_close_repair) == (close_only and not legacy)
+    assert result.summary['CLOSE_ONLY_R3_REPAIRABLE'] == (
+        result.summary['LEGACY_OPEN_GATED_R3_REPAIRABLE']
+        + result.summary['OPEN_ONLY_BLOCKED_CLOSE_REPAIR']
+    )
+    if gate == 'bounds':
+        assert result.summary['LOW_ABOVE_HIGH'] == 1
+        assert result.summary['OPEN_ONLY_BLOCKED_CLOSE_REPAIR'] == 0
+    if gate == 'candidate':
+        assert result.summary['CANDIDATE_CLOSE_OUTSIDE_LOW_HIGH'] == 1
+
+
+@pytest.mark.parametrize('opening', [np.nan, np.inf, -np.inf])
+def test_nonfinite_open_still_excluded_from_exact_population_and_counterfactual(opening):
+    intervals = diagnostic.validate_manifest(pd.DataFrame(family(
+        raw_open=opening, terminal_session='2026-10-01', session_evidence='evidence',
+    )))
+    with pytest.raises(diagnostic.DiagnosticFailure, match='population mismatch'):
+        diagnostic.select_affected_monthly(intervals)
+    # Exercise the defensive substrate gate without weakening production selection.
+    affected = intervals.loc[intervals.interval.eq('1mo')]
+    result = diagnostic.analyze(intervals, affected)
+    assert result.summary['OPEN_NONFINITE'] == 1
+    assert result.summary['CLOSE_ONLY_R3_REPAIRABLE'] == 0
+    assert result.summary['LEGACY_OPEN_GATED_R3_REPAIRABLE'] == 0
+
+
+@pytest.mark.parametrize('interval_index', [0, 1])
+def test_finalized_or_repaired_peer_close_is_never_used(interval_index):
+    rows = family(raw_open=98.0, terminal_session='2026-10-01', session_evidence='evidence')
+    rows[interval_index].update(raw_close=np.nan, finalized_close=101.0,
+                                canonical_observed_close=101.0,
+                                finalization_status='repaired')
+    result = analyze_rows(rows)
+    assert result.summary['CLOSE_ONLY_R3_REPAIRABLE'] == 0
+    assert result.summary['OPEN_ONLY_BLOCKED_CLOSE_REPAIR'] == 0
+    assert result.detail.candidate.isna().all()
+
+
+def test_comparative_population_identity_and_geometry_counts(monkeypatch):
+    rows = []
+    for symbol, opening, low, high in [('IN', 100, 99, 102), ('BELOW', 98, 99, 102),
+                                      ('ABOVE', 103, 99, 102), ('INVERTED', 100, 102, 99)]:
+        rows.extend(family(symbol, raw_open=opening, raw_low=low, raw_high=high,
+                           terminal_session='2026-10-01', session_evidence='evidence'))
+    monkeypatch.setattr(diagnostic, 'EXPECTED_AFFECTED', 4)
+    summary = analyze_rows(rows).summary
+    assert summary['LEGACY_OPEN_GATED_R3_REPAIRABLE'] == 1
+    assert summary['CLOSE_ONLY_R3_REPAIRABLE'] == 3
+    assert summary['OPEN_ONLY_BLOCKED_CLOSE_REPAIR'] == 2
+    assert summary['LEGACY_OPEN_GATED_R3_NOT_REPAIRABLE'] == 3
+    assert summary['CLOSE_ONLY_R3_NOT_REPAIRABLE'] == 1
+    assert summary['OPEN_BELOW_LOW'] == 2  # includes inverted bounds, separately counted
+    assert summary['OPEN_ABOVE_HIGH'] == 2
+    assert summary['LOW_ABOVE_HIGH'] == 1

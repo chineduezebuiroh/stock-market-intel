@@ -200,6 +200,15 @@ def analyze(intervals: pd.DataFrame, affected: pd.DataFrame) -> EvidenceResult:
         record["m_substrate_valid"] = bool(
             None not in (o, h, low, volume) and volume >= 0 and low <= o <= h
         )
+        # Counterfactual only: keep finite native O/H/L/V and ordered bounds,
+        # but report Open geometry separately from Close-repair eligibility.
+        record["m_close_only_substrate_valid"] = bool(
+            None not in (o, h, low, volume) and volume >= 0 and low <= h
+        )
+        record["m_open_nonfinite"] = o is None
+        record["m_open_below_low"] = o is not None and low is not None and o < low
+        record["m_open_above_high"] = o is not None and h is not None and o > h
+        record["m_bounds_inverted"] = low is not None and h is not None and low > h
         record["m_interval_label"] = None  # not persisted in the health manifest
         session = _date_value(m.terminal_session)
         evidence = isinstance(m.session_evidence, str) and bool(m.session_evidence)
@@ -236,14 +245,29 @@ def analyze(intervals: pd.DataFrame, affected: pd.DataFrame) -> EvidenceResult:
         records.append(record)
 
     detail = pd.DataFrame(records).set_index("symbol")
-    detail["strict_r3_repairable"] = (
+    common_close_repair_gates = (
         detail["d_state"].eq("ELIGIBLE")
         & detail["w_state"].eq("ELIGIBLE")
         & detail["dw_status"].eq("AGREE")
-        & detail["m_substrate_valid"]
         & detail["m_current_period"].eq("PROVEN")
         & detail["m_current_through_target"].eq("PROVEN")
         & detail["m_range_pass"]
+    )
+    # Preserve the original result and reason partition as legacy aliases.
+    detail["legacy_open_gated_r3_repairable"] = (
+        common_close_repair_gates & detail.m_substrate_valid
+    )
+    detail["strict_r3_repairable"] = detail.legacy_open_gated_r3_repairable
+    detail["close_only_r3_repairable"] = (
+        common_close_repair_gates & detail.m_close_only_substrate_valid
+    )
+    # With finite values and Low <= High, the complement of Low <= Open <= High
+    # is exactly Open < Low or Open > High. Legacy is therefore a subset of
+    # close-only, partitioned into legacy passes and these Open-only exclusions.
+    detail["open_only_blocked_close_repair"] = (
+        ~detail.legacy_open_gated_r3_repairable
+        & detail.close_only_r3_repairable
+        & (detail.m_open_below_low | detail.m_open_above_high)
     )
     reasons = detail.apply(_primary_reason, axis=1)
     summary = _summary(detail)
@@ -298,6 +322,16 @@ def _summary(d: pd.DataFrame) -> dict[str, int]:
         "M_CURRENT_THROUGH_TARGET_FALSE": count(d.m_current_through_target.eq("FALSE")),
         "M_CURRENT_THROUGH_TARGET_UNKNOWN": count(d.m_current_through_target.eq("UNKNOWN")),
         "DW_AGREE_AND_M_RANGE_PASS": count(d.dw_status.eq("AGREE") & d.m_range_pass),
+        "LEGACY_OPEN_GATED_R3_REPAIRABLE": count(d.legacy_open_gated_r3_repairable),
+        "LEGACY_OPEN_GATED_R3_NOT_REPAIRABLE": count(~d.legacy_open_gated_r3_repairable),
+        "CLOSE_ONLY_R3_REPAIRABLE": count(d.close_only_r3_repairable),
+        "CLOSE_ONLY_R3_NOT_REPAIRABLE": count(~d.close_only_r3_repairable),
+        "OPEN_ONLY_BLOCKED_CLOSE_REPAIR": count(d.open_only_blocked_close_repair),
+        "OPEN_BELOW_LOW": count(d.m_open_below_low),
+        "OPEN_ABOVE_HIGH": count(d.m_open_above_high),
+        "OPEN_NONFINITE": count(d.m_open_nonfinite),
+        "LOW_ABOVE_HIGH": count(d.m_bounds_inverted),
+        "CANDIDATE_CLOSE_OUTSIDE_LOW_HIGH": count(d.candidate.notna() & ~d.m_range_pass),
         "STRICT_R3_REPAIRABLE": count(d.strict_r3_repairable),
         "STRICT_R3_NOT_REPAIRABLE": count(~d.strict_r3_repairable),
     }
@@ -407,6 +441,12 @@ def run_diagnostic(*, data_root: Path = DATA) -> EvidenceResult:
     print("[SUMMARY]")
     for name, value in result.summary.items():
         print(f"{name}={value}")
+    print("[OPEN_GEOMETRY_COUNTERFACTUAL]")
+    print("CLOSE_ONLY_R3_REPAIRABLE = LEGACY_OPEN_GATED_R3_REPAIRABLE + OPEN_ONLY_BLOCKED_CLOSE_REPAIR")
+    print("Open geometry remains separate native-quality evidence; this comparison does not change native quality policy.")
+    print("OPEN_NONFINITE is zero in the selected population because malformed-M selection requires finite O/H/L/V.")
+    print("STRICT_R3_* and PRIMARY_REASON_PARTITION retain legacy/open-gated semantics.")
+    print("OPEN_BELOW_LOW/OPEN_ABOVE_HIGH are quality counts and may overlap when LOW_ABOVE_HIGH; inverted bounds never count as OPEN_ONLY_BLOCKED_CLOSE_REPAIR.")
     print("[MONTHLY_SUBSTRATE]")
     numeric = affected[["raw_open", "raw_high", "raw_low", "raw_volume"]].apply(
         pd.to_numeric, errors="coerce"
