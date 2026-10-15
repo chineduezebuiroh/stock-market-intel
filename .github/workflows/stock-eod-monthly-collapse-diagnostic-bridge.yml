@@ -22,7 +22,7 @@ jobs:
       - name: Checkout diagnostic PR head
         uses: actions/checkout@v4
         with:
-          ref: a28aa588798539e50758a76863b67929b3e8afd9
+          ref: 59d361903f52a9da9b4a35c15de5ef4b2b28ba6c
 
       - name: Set up Python
         uses: actions/setup-python@v5
