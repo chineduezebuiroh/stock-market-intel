@@ -36,7 +36,9 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
-      STOCK_EOD_CAPTURE_APPLICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.capture_application_boundaries == true && '1' || '0' }}
+      # Temporary B/C capture for the malformed-terminal-Close investigation.
+      # Disable scheduled capture and upload after sufficient evidence is collected.
+      STOCK_EOD_CAPTURE_APPLICATION: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.capture_application_boundaries == true)) && '1' || '0' }}
       STOCK_EOD_CAPTURE_RAW: ${{ github.event_name == 'workflow_dispatch' && inputs.request_raw_response_capture == true && '1' || '0' }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -71,7 +73,7 @@ jobs:
           python .github/scripts/run_stocks_eod_guarded.py
 
       - name: Upload optional acquisition diagnostic evidence
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && (inputs.capture_application_boundaries == true || inputs.request_raw_response_capture == true) }}
+        if: ${{ always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.capture_application_boundaries == true || inputs.request_raw_response_capture == true))) }}
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:

@@ -342,8 +342,8 @@ def test_facts_dont_leak_secrets_and_snapshot_is_detached(tmp_path):
 
 
 @pytest.mark.parametrize('event,application,raw,expected', [
-    ('schedule', None, None, ('0', '0', False)),
-    ('schedule', True, True, ('0', '0', False)),
+    ('schedule', None, None, ('1', '0', True)),
+    ('schedule', True, True, ('1', '0', True)),
     ('workflow_dispatch', None, None, ('0', '0', False)),
     ('workflow_dispatch', False, False, ('0', '0', False)),
     ('workflow_dispatch', True, False, ('1', '0', True)),
@@ -360,6 +360,13 @@ def test_workflow_event_activation_contract(event, application, raw, expected):
     triggers = config.get('on', config.get(True))
     assert set(triggers) == {'schedule', 'workflow_dispatch'}
     assert triggers['schedule'] == [{'cron': '00 21-23 * * 1-5'}]
+    assert '    - cron: "00 21-23 * * 1-5"\n' in path.read_text()
+    assert set(config['jobs']) == {'daily-eod-stocks'}
+    commands = [s['run'] for s in config['jobs']['daily-eod-stocks']['steps'] if 'run' in s]
+    assert commands == [
+        'python -m pip install --upgrade pip\npip install -r requirements.txt\n',
+        'python .github/scripts/run_stocks_eod_guarded.py\n',
+    ]
     job = config['jobs']['daily-eod-stocks']
     # runner is available at step level, never in job-level env.
     assert not any('runner.' in str(v) for v in job['env'].values())
