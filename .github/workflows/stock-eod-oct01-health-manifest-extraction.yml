@@ -1,0 +1,41 @@
+# TEMPORARY investigation infrastructure; remove after the Oct. 1 strict-R3 investigation is complete.
+name: Extract Immutable Oct. 1 Stock EOD Health Manifest
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract-immutable-manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download existing immutable health manifest (read-only)
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_PAGER: ""
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stock-eod-oct01-health-manifest"
+          echo 'S3 bucket: stock-intel-data-prod'
+          echo 'S3 key: data/_health/stocks_eod_family/prod-20261002T003510Z-85b4ac62/manifest.parquet'
+          aws s3api get-object \
+            --bucket stock-intel-data-prod \
+            --key data/_health/stocks_eod_family/prod-20261002T003510Z-85b4ac62/manifest.parquet \
+            "$RUNNER_TEMP/stock-eod-oct01-health-manifest/manifest.parquet"
+          test -f "$RUNNER_TEMP/stock-eod-oct01-health-manifest/manifest.parquet"
+          stat --format='Local file size: %s bytes' "$RUNNER_TEMP/stock-eod-oct01-health-manifest/manifest.parquet"
+          sha256sum "$RUNNER_TEMP/stock-eod-oct01-health-manifest/manifest.parquet"
+
+      - name: Upload unchanged health manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-eod-oct01-health-manifest-${{ github.run_id }}
+          path: ${{ runner.temp }}/stock-eod-oct01-health-manifest/manifest.parquet
+          if-no-files-found: error
+          retention-days: 30
