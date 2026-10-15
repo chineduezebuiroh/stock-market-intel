@@ -5,6 +5,7 @@ import os
 import hashlib
 import pandas as pd
 import yfinance as yf
+from diagnostics.stock_eod_acquisition_capture import capture as capture_acquisition_boundary
 from datetime import datetime, timedelta
 
 import signal
@@ -404,7 +405,12 @@ def load_eod(
         print(f"[WARN] load_eod failed for {symbol} ({timeframe}): {e}")
         return pd.DataFrame()
 
+    capture_acquisition_boundary(
+        "B", df, requested_start=start_utc.isoformat(), requested_end=end_utc.isoformat(),
+        native_interval=interval, window_bars=window_bars, auto_adjust=False, actions=False,
+    )
     if df is None or df.empty:
+        capture_acquisition_boundary("C", df)
         return pd.DataFrame()
 
     # ------------------------------------------------------------------
@@ -453,9 +459,11 @@ def load_eod(
 
     # Keep only the columns we care about; add missing as NaN
     core_cols = ["open", "high", "low", "close", "adj_close", "volume"]
+    inserted_columns = []
     for c in core_cols:
         if c not in df.columns:
             df[c] = pd.NA
+            inserted_columns.append(c)
 
     df = df[core_cols]
 
@@ -463,7 +471,9 @@ def load_eod(
     # 4) Clean index & enforce sliding window
     # ------------------------------------------------------------------
     df = df.sort_index()
+    rows_before_deduplication = len(df)
     df = df[~df.index.duplicated(keep="last")]
+    duplicates_removed = rows_before_deduplication - len(df)
 
     if window_bars is not None and len(df) > window_bars:
         df = df.iloc[-window_bars:]
@@ -489,6 +499,9 @@ def load_eod(
             df.to_json(date_format="iso", orient="split").encode()
         ).hexdigest(),
     }
+    capture_acquisition_boundary(
+        "C", df, inserted_columns=inserted_columns, duplicates_removed=duplicates_removed,
+    )
     return df
 
 

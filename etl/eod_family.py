@@ -28,6 +28,7 @@ from etl.eod_reconciliation import (
     repair_terminal_close,
 )
 from etl.sources import safe_load_eod
+from diagnostics.stock_eod_acquisition_capture import acquisition, acquired_family
 
 
 FAMILY_INTERVALS = ("1d", "1wk", "1mo")
@@ -240,19 +241,22 @@ def acquire_stock_eod_family(
         frame = None
         error = None
         try:
-            frame = loader(symbol, timeframe=TIMEFRAME_BY_INTERVAL[interval],
-                           window_bars=windows[interval], session=session)
+            with acquisition(run_id, symbol, interval):
+                frame = loader(symbol, timeframe=TIMEFRAME_BY_INTERVAL[interval],
+                               window_bars=windows[interval], session=session)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
         completed = clock()
         observation = _native_observation(interval, frame, started, completed, error)
         acquired[interval] = observation
         succeeded += observation.acquisition_status == "success"
-    return StockEODObservationFamily(
+    family = StockEODObservationFamily(
         run_id=run_id, symbol=symbol.strip().upper(), daily=acquired["1d"],
         weekly=acquired["1wk"], monthly=acquired["1mo"],
         requests=RequestAccounting(3, succeeded, 3 - succeeded, FAMILY_INTERVALS),
     )
+    acquired_family(family)
+    return family
 
 
 def reconcile_stock_eod_family(family: StockEODObservationFamily) -> FamilyFinalization:

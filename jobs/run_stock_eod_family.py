@@ -29,6 +29,7 @@ from etl.eod_family import (
     reconcile_stock_eod_family,
 )
 from etl.sources import safe_load_eod
+from diagnostics.stock_eod_acquisition_capture import configured_family
 from indicators.composite_spy_qqq_volume_ma_ratio import (
     REFERENCE_EOD_WINDOW_BARS,
     REFERENCE_SYMBOLS,
@@ -172,6 +173,7 @@ def _summary_row(
     }])
 
 
+@configured_family
 def run_family(
     *,
     run_id: str | None = None,
