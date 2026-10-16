@@ -44,7 +44,8 @@ def telegram_chat_id_for_route(route: str | None = None) -> str:
     return os.getenv(key, "").strip() or _env("TELEGRAM_CHAT_ID")
 
 
-def send_telegram_message(text: str, *, chat_id: str | None = None) -> None:
+def send_telegram_message(text: str, *, chat_id: str | None = None,
+                          parse_mode: str | None = "Markdown") -> None:
     token = _env("TELEGRAM_BOT_TOKEN")
     chat_id = chat_id or _env("TELEGRAM_CHAT_ID")
 
@@ -54,9 +55,10 @@ def send_telegram_message(text: str, *, chat_id: str | None = None) -> None:
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown",  # keep simple; Telegram “MarkdownV2” is picky
         "disable_web_page_preview": True,
     }
+    if parse_mode is not None:
+        payload["parse_mode"] = parse_mode
     r = requests.post(url, data=payload, timeout=20)
     if not r.ok:
         raise RuntimeError(f"Telegram send failed: {r.status_code} {r.text}")
@@ -338,3 +340,31 @@ def notify_combo_signals(
     # record last fingerprint (for change suppression)
     save_alert_fingerprint(key, fp, meta={"combo": combo_name, "asof": asof})
     print(f"[NOTIFY] sent alert for {combo_name} (signals={len(rows)})")
+
+
+
+def notify_stock_eod_failure(reason: str, coverage: dict | None = None,
+                             health_details: Iterable[str] = ()) -> None:
+    """One explicit failure attempt, independent of signal presence/health success."""
+    lines = ["Stock EOD degraded/failure"]
+    if coverage is not None:
+        lines.append("Family: " + coverage["family_run_id"])
+        for tf, label in (("daily", "D"), ("weekly", "W"), ("monthly", "M")):
+            lines.append(f"{label}: {coverage['final_counts'][tf]} / "
+                         f"{coverage['expected_count']} ({coverage['coverage'][tf]:.2%})")
+        failing = ", ".join(coverage["failing_timeframes"]) or "none"
+        lines.append(f"Catastrophic guardrail: {'PASS' if coverage['passed'] else 'FAIL'}; "
+                     f"floor={coverage['threshold_percent']}%; failing={failing}")
+        missing = coverage.get("shortlist_missing")
+        lines.append("Shortlist missing from final DWM support: " +
+                     ("unknown" if missing is None else ", ".join(missing) or "none"))
+        lines.append("Publication/mirror/product stages may already have written usable results; see run logs.")
+    else:
+        lines.append("Family/coverage unavailable for this invocation; see run logs.")
+    lines.extend(health_details)
+    lines.append("Failure: " + reason)
+    text = "\n".join(lines)
+    print("[STOCK_EOD_FAILURE] " + text, flush=True)
+    if len(text) > 3900:
+        text = text[:3800] + "\n[truncated; full details in run logs]"
+    send_telegram_message(text, chat_id=telegram_chat_id_for_route("stocks_eod"), parse_mode=None)

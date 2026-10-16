@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 import os
 import sys
+import json
+import tempfile
 #from datetime import time
 #from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -16,10 +18,10 @@ if str(ROOT) not in sys.path:
 
 #from core.paths import DATA
 #from core import storage
-from core.health import run_combo_health, print_results
+from core.health import run_combo_health, print_results, require_stock_eod_final_coverage
 from core.guard import run_registry_guarded
 #from core.signal_alerts import notify_on_signals
-from core.notify import notify_combo_signals
+from core.notify import notify_combo_signals, notify_stock_eod_failure
 
 # =======================================================
 # ----- Config: Set job name constant for auidt log -----
@@ -51,23 +53,43 @@ def run_profile() -> None:
         [sys.executable, str(root / "jobs" / "run_combo.py"), "stocks", "stocks_c_dwm_all"],
     ]
 
-    for cmd in cmds:
-        print(f"[INFO] Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, check=True)
-        print(f"[INFO] Finished: {' '.join(cmd)} with return code {result.returncode}")
-    
-    # =======================================================
-    #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
-    # =======================================================
-    results = []
-    results += run_combo_health(combos=["stocks_c_dwm_shortlist"], universe_csv="shortlist_stocks.csv")
-    results += run_combo_health(combos=["stocks_c_dwm_all"], universe_csv=None)
-    print_results(results)
+    # A fresh local report binds coverage to this child invocation, not a later pointer.
+    with tempfile.TemporaryDirectory(prefix="stock-eod-profile-") as directory:
+        report_path = Path(directory) / "coverage.json"
+        cmds[0] += ["--coverage-report", str(report_path)]
+        coverage = None
+        results = []
+        try:
+            for index, cmd in enumerate(cmds):
+                print(f"[INFO] Running: {' '.join(cmd)}")
+                result = subprocess.run(cmd, check=True)
+                print(f"[INFO] Finished: {' '.join(cmd)} with return code {result.returncode}")
+                if index == 0:
+                    coverage = json.loads(report_path.read_text(encoding="utf-8"))
 
-    #notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False)
-    #notify_combo_signals("stocks_c_dwm_all", only_if_changed=False)
-    notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False, route="stocks_eod")
-    notify_combo_signals("stocks_c_dwm_all", only_if_changed=False, route="stocks_eod")
+            results += run_combo_health(combos=["stocks_c_dwm_shortlist"], universe_csv="shortlist_stocks.csv")
+            results += run_combo_health(combos=["stocks_c_dwm_all"], universe_csv=None)
+            print_results(results)
+            # Deliberately after existing publication, mirrors and product work.
+            require_stock_eod_final_coverage(coverage)
+            notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False, route="stocks_eod")
+            notify_combo_signals("stocks_c_dwm_all", only_if_changed=False, route="stocks_eod")
+        except Exception as original_error:
+            if coverage is None and report_path.exists():
+                try:
+                    coverage = json.loads(report_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    pass
+            try:
+                notify_stock_eod_failure(
+                    str(original_error), coverage,
+                    [f"{r.name}: {r.details}" for r in results if not r.ok],
+                )
+            except Exception as notification_error:
+                print(f"[NOTIFY][ERROR] Stock EOD failure notification failed: {notification_error}; "
+                      f"original failure remains primary: {original_error}", flush=True)
+            raise
+
 
 def main() -> None:
     event_name = os.getenv("GITHUB_EVENT_NAME", "")

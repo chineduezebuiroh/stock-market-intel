@@ -200,3 +200,40 @@ def print_results(results: Iterable[HealthResult], fail_on_error: bool = True) -
         print(msg)
         if fail_on_error:
             raise RuntimeError(msg)
+
+
+# Conservative operational floor, evaluated only on final candidate snapshots.
+STOCK_EOD_CATASTROPHIC_COVERAGE_PERCENT = 90
+
+
+def stock_eod_final_coverage(family_run_id: str, snapshots: dict[str, pd.DataFrame],
+                             routed_symbols: Iterable[object]) -> dict:
+    expected = _norm_syms(routed_symbols)
+    if not expected:
+        raise ValueError("Stock EOD coverage requires a nonempty routed universe")
+    counts = {
+        timeframe: len(_norm_syms(snapshots[timeframe]["symbol"]) & expected)
+        for timeframe in ("daily", "weekly", "monthly")
+    }
+    failing = [tf for tf, count in counts.items()
+               if count * 100 < STOCK_EOD_CATASTROPHIC_COVERAGE_PERCENT * len(expected)]
+    return {
+        "family_run_id": family_run_id,
+        "threshold_percent": STOCK_EOD_CATASTROPHIC_COVERAGE_PERCENT,
+        "expected_count": len(expected), "final_counts": counts,
+        "coverage": {tf: count / len(expected) for tf, count in counts.items()},
+        "failing_timeframes": failing, "passed": not failing,
+    }
+
+
+def require_stock_eod_final_coverage(report: dict) -> None:
+    if not report["passed"]:
+        details = ", ".join(
+            f"{tf}={count}/{report['expected_count']} ({report['coverage'][tf]:.2%})"
+            for tf, count in report["final_counts"].items()
+        )
+        raise RuntimeError(
+            f"Stock EOD catastrophic coverage failure: family={report['family_run_id']}; "
+            f"{details}; below {report['threshold_percent']}%: "
+            + ", ".join(report["failing_timeframes"])
+        )
