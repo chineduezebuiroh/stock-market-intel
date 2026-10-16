@@ -1,0 +1,133 @@
+# TEMPORARY transport-only investigation infrastructure; remove after calibration.
+name: Extract Bounded Stock EOD Semantic Calibration Evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract-fixed-cohort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Retrieve exactly 43 fixed objects and record transport inventory
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_PAGER: ""
+          AWS_MAX_ATTEMPTS: "1"
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          bucket = "stock-intel-data-prod"
+          families = (
+              "prod-20261001T002500Z-c924d845",
+              "prod-20261002T003510Z-85b4ac62",
+              "prod-20261003T001402Z-c78dfbe2",
+              "prod-20261007T002633Z-c019d022",
+              "prod-20261008T004729Z-ce8da38e",
+              "prod-20261009T010208Z-57851ffe",
+              "prod-20261009T235714Z-eb924d25",
+              "prod-20261012T222708Z-399ff22b",
+              "prod-20261013T022752Z-15df08d4",
+          )
+          # These two health manifests already exist outside S3 extraction.
+          health_already_retained = {
+              "prod-20261002T003510Z-85b4ac62",
+              "prod-20261012T222708Z-399ff22b",
+          }
+          objects = []
+          for family in families:
+              for filename in ("manifest.json", "daily.parquet", "weekly.parquet", "monthly.parquet"):
+                  objects.append((family, "generation/" + filename,
+                                  f"data/snapshots/stocks/eod/generations/{family}/{filename}"))
+              if family not in health_already_retained:
+                  objects.append((family, "health/manifest.parquet",
+                                  f"data/_health/stocks_eod_family/{family}/manifest.parquet"))
+          assert len(families) == len(set(families)) == 9
+          assert len(objects) == len({key for _, _, key in objects}) == 43
+          root = Path(os.environ["RUNNER_TEMP"]) / "stock-eod-semantic-calibration"
+          root.mkdir(exist_ok=False)
+          inventory = []
+          for family, role, key in objects:
+              relative = Path("calibration") / family / role
+              destination = root / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              temporary = destination.with_name(destination.name + ".partial")
+              record = {
+                  "family_run_id": family, "object_role": role,
+                  "bucket": bucket, "key": key, "local_path": str(relative),
+                  "status": "ERROR", "byte_size": None, "sha256": None,
+                  "etag": None, "last_modified": None,
+                  "returned_metadata": {}, "error": None,
+              }
+              try:
+                  # One invocation/request per allowlisted object, no retries/discovery.
+                  result = subprocess.run(
+                      ["aws", "s3api", "get-object", "--bucket", bucket, "--key", key,
+                       "--output", "json", "--no-cli-pager",
+                       "--cli-connect-timeout", "5", "--cli-read-timeout", "10",
+                       str(temporary)],
+                      capture_output=True, text=True, timeout=17, check=False,
+                  )
+                  if result.returncode:
+                      # Missing is distinct from access denial, timeout, or other errors.
+                      record["status"] = (
+                          "MISSING" if "(NoSuchKey)" in result.stderr or "(404)" in result.stderr
+                          else "ERROR"
+                      )
+                      record["error"] = result.stderr.strip()
+                  else:
+                      metadata = json.loads(result.stdout)
+                      record["returned_metadata"] = metadata
+                      record["etag"] = metadata.get("ETag")
+                      record["last_modified"] = metadata.get("LastModified")
+                      size = temporary.stat().st_size
+                      digest = hashlib.sha256()
+                      with temporary.open("rb") as stream:
+                          for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                              digest.update(chunk)
+                      if size != metadata.get("ContentLength"):
+                          raise ValueError("download size differs from returned ContentLength")
+                      temporary.rename(destination)  # No payload transformation.
+                      record.update(status="RETRIEVED", byte_size=size, sha256=digest.hexdigest())
+              except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+                  record["status"] = "ERROR"
+                  record["error"] = type(exc).__name__ + ": retrieval/integrity check failed"
+              finally:
+                  temporary.unlink(missing_ok=True)
+              inventory.append(record)
+              # Stable allowlist order, fixed schema, no generated wall-clock fields.
+              (root / "transport_inventory.json").write_text(
+                  json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+              )
+              print(json.dumps({k: record[k] for k in (
+                  "family_run_id", "object_role", "bucket", "key", "status", "byte_size", "sha256"
+              )}, sort_keys=True))
+          counts = {status: sum(r["status"] == status for r in inventory)
+                    for status in ("RETRIEVED", "MISSING", "ERROR")}
+          print(json.dumps(counts, sort_keys=True))
+          # Finish all 43 attempts before signaling incompleteness; artifact still uploads.
+          sys.exit(0 if counts["RETRIEVED"] == 43 else 1)
+          PY
+
+      - name: Upload unchanged objects and transport inventory
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-eod-semantic-calibration-forensics-${{ github.run_id }}
+          path: ${{ runner.temp }}/stock-eod-semantic-calibration/
+          if-no-files-found: error
+          retention-days: 30
