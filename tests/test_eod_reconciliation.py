@@ -94,11 +94,70 @@ def test_target_bounds_and_ohlcv_are_mandatory(low, high, bad):
     assert provenance["data_quality_status"] == "excluded"
 
 
-def test_target_open_must_also_be_inside_native_range():
+@pytest.mark.parametrize("opening", [98.999, 101.001])
+@pytest.mark.parametrize("tier", [1, 2])
+def test_open_geometry_does_not_veto_close_only_repair(opening, tier):
+    # Synthetic shape of the historical Open-only Close-repair rejection.
     target = frame()
-    target.loc[target.index[-1], "open"] = 102
+    target.loc[target.index[-1], "open"] = opening
+    original = target.copy(deep=True)
+    peers = ([obs("1wk"), obs("1mo")] if tier == 1 else
+             [obs("1wk", session_evidence="yfinance_interval_merge_lastTrade")])
+    result = canonical_terminal_session_close(peers, target_session=SESSION, price_tolerance=.005)
+    repaired, provenance = repair_terminal_close(target, result)
+    assert repaired.iloc[-1].close == 100
+    assert provenance["data_quality_status"] == "repaired"
+    assert provenance["evidence_tier"].startswith(f"tier_{tier}")
+    pd.testing.assert_frame_equal(target, original)
+    pd.testing.assert_frame_equal(repaired.drop(columns="close"), original.drop(columns="close"))
+    assert "target_open_outside_low_high" not in provenance
+
+
+@pytest.mark.parametrize("field,value,reason", [
+    ("low", 102., "target low exceeds target high"),
+    *[(field, value, "target O/H/L/V is malformed")
+      for field in ("open", "high", "low", "volume")
+      for value in (np.nan, np.inf, -np.inf)],
+    ("volume", -1., "target O/H/L/V is malformed"),
+])
+def test_target_substrate_rejections_remain(field, value, reason):
+    target = frame()
+    target.loc[target.index[-1], field] = value
+    original = target.copy(deep=True)
     result = canonical_terminal_session_close([obs("1wk"), obs("1mo")],
                                               target_session=SESSION, price_tolerance=.005)
+    repaired, provenance = repair_terminal_close(target, result)
+    pd.testing.assert_frame_equal(repaired, original)
+    assert provenance["data_quality_status"] == "excluded"
+    assert provenance["reason"] == reason
+
+
+@pytest.mark.parametrize("candidate,reason", [
+    (98.999, "canonical close outside target low/high"),
+    (101.001, "canonical close outside target low/high"),
+    *[(value, "canonical close is nonfinite") for value in (None, np.nan, np.inf, -np.inf)],
+])
+def test_candidate_rejections_are_truthful(candidate, reason):
+    from dataclasses import replace
+    result = canonical_terminal_session_close([obs("1wk"), obs("1mo")],
+                                              target_session=SESSION, price_tolerance=.005)
+    target = frame()
+    repaired, provenance = repair_terminal_close(target, replace(result, canonical_close=candidate))
+    assert pd.isna(repaired.iloc[-1].close)
+    assert provenance["reason"] == reason
+    assert provenance["data_quality_status"] == "excluded"
+
+
+@pytest.mark.parametrize("peers", [
+    [obs("1wk", 100), obs("1mo", 102)],
+    [obs("1wk", session_evidence=None)],
+    [obs("1wk", session=date(2026, 9, 22))],
+    [obs("1wk", independent_native=False), obs("1mo", independent_native=False)],
+])
+def test_open_geometry_cannot_bypass_peer_evidence_failure(peers):
+    target = frame()
+    target.loc[target.index[-1], "open"] = 102.
+    result = canonical_terminal_session_close(peers, target_session=SESSION, price_tolerance=.005)
     repaired, provenance = repair_terminal_close(target, result)
     assert pd.isna(repaired.iloc[-1].close)
     assert provenance["data_quality_status"] == "excluded"

@@ -102,8 +102,7 @@ mode, and `data_quality_status`. Q/Y inherit session and lineage from monthly.
 
 No counterexample was found once all proposed preconditions are genuinely
 satisfied **and** the following are added: the same instrument/listing/currency,
-same raw-price convention and provider revision epoch, target O/H/L/V validity,
-`low <= canonical_close <= high`, `low <= open <= high`, nonnegative volume,
+same raw-price convention and provider revision epoch, finite target O/H/L/V, `low <= high`, finite canonical Close within `[low, high]`, nonnegative volume,
 and no split/corporate-action ambiguity. Under that strengthened contract,
 cross-timeframe close-only recovery is technically sound: Close represents the
 shared terminal event, while O/H/L/V remain target-period aggregates. This is
@@ -135,7 +134,8 @@ freshness, revision, and range proof; source count alone is not authority.
 3. Establish target and sources' terminal-session/freshness metadata.
 4. Reconcile a canonical raw close from compatible evidence; disagreement
    fails closed.
-5. If target O/H/L/V and OHLC range/order invariants pass, repair only Close,
+5. If target O/H/L/V are finite, Volume is nonnegative, Low <= High, and the
+   finite canonical Close is inside target Low/High, repair only Close,
    record source(s), session, fetches, original state, tolerance, and confidence,
    then recompute all target indicators.
 6. Otherwise consider an old same-timeframe/same-label whole row only if its
@@ -173,3 +173,11 @@ Follow it with a revision that first adds read-only lineage/session metadata and
 direct-interval empirical telemetry, then adds retry and conditional canonical
 close recovery behind an observable policy. Do not replace the present gate
 with an unproven monthly fallback.
+
+### Close-repair geometry boundary
+
+The Close-repair substrate requires finite Open/High/Low/Volume, Volume >= 0,
+and Low <= High. The candidate must be finite and satisfy Low <= Close <= High.
+Finite Open outside Low/High does not by itself veto Close repair. Open is never
+clamped or repaired. This does not establish that an out-of-range Open is
+economically valid and does not change native Stock EOD quality policy.
