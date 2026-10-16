@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from core.paths import DATA, CFG  # no REF
 from core import storage
+from diagnostics.stock_eod_performance import measure, timed_stage
 
 import pandas as pd
 import yaml
@@ -339,6 +340,7 @@ def _materialize_canonical_rolling_bars(frame: pd.DataFrame) -> pd.DataFrame:
     return canonical
 
 
+@timed_stage("processing")
 def process_one_preloaded(
     namespace: str,
     timeframe: str,
@@ -360,8 +362,11 @@ def process_one_preloaded(
     parquet = parquet_path(DATA, f"{namespace}_{timeframe}", symbol)
     parquet.parent.mkdir(parents=True, exist_ok=True)
 
-    if storage.exists(parquet):
-        existing = storage.load_parquet(parquet)
+    with measure(timeframe, "storage_exists"):
+        has_existing = storage.exists(parquet)
+    if has_existing:
+        with measure(timeframe, "storage_read"):
+            existing = storage.load_parquet(parquet)
         bad_cols = [
             c for c in existing.columns
             if isinstance(c, str) and c.startswith("(")
@@ -404,14 +409,17 @@ def process_one_preloaded(
     # concat happening to discard non-JSON provider attrs when history exists.
     merged = _materialize_canonical_rolling_bars(merged)
 
-    merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
+    with measure(timeframe, "indicator"):
+        merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
     if merged is None or merged.empty:
         print(f"[INGEST][SKIP] {namespace}:{timeframe} {symbol} post-indicators empty", flush=True)
         return ProcessOutcome(False, "indicator output is empty")
 
-    storage.save_parquet(merged, parquet)
+    with measure(timeframe, "storage_write"):
+        storage.save_parquet(merged, parquet)
     try:
-        ok = storage.exists(parquet)
+        with measure(timeframe, "storage_exists"):
+            ok = storage.exists(parquet)
     except Exception as exc:
         ok = False
         print(f"[WRITE][ERR] exists-check failed for {parquet}: {exc}", flush=True)
@@ -422,7 +430,8 @@ def process_one_preloaded(
 
     if progress_index == 1:
         try:
-            df_chk = storage.load_parquet(parquet)
+            with measure(timeframe, "storage_read"):
+                df_chk = storage.load_parquet(parquet)
             print(f"[WRITE][CHK] {namespace}:{timeframe} {symbol} saved shape={df_chk.shape}", flush=True)
         except Exception as exc:
             print(f"[WRITE][CHK][ERR] {namespace}:{timeframe} {symbol}: {exc}", flush=True)
@@ -553,6 +562,7 @@ def ingest_one(namespace: str, timeframe: str, symbols, session: str, window_bar
     return rejected_symbols
 
 
+@timed_stage("snapshot")
 def build_timeframe_snapshot_frame(
     namespace: str,
     timeframe: str,

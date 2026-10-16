@@ -35,6 +35,7 @@ from etl.eod_family import (
 )
 from etl.sources import safe_load_eod
 from diagnostics.stock_eod_acquisition_capture import configured_family
+from diagnostics.stock_eod_performance import family_performance, identify_family
 from indicators.composite_spy_qqq_volume_ma_ratio import (
     REFERENCE_EOD_WINDOW_BARS,
     REFERENCE_SYMBOLS,
@@ -179,6 +180,7 @@ def _summary_row(
 
 
 @configured_family
+@family_performance
 def run_family(
     *,
     run_id: str | None = None,
@@ -190,6 +192,7 @@ def run_family(
     run_id = run_id or (
         f"prod-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
     )
+    identify_family(run_id)
     pointer_state = capture_current_pointer_state(DATA)
     acquire = acquire or acquire_stock_eod_family
     symbols = resolve_family_symbols()

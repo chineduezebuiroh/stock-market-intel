@@ -150,3 +150,34 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
     assert set(published.daily.symbol) == set(symbols)
     assert set(published.weekly.symbol) == {"AAPL"}
     assert set(published.monthly.symbol) == set(symbols)
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_production_contract_with_and_without_performance_collection(
+    monkeypatch, tmp_path, capsys, enabled,
+):
+    from diagnostics import stock_eod_performance as perf
+
+    if not enabled:
+        def unavailable():
+            raise OSError("diagnostic collector unavailable")
+        monkeypatch.setattr(perf, "FamilyPerformance", unavailable)
+    # Reuse all native acquisition/reference, finalized rolling frame, snapshot,
+    # B2 publication and failing-coverage-handoff assertions in both modes.
+    test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized_frames(
+        monkeypatch, tmp_path,
+    )
+    lines = [line for line in capsys.readouterr().out.splitlines()
+             if line.startswith("[STOCK_EOD_PERF] ")]
+    if not enabled:
+        assert not lines
+        return
+    assert len(lines) == 1
+    import json
+    performance = json.loads(lines[0].split(" ", 1)[1])
+    assert performance["family_run_id"] == "prod-20260926T010000Z-00000002"
+    assert performance["timing_errors"] == 0
+    assert {tf: bins["count"] for tf, bins in performance["processing"].items()} == {
+        "daily": 2, "weekly": 1, "monthly": 2,
+    }
+    assert all(bins["count"] == 1 for bins in performance["snapshot"].values())
