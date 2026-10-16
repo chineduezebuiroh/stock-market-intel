@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import sys
+import argparse
+import json
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -16,6 +19,8 @@ if str(ROOT) not in sys.path:
 
 from core import storage
 from core.paths import DATA, CFG
+from core.health import (stock_eod_final_coverage, require_stock_eod_final_coverage,
+                         load_universe_symbols)
 from core.stock_eod_family import (
     capture_current_pointer_state,
     publish_stock_eod_family,
@@ -179,6 +184,7 @@ def run_family(
     run_id: str | None = None,
     acquire: Callable | None = None,
     reference_loader: Callable = safe_load_eod,
+    coverage_report: Path | None = None,
 ) -> Path:
     """Acquire each D/W/M family once and publish existing canonical products."""
     run_id = run_id or (
@@ -285,6 +291,15 @@ def run_family(
         )
         for timeframe in TIMEFRAMES
     }
+    # Freeze post-processing membership, but do not withhold existing publication.
+    coverage = stock_eod_final_coverage(run_id, snapshots, symbols)
+    try:
+        support = set.intersection(*(set(frame.symbol) for frame in snapshots.values()))
+        coverage["shortlist_missing"] = sorted(load_universe_symbols("shortlist_stocks.csv") - support)
+    except Exception as exc:
+        coverage["shortlist_missing"] = None
+        coverage["shortlist_context_error"] = str(exc)
+    print("[STOCK_EOD_COVERAGE] " + json.dumps(coverage, sort_keys=True), flush=True)
     published = publish_stock_eod_family(
         run_id, snapshots["daily"], snapshots["weekly"], snapshots["monthly"],
         expected_pointer_revision=pointer_state.revision,
@@ -295,6 +310,13 @@ def run_family(
         f"[FAMILY_PUBLISH][COMMIT_OK] family_run_id={published.pointer.family_run_id} "
         f"previous={published.pointer.previous_family_run_id}", flush=True,
     )
+    # Local invocation-scoped handoff, never a new production S3 object/pointer.
+    if coverage_report is not None:
+        try:
+            coverage_report.write_text(json.dumps(coverage, sort_keys=True) + "\n", encoding="utf-8")
+        except OSError as exc:
+            # Preserve mirror availability; the profile fails if its report is absent.
+            print(f"[STOCK_EOD_COVERAGE][REPORT_ERROR] {exc}", flush=True)
     try:
         for timeframe in TIMEFRAMES:
             write_legacy_timeframe_snapshot("stocks", timeframe, snapshots[timeframe])
@@ -309,8 +331,18 @@ def run_family(
 
 
 def main() -> None:
-    path = run_family()
-    print(f"[OK] Stock EOD family production run complete: {path}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--coverage-report", type=Path,
+                        help="Local profile handoff; profile enforces coverage after product work")
+    args = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix="stock-eod-coverage-") as directory:
+        report_path = args.coverage_report or Path(directory) / "coverage.json"
+        path = run_family(coverage_report=report_path)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        if args.coverage_report is None:
+            require_stock_eod_final_coverage(report)
+        label = "OK" if report["passed"] else "COVERAGE_FAIL"
+        print(f"[{label}] Stock EOD family production run complete: {path}")
 
 
 if __name__ == "__main__":

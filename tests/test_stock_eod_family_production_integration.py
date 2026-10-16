@@ -95,10 +95,12 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
         lambda *args, **kwargs: pytest.fail("hidden downstream provider call"),
     )
 
+    coverage_path = tmp_path / "coverage.json"
     telemetry_path = runner.run_family(
         run_id="prod-20260926T010000Z-00000002",
         acquire=acquire,
         reference_loader=reference_provider,
+        coverage_report=coverage_path,
     )
 
     assert len(primary_calls) == 3 * len(symbols)
@@ -134,3 +136,17 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
     assert summary.total_provider_attempts == 12
     assert summary.reconciliation_provider_requests == 0
     assert summary.downstream_provider_requests == 0
+
+    # Post-repair/post-processing snapshot counts, never native-invalid counts.
+    import json
+    from core.stock_eod_family import resolve_current_stock_eod_family
+    report = json.loads(coverage_path.read_text())
+    assert report["expected_count"] == 2
+    assert report["final_counts"] == {"daily": 2, "weekly": 1, "monthly": 2}
+    assert report["failing_timeframes"] == ["weekly"]
+    # Despite the coverage flag, original B2 authority and mirrors remain usable.
+    published = resolve_current_stock_eod_family(data_root=tmp_path)
+    assert published.pointer.family_run_id == report["family_run_id"]
+    assert set(published.daily.symbol) == set(symbols)
+    assert set(published.weekly.symbol) == {"AAPL"}
+    assert set(published.monthly.symbol) == set(symbols)
