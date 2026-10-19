@@ -173,6 +173,18 @@ def _pctrank(x):
     return len(x[x <= x.iloc[-1]]) / len(x) * 100
 
 
+def _pctrank_raw(x: np.ndarray) -> float:
+    """Original inclusive percentile rank for ``rolling.apply(raw=True)``.
+
+    Pandas retains responsibility for window boundaries and missing-value
+    eligibility. Count ties with <= and preserve division before multiplication.
+    """
+    if len(x) == 0:
+        # A zero-length configured window retains the original indexing error.
+        return _pctrank(pd.Series(x))
+    return int(np.count_nonzero(x <= x[-1])) / len(x) * 100
+
+
 def _linear_reg_curve(series: pd.Series, length: int) -> pd.Series:
     """
     Rolling linear regression curve over 'length' bars.
