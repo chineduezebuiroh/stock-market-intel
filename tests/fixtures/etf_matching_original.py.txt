@@ -54,7 +54,7 @@ _STOPWORDS = {
     "the",
     "trust",
     "u.s.",
-    "usd",    
+    "usd",
     "vaneck",
     "weight",
 }
@@ -112,7 +112,7 @@ def _normalize_token(tok: str) -> str:
         return tok[:-1]
 
     return tok
-    
+
 
 def _tokenize(text: str | None) -> set[str]:
     """Tokenize with stopword removal + plural/inflection normalization."""
@@ -234,7 +234,7 @@ def _load_etf_match_overrides() -> dict[str, dict[str, str]]:
         }
 
     return out
-    
+
 # ===========================================================
 # Main Function - Public API
 # ===========================================================
@@ -300,7 +300,7 @@ def build_symbol_to_etf_map(
         )
 
     overrides = _load_etf_match_overrides()
-    
+
     rows: list[dict] = []
 
     for _, s in stocks_meta.iterrows():
@@ -335,7 +335,7 @@ def build_symbol_to_etf_map(
                 best_sector_etf = etf["symbol"]
                 best_sector_name = etf["name"]
 
- 
+
         override = overrides.get(sym)
 
         if override is not None:
@@ -351,7 +351,7 @@ def build_symbol_to_etf_map(
                 primary = best_sector_etf
             else:
                 primary = default_etf
-    
+
             # --- Secondary selection (keep the "other" candidate if meaningful) ---
             secondary = None
             # Candidate list: (etf_symbol, score)
