@@ -1,52 +1,52 @@
-symbol,name
+symbol,name,auto_match
 
-IGV,iShares Expanded Tech-Software Sector ETF
-XSW,SPDR S&P Software & Services ETF
-QQQ,Invesco QQQ Trust
-SMH,VanEck Semiconductor ETF
-CIBR,First Trust NASDAQ Cybersecurity ETF
-XLK,Technology Select Sector SPDR Fund
+IGV,iShares Expanded Tech-Software Sector ETF,true
+XSW,SPDR S&P Software & Services ETF,false
+QQQ,Invesco QQQ Trust,true
+SMH,VanEck Semiconductor ETF,true
+CIBR,First Trust NASDAQ Cybersecurity ETF,true
+XLK,Technology Select Sector SPDR Fund,true
 
-RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF
-ITB,iShares U.S. Home Construction ETF
-XRT,SPDR S&P Retail ETF
-IBUY,Amplify Online Retail ETF
-PEJ,Invesco Dynamic Leisure & Entertainment ETF
-JETS,U.S. Global Jets ETF
+RSPD,Invesco S&P 500 Equal Weight Consumer Discretionary ETF,true
+ITB,iShares U.S. Home Construction ETF,false
+XRT,SPDR S&P Retail ETF,true
+IBUY,Amplify Online Retail ETF,true
+PEJ,Invesco Dynamic Leisure & Entertainment ETF,true
+JETS,U.S. Global Jets ETF,true
 
-USO,United States Oil Fund
-UNG,United States Natural Gas Fund
-XOP,SPDR S&P Oil & Gas Exploration & Production ETF
-XLE,Energy Select Sector SPDR Fund
+USO,United States Oil Fund,true
+UNG,United States Natural Gas Fund,true
+XOP,SPDR S&P Oil & Gas Exploration & Production ETF,true
+XLE,Energy Select Sector SPDR Fund,true
 
-IYT,iShares U.S. Transportation ETF
-ITA,iShares U.S. Aerospace & Defense ETF
-XLI,Industrial Select Sector SPDR Fund
+IYT,iShares U.S. Transportation ETF,true
+ITA,iShares U.S. Aerospace & Defense ETF,true
+XLI,Industrial Select Sector SPDR Fund,true
 
-KBWB,Invesco KBW Bank ETF
-KCE,SPDR S&P Capital Markets ETF
-KIE,SPDR S&P Insurance ETF
-XLF,Financial Select Sector SPDR Fund
+KBWB,Invesco KBW Bank ETF,true
+KCE,SPDR S&P Capital Markets ETF,true
+KIE,SPDR S&P Insurance ETF,true
+XLF,Financial Select Sector SPDR Fund,true
 
-IHE,iShares U.S. Pharmaceuticals ETF
-IBB,iShares Biotechnology ETF
-XLV,Health Care Select Sector SPDR Fund
+IHE,iShares U.S. Pharmaceuticals ETF,true
+IBB,iShares Biotechnology ETF,true
+XLV,Health Care Select Sector SPDR Fund,true
 
-XLP,Consumer Staples Select SPDR Fund
-RSPS,Invesco S&P 500 Equal Weight Consumer Staples ETF
-FTXG,First Trust Nasdaq Food & Beverage ETF
+XLP,Consumer Staples Select SPDR Fund,true
+RSPS,Invesco S&P 500 Equal Weight Consumer Staples ETF,true
+FTXG,First Trust Nasdaq Food & Beverage ETF,true
 
-XLC,Communication Services Select Sector SPDR Fund
-IYZ,iShares U.S. Telecommunications ETF
+XLC,Communication Services Select Sector SPDR Fund,true
+IYZ,iShares U.S. Telecommunications ETF,true
 
-XLRE,Real Estate Select Sector SPDR Fund
+XLRE,Real Estate Select Sector SPDR Fund,true
 
-XLB,Materials Select Sector SPDR Fund
-VEGI,iShares MSCI Agriculture Producers ETF
+XLB,Materials Select Sector SPDR Fund,true
+VEGI,iShares MSCI Agriculture Producers ETF,true
 
-GLD,SPDR Gold Shares
+GLD,SPDR Gold Shares,true
 
-XLU,Utilities Select Sector SPDR Fund
+XLU,Utilities Select Sector SPDR Fund,true
 
-SPY,SPDR S&P 500 ETF Trust
-IWM,iShares Russell 2000 ETF
+SPY,SPDR S&P 500 ETF Trust,true
+IWM,iShares Russell 2000 ETF,true
