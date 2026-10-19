@@ -19,6 +19,28 @@ from .universe import load_etf_universe, load_options_universe
 from etl.etf_matching import build_symbol_to_etf_map  # reuse existing logic
 
 
+def _automatic_matching_candidates(etfs: pd.DataFrame) -> pd.DataFrame:
+    """Filter matching only; acquisition continues to use the full shortlist."""
+    if "auto_match" not in etfs.columns:
+        return etfs.copy()
+
+    enabled = []
+    for _, row in etfs.iterrows():
+        value = row["auto_match"]
+        if pd.isna(value) or str(value).strip() == "":
+            enabled.append(True)
+            continue
+        normalized = str(value).strip().lower()
+        if normalized not in {"true", "false"}:
+            raise ValueError(
+                f"Invalid auto_match value {value!r} for ETF {row['symbol']!r}; "
+                "expected true, false, or blank"
+            )
+        enabled.append(normalized == "true")
+
+    return etfs.loc[enabled].copy()
+
+
 
 def build_options_eligible_etf_map() -> pd.DataFrame:
     """
@@ -55,7 +77,7 @@ def build_options_eligible_etf_map() -> pd.DataFrame:
     # 3) Build mapping using your tokenized similarity helper
     mapping = build_symbol_to_etf_map(
         stocks_meta=stocks_meta,
-        etfs_df=etfs_df,
+        etfs_df=_automatic_matching_candidates(etfs_df),
         #industry_min_score=0.35,  # tweakable
         #sector_min_score=0.25,    # tweakable
     )

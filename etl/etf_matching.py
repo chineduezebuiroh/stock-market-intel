@@ -59,6 +59,14 @@ _STOPWORDS = {
     "weight",
 }
 
+# Match complete terms before punctuation is split (notably S&P and U.S.).
+# Use the tokenizer's alphanumeric boundaries and spaces to keep words apart.
+_stopword_re = re.compile(
+    r"(?<![a-z0-9])(?:"
+    + "|".join(re.escape(word) for word in sorted(_STOPWORDS, key=lambda word: (-len(word), word)))
+    + r")(?![a-z0-9])"
+)
+
 # A few known exceptions where trailing "s" is *not* just a plural.
 _PLURAL_EXCEPTIONS = {
     "ms", "us", "gas", "as", "is", "this", "yes"
@@ -119,12 +127,10 @@ def _tokenize(text: str | None) -> set[str]:
     if not isinstance(text, str) or not text:
         return set()
 
-    raw_tokens = _token_re.findall(text.lower())
+    raw_tokens = _token_re.findall(_stopword_re.sub(" ", text.lower()))
 
     tokens: set[str] = set()
     for t in raw_tokens:
-        if not t or t in _STOPWORDS:
-            continue
         norm = _normalize_token(t)
         if norm and norm not in _STOPWORDS:
             tokens.add(norm)

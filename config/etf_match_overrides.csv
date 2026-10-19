@@ -35,3 +35,15 @@ USAS,XLB,XLI,manual override
 VAC,PEJ,RSPD,manual override
 
 YUMC,PEJ,RSPD,manual override
+
+CVCO,ITB,RSPD,manual override
+DHI,ITB,RSPD,manual override
+GRBK,ITB,RSPD,manual override
+IBP,ITB,RSPD,manual override
+KBH,ITB,RSPD,manual override
+LEN,ITB,RSPD,manual override
+MHO,ITB,RSPD,manual override
+MTH,ITB,RSPD,manual override
+PHM,ITB,RSPD,manual override
+SKY,ITB,RSPD,manual override
+TOL,ITB,RSPD,manual override

@@ -23,7 +23,10 @@ def load_etf_universe() -> pd.DataFrame:
     config/shortlist_sector_etfs.csv
     """
     path = CFG / "shortlist_sector_etfs.csv"
-    return pd.read_csv(path)
+    # Preserve nonblank values such as "NA" for auto_match validation rather
+    # than silently interpreting them as missing/enabled. Other columns retain
+    # their existing CSV parsing behavior.
+    return pd.read_csv(path, converters={"auto_match": str})
 
 
 def load_options_universe() -> pd.DataFrame:
