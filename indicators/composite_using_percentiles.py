@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank, _linear_reg_curve
+from .helpers import _load_benchmark_vol_ma, _sma, _ema, _wema, _rolling_slope, _atr, _pctrank_raw, _linear_reg_curve
 
 # ------------------------------------------------------------------
 # Set Global Constants
@@ -100,8 +100,8 @@ def indicator_exh_abs_price_action(
     # Apply the rolling percentile calculation
     window_size = L  # Example window size
     
-    candlebody_percentile = candlebody_adj.rolling(window=window_size).apply(_pctrank, raw=False)
-    volume_percentile = volume.rolling(window=window_size).apply(_pctrank, raw=False)
+    candlebody_percentile = candlebody_adj.rolling(window=window_size).apply(_pctrank_raw, raw=True)
+    volume_percentile = volume.rolling(window=window_size).apply(_pctrank_raw, raw=True)
     
     # RoundDown / RoundUp to integer percent
     cb_pct_floor = np.floor(candlebody_percentile)
@@ -280,7 +280,7 @@ def indicator_significant_volume(
     # Apply the rolling percentile calculation
     window_size = L  # Example window size
     
-    volume_percentile = volume.rolling(window=window_size).apply(_pctrank, raw=False)
+    volume_percentile = volume.rolling(window=window_size).apply(_pctrank_raw, raw=True)
     # RoundUp to integer percent
     vol_pct_ceil = np.ceil(volume_percentile)
 
