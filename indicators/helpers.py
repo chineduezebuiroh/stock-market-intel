@@ -179,6 +179,9 @@ def _pctrank_raw(x: np.ndarray) -> float:
     Pandas retains responsibility for window boundaries and missing-value
     eligibility. Count ties with <= and preserve division before multiplication.
     """
+    if len(x) == 0:
+        # A zero-length configured window retains the original indexing error.
+        return _pctrank(pd.Series(x))
     return int(np.count_nonzero(x <= x[-1])) / len(x) * 100
 
 

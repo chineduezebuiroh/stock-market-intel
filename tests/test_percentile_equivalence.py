@@ -183,6 +183,24 @@ def test_callback_failure_preserves_per_indicator_fallback(monkeypatch, capsys):
     pd.testing.assert_frame_equal(actual, expected, check_exact=True)
 
 
+@pytest.mark.parametrize("L", [-1, 0])
+def test_invalid_window_preserves_original_exception_and_fallback(monkeypatch, capsys, L):
+    frame = bars(260)
+    for name in ("indicator_exh_abs_price_action", "indicator_significant_volume"):
+        with pytest.raises(Exception) as expected:
+            ORIGINAL[name](frame, lookback_period=L)
+        with pytest.raises(type(expected.value)) as actual:
+            getattr(percentile, name)(frame, lookback_period=L)
+        assert actual.value.args == expected.value.args
+    instances = core._STORAGE_PROFILES[("stocks", "daily")]
+    configured = [core.IndicatorInstance(inst.key, inst.base_id,
+                  {**inst.params, "lookback_period": L})
+                  if inst.base_id in {"exh_abs_price_action", "significant_volume"} else inst
+                  for inst in instances]
+    monkeypatch.setitem(core._STORAGE_PROFILES, ("stocks", "daily"), configured)
+    compare_core(monkeypatch, frame, "stocks", "daily", capsys)
+
+
 def test_replacement_correction_and_window_truncation(monkeypatch, capsys):
     from etl.window import update_fixed_window
     for tf, n in (("daily", 260), ("weekly", 210), ("monthly", 250)):
