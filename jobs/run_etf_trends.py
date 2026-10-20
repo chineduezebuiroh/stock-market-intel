@@ -50,6 +50,13 @@ def load_etf_symbols() -> list[str]:
     return syms
 
 
+def _canonical_etf_bars(frame: pd.DataFrame) -> pd.DataFrame:
+    """Detach acquisition-only provenance without changing bars or durable attrs."""
+    canonical = frame.copy(deep=False)
+    canonical.attrs.pop("eod_provenance", None)
+    return canonical
+
+
 def ingest_etf_timeframe(timeframe: str) -> None:
     """
     Ingest ETFs for a single timeframe (e.g. weekly) and build a snapshot
@@ -62,13 +69,13 @@ def ingest_etf_timeframe(timeframe: str) -> None:
 
     symbols = load_etf_symbols()
     if not symbols:
-        print("[WARN] No ETF symbols found.")
-        return
+        raise RuntimeError(f"Required ETF universe is empty: {timeframe}")
 
     rows = []
     for sym in symbols:
         df_new = load_eod(sym, timeframe=timeframe, window_bars=window_bars, session=session)
         if df_new is None or df_new.empty:
+            print(f"[WARN] ETF acquisition is empty; excluding {timeframe}/{sym}")
             continue
 
         parquet = parquet_path(DATA, f"{namespace}_{timeframe}", sym)
@@ -83,9 +90,17 @@ def ingest_etf_timeframe(timeframe: str) -> None:
         else:
             existing = pd.DataFrame()
 
+        # ETF ingestion has no reconciliation stage. Remove transient metadata
+        # from both inputs before concat can compare nested provider DataFrames.
+        df_new = _canonical_etf_bars(df_new)
+        existing = _canonical_etf_bars(existing)
         merged = update_fixed_window(df_new, existing, window_bars)
         if merged is None or merged.empty:
+            print(f"[WARN] ETF merged history is empty; excluding {timeframe}/{sym}")
             continue
+        # Preserve unrelated attrs even when concat drops unequal dictionaries.
+        # The latest observation takes precedence for matching durable keys.
+        merged.attrs = {**existing.attrs, **df_new.attrs}
 
         merged = apply_core(merged, namespace=namespace, timeframe=timeframe)
         """merged.to_parquet(parquet)"""
@@ -96,8 +111,7 @@ def ingest_etf_timeframe(timeframe: str) -> None:
         rows.append(last)
 
     if not rows:
-        print(f"[WARN] No ETF rows ingested for timeframe={timeframe}")
-        return
+        raise RuntimeError(f"Required ETF snapshot is empty: {timeframe}")
 
     snap = pd.concat(rows, axis=0)
     if snap.index.name is None:

@@ -218,7 +218,6 @@ def test_replacement_correction_and_window_truncation(monkeypatch, capsys):
 
 def test_family_persistence_provenance_coverage_and_publication(monkeypatch, tmp_path):
     from core import storage
-    from core.stock_eod_family import resolve_current_stock_eod_family
     from etl.eod_family import acquire_stock_eod_family
     from jobs import run_stock_eod_family as runner, run_timeframe
 
@@ -256,16 +255,18 @@ def test_family_persistence_provenance_coverage_and_publication(monkeypatch, tmp
                               ORIGINAL["indicator_exh_abs_price_action"])
                 patch.setitem(core.INDICATOR_FUNCS, "significant_volume",
                               ORIGINAL["indicator_significant_volume"])
-            path = runner.run_family(run_id="prod-20260923T220000Z-12345678",
-                                     acquire=acquire,
-                                     reference_loader=lambda *a, **kw: bars(300),
-                                     coverage_report=root / "coverage.json")
+            with pytest.raises(RuntimeError, match="catastrophic coverage"):
+                runner.run_family(run_id="prod-20260923T220000Z-12345678",
+                                  acquire=acquire,
+                                  reference_loader=lambda *a, **kw: bars(300),
+                                  coverage_report=root / "coverage.json")
+        path = runner.production_manifest_path("prod-20260923T220000Z-12345678")
         telemetry = storage.load_parquet(path)
         interval_rows = telemetry.loc[telemetry.record_type == "interval"]
         assert "repaired" in set(interval_rows.finalization_status)
         assert "excluded" in set(interval_rows.processing_status)
-        published = resolve_current_stock_eod_family(data_root=root)
-        assert set(published.weekly.symbol) == {"AAPL"}
+        from core.stock_eod_family import current_pointer_path
+        assert not current_pointer_path(root).exists()
         files = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*.parquet")}
         results.append((files, json.loads((root / "coverage.json").read_text())))
     assert results[0] == results[1]

@@ -66,12 +66,11 @@ def run_profile() -> None:
                 print(f"[INFO] Finished: {' '.join(cmd)} with return code {result.returncode}")
                 if index == 0:
                     coverage = json.loads(report_path.read_text(encoding="utf-8"))
+                    require_stock_eod_final_coverage(coverage)
 
             results += run_combo_health(combos=["stocks_c_dwm_shortlist"], universe_csv="shortlist_stocks.csv")
             results += run_combo_health(combos=["stocks_c_dwm_all"], universe_csv=None)
             print_results(results)
-            # Deliberately after existing publication, mirrors and product work.
-            require_stock_eod_final_coverage(coverage)
             notify_combo_signals("stocks_c_dwm_shortlist", only_if_changed=False, route="stocks_eod")
             notify_combo_signals("stocks_c_dwm_all", only_if_changed=False, route="stocks_eod")
         except Exception as original_error:

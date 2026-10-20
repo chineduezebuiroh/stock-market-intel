@@ -10,31 +10,43 @@ are not coverage inputs. Existing reconciliation and row-quality rules are uncha
 
 ## Execution seam and availability
 
-The family runner computes/logs `[STOCK_EOD_COVERAGE]` from the final snapshots
-immediately before publication, when the universe and candidate are frozen.
-It deliberately does not use that result to block B2 publication/CAS or legacy
-mirrors. A guardrail failure is an operational run failure, not rejection of
-family authority in v1. Immutable artifacts and partial dashboard results remain
-available under the existing architecture; nothing is deleted or rolled back.
-Existing structural failures (including a wholly empty required snapshot) still
-fail in the existing path and do not gain permission to publish.
+The family runner computes/logs `[STOCK_EOD_COVERAGE]` from final snapshots,
+writes the invocation-scoped local coverage report, and enforces the floor before
+immutable generation staging, pointer CAS, or legacy snapshot writes. Health
+telemetry and acquisition diagnostics remain available on failure. Rolling-bar
+writes made during acquisition/processing are not rolled back.
 
-The official profile gives its family subprocess a fresh temporary local
-`--coverage-report` path. The child writes the same report only after successful
-CAS, before mirror writes, so a later mirror failure can still be explained.
-The profile never rereads a possibly newer `current.json` to reconstruct counts.
-A missing/unreadable report fails the profile rather than sending normal signals.
-Report-write errors are logged without preventing mirror writes.
+The official profile supplies a fresh temporary `--coverage-report` path. Both
+family and profile enforce coverage; the profile checks immediately after the
+family returns, before ETF/combo stages. A failed family subprocess stops those
+stages. Missing/unreadable coverage reports fail closed before dependent work;
+report-write failure in the family also stops publication.
 
-The profile retains existing ETF/combo/health ordering. After successful product
-health, it enforces the coverage result before ordinary signal notifications.
-If product work or health fails first, that original failure remains primary;
-the explicit failure notification still includes the coverage result when
-available. Existing combo-stage failures still stop subsequent product work.
-The standalone family CLI, without `--coverage-report`, enforces the floor after
-publication and mirrors. Python `run_family` remains the acquisition/publication
-function returning the telemetry path; CLI/profile callers own terminal coverage
-enforcement.
+Weekly and daily ETF stages are mandatory, but configured ETFs are not a
+per-signal required universe. Isolated empty acquisitions/merges are logged and
+omitted from the new snapshot; a wholly empty universe or snapshot fails the
+stage. Processing and persistence exceptions remain fatal. No new ETF coverage
+percentage is imposed. Transient
+`eod_provenance` attrs are detached from both ETF merge inputs before indicators
+and persistence; unrelated attrs remain, with new values taking precedence.
+
+The existing overlay contract uses primary/optional-secondary mappings, left
+joins and available-data aggregation. An omission leaves only its dependent
+stocks with less overlay evidence. There is no documented minimum ETF coverage
+or per-stock overlay-readiness gate. In particular, all-absent ETF scores bypass
+ETF guards in the existing scorer; an ingestion success alone does not prove
+that every signal has ETF confirmation. Also, `load_etf_trend_scores` prefers an
+existing cached score object over the current snapshot, and ingestion does not
+refresh that cache. Before recovery, verify cache freshness/coherence or address
+it in a separately reviewed bounded change. These gaps are not silently changed
+into new signal/completeness policies by this hotfix.
+
+Stock-family technical publication is not end-to-end trading-signal readiness.
+ETF or combo failure still propagates, prevents normal signal notifications and
+prevents registry-success marking. Stock publication and subsequent ETF/combo
+writes are not one transaction: a later failure can leave a valid stock family
+published while products remain stale or partially written. A separate governed
+candidate/readiness promotion contract is required for full-cycle atomicity.
 
 ## Failure notification
 
@@ -58,7 +70,6 @@ or external Telegram outage; it guarantees an attempt for caught run failures,
 not delivery. No retry/ledger or exactly-once machinery is introduced.
 There is no accepted/candidate pointer split, dashboard warning/selector,
 product framework, relative policy, or semantic-state model. Streamlit continues
-to read existing mirrors/current combos; partial or previously retained combo
-files can therefore still be visible. The explicit run failure and Telegram
-attempt make the problem visible without hiding usable results. These adjacent
+to read existing mirrors/current combos; previously retained combo
+files can therefore still be visible after a failed product stage. These adjacent
 consumer/transactional issues are deferred; no performance optimization is included.

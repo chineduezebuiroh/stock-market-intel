@@ -102,6 +102,42 @@ def evaluate_long_candidate(**etf_scores):
     )[0]
 
 
+def test_missing_overlay_contract_uses_available_data_and_bypasses_all_absent():
+    # Document current signal policy; this is not an ingestion coverage floor.
+    assert evaluate_long_candidate(etf_lower_primary_long_score=np.nan,
+                                   etf_lower_secondary_long_score=4.0) == "long"
+    assert evaluate_long_candidate() == "long"  # known no-data guard bypass
+
+
+def test_isolated_etf_omission_only_changes_dependent_join_rows(tmp_path, monkeypatch):
+    pd.DataFrame([
+        {"symbol": "A", "etf_symbol_primary": "MISSING", "etf_symbol_secondary": "SECOND"},
+        {"symbol": "B", "etf_symbol_primary": "GOOD", "etf_symbol_secondary": None},
+    ]).to_csv(tmp_path / "symbol_to_etf_options_eligible.csv", index=False)
+    monkeypatch.setattr(guardrails, "REF", tmp_path)
+    partial = pd.DataFrame({"etf_long_score": [4., 5.], "etf_short_score": [0., 0.]},
+                           index=pd.Index(["GOOD", "SECOND"], name="etf_symbol"))
+    monkeypatch.setattr(guardrails, "load_etf_trend_scores", lambda tf: partial)
+    stocks = pd.DataFrame({"symbol": ["A", "B"]})
+    joined = guardrails.attach_etf_trends_for_options_combo(
+        stocks, {"universe": "options_eligible"}, lower_tf="daily", middle_tf="weekly",
+    ).set_index("symbol")
+    assert list(joined.index) == ["A", "B"]
+    assert pd.isna(joined.loc["A", "etf_primary_long_score"])
+    assert joined.loc["A", "etf_secondary_long_score"] == 5.
+    assert joined.loc["B", "etf_primary_long_score"] == 4.
+    assert pd.isna(joined.loc["B", "etf_secondary_long_score"])
+
+
+def test_existing_score_cache_precedes_snapshot_known_freshness_gap(monkeypatch):
+    cached = pd.DataFrame({"etf_long_score": [4.], "etf_short_score": [0.]}, index=["STALE"])
+    monkeypatch.setattr(trend_engine.storage, "exists", lambda path: True)
+    monkeypatch.setattr(trend_engine.storage, "load_parquet", lambda path: cached)
+    monkeypatch.setattr(trend_engine, "compute_etf_trend_scores",
+                        lambda tf: pytest.fail("existing contract prefers cache"))
+    assert trend_engine.load_etf_trend_scores("weekly") is cached
+
+
 def test_guardrail_threshold_four_changes_confirmation_and_opposition():
     assert evaluate_long_candidate(etf_lower_primary_long_score=3.0) == "watch"
     assert evaluate_long_candidate(etf_lower_primary_long_score=4.0) == "long"

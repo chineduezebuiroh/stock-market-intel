@@ -132,7 +132,7 @@ def test_failure_notice_attempt_preserves_original_and_current_invocation(monkey
         assert caught.value is original
     else:
         assert "catastrophic coverage" in str(caught.value)
-        assert events.count("command") == 5  # no early coverage abort
+        assert events.count("command") == 1  # fail before ETF/combo stages
         assert "signal" not in events
     assert len(notices) == 1 and notices[0][1] == report
     if failure == "health":
