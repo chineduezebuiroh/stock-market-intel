@@ -238,7 +238,7 @@ def test_reserved_categories_preserve_controls_and_complete_families(tmp_path):
 
 def test_deterministic_production_outputs_identical_with_capture(tmp_path,monkeypatch):
     # Reuse the existing complete production fixture (reference requests, repaired
-    # daily, excluded weekly, indicators, snapshots, immutable publication).
+    # daily, excluded weekly, indicators, blocked low-coverage publication).
     path=Path(__file__).with_name('test_stock_eod_family_production_integration.py')
     spec=importlib.util.spec_from_file_location('production_fixture',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     original=module.acquire_stock_eod_family
@@ -253,17 +253,19 @@ def test_deterministic_production_outputs_identical_with_capture(tmp_path,monkey
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(publication,'_utc_iso',lambda:'2026-10-13T22:00:00Z')
             with diag.collecting(diag.Config(application=enabled,raw_response=enabled,selected_symbols=('AAPL','MSFT'))) as collector:
-                module.test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized_frames(patch,root)
-            # Published generation/pointer bytes exist on disk; rolling snapshots
-            # are kept in the fixture's actual storage dictionary.
+                state=module.exercise_authoritative_family_rejection(patch,root)
+            # Coverage report survives; no generation/pointer/mirrors are created.
+            # Compare canonical rolling frames held in the fixture's storage.
             files={str(p.relative_to(root)):p.read_bytes() for p in root.rglob('*') if p.is_file() and not p.name.endswith('.lock')}
-            load=module.runner.storage.load_parquet
-            snapshots=[load(root/name) for name in ['snapshot_stocks_daily.parquet','snapshot_stocks_weekly.parquet','snapshot_stocks_monthly.parquet']]
+            snapshots=[state[key] for key in sorted(state) if '/bars/' in key]
             outputs.append((files,snapshots,collector))
     assert outputs[0][0]==outputs[1][0]
     for a,b in zip(outputs[0][1],outputs[1][1]):
         pd.testing.assert_frame_equal(a,b)
-        assert a.to_parquet()==b.to_parquet()
+        # The rejected symbol's deliberately unsafe old history is retained;
+        # only newly materialized canonical frames have a Parquet contract.
+        if 'eod_provenance' not in a.attrs:
+            assert a.to_parquet()==b.to_parquet()
     assert outputs[1][2].counts['selected']==6
 
 

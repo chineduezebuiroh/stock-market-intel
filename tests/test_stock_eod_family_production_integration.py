@@ -41,7 +41,7 @@ def history(interval: str, close: float = 100.0, *, malformed_terminal=False, pe
     return result
 
 
-def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized_frames(
+def exercise_authoritative_family_rejection(
     monkeypatch, tmp_path
 ):
     symbols = ["AAPL", "MSFT"]
@@ -96,12 +96,14 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
     )
 
     coverage_path = tmp_path / "coverage.json"
-    telemetry_path = runner.run_family(
-        run_id="prod-20260926T010000Z-00000002",
-        acquire=acquire,
-        reference_loader=reference_provider,
-        coverage_report=coverage_path,
-    )
+    with pytest.raises(RuntimeError, match="catastrophic coverage"):
+        runner.run_family(
+            run_id="prod-20260926T010000Z-00000002",
+            acquire=acquire,
+            reference_loader=reference_provider,
+            coverage_report=coverage_path,
+        )
+    telemetry_path = runner.production_manifest_path("prod-20260926T010000Z-00000002")
 
     assert len(primary_calls) == 3 * len(symbols)
     assert len(reference_calls) == 6
@@ -121,13 +123,7 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
     assert aapl_monthly.iloc[-1].close == 100.0
 
     pd.testing.assert_frame_equal(storage_state[str(msft_weekly_path)], old_weekly)
-    daily_snapshot = storage_state[str(tmp_path / "snapshot_stocks_daily.parquet")]
-    weekly_snapshot = storage_state[str(tmp_path / "snapshot_stocks_weekly.parquet")]
-    monthly_snapshot = storage_state[str(tmp_path / "snapshot_stocks_monthly.parquet")]
-    assert set(daily_snapshot.symbol) == set(symbols)
-    assert set(monthly_snapshot.symbol) == set(symbols)
-    assert set(weekly_snapshot.symbol) == {"AAPL"}
-    assert daily_snapshot.loc[daily_snapshot.symbol == "AAPL", "close"].iloc[0] == 100.0
+    assert not any("snapshot_stocks_" in key for key in storage_state)
 
     telemetry = storage_state[str(telemetry_path)]
     summary = telemetry.loc[telemetry.record_type == "run_summary"].iloc[0]
@@ -139,17 +135,17 @@ def test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized
 
     # Post-repair/post-processing snapshot counts, never native-invalid counts.
     import json
-    from core.stock_eod_family import resolve_current_stock_eod_family
     report = json.loads(coverage_path.read_text())
     assert report["expected_count"] == 2
     assert report["final_counts"] == {"daily": 2, "weekly": 1, "monthly": 2}
     assert report["failing_timeframes"] == ["weekly"]
-    # Despite the coverage flag, original B2 authority and mirrors remain usable.
-    published = resolve_current_stock_eod_family(data_root=tmp_path)
-    assert published.pointer.family_run_id == report["family_run_id"]
-    assert set(published.daily.symbol) == set(symbols)
-    assert set(published.weekly.symbol) == {"AAPL"}
-    assert set(published.monthly.symbol) == set(symbols)
+    from core.stock_eod_family import current_pointer_path
+    assert not current_pointer_path(tmp_path).exists()
+    return storage_state
+
+
+def test_authoritative_family_preserves_frames_but_blocks_low_coverage(monkeypatch, tmp_path):
+    exercise_authoritative_family_rejection(monkeypatch, tmp_path)
 
 
 @pytest.mark.parametrize("enabled", [False, True])
@@ -163,8 +159,8 @@ def test_production_contract_with_and_without_performance_collection(
             raise OSError("diagnostic collector unavailable")
         monkeypatch.setattr(perf, "FamilyPerformance", unavailable)
     # Reuse all native acquisition/reference, finalized rolling frame, snapshot,
-    # B2 publication and failing-coverage-handoff assertions in both modes.
-    test_authoritative_family_handoff_is_provider_closed_and_publishes_finalized_frames(
+    # prepublication rejection and failing-coverage-handoff assertions in both modes.
+    test_authoritative_family_preserves_frames_but_blocks_low_coverage(
         monkeypatch, tmp_path,
     )
     lines = [line for line in capsys.readouterr().out.splitlines()
