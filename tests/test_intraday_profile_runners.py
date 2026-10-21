@@ -200,3 +200,32 @@ def test_stocks_profile_contract(stocks, monkeypatch):
         ("stocks_d_4hdw_shortlist",),
         {"only_if_changed": True},
     )
+
+
+@pytest.mark.parametrize("month,day", [(1, 5), (7, 6)])
+def test_stocks_premarket_runner_preserves_registry_and_later_windows(
+    stocks, monkeypatch, month, day
+):
+    state = {"value": pd.DataFrame()}
+    monkeypatch.setattr(guard, "load_execution_registry", lambda: state["value"].copy())
+    monkeypatch.setattr(
+        guard, "save_execution_registry", lambda value: state.update(value=value.copy())
+    )
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    now = datetime(2026, month, day, 4, 59, tzinfo=NY)
+    monkeypatch.setattr(stocks, "now_ny", lambda: now)
+    calls = []
+    monkeypatch.setattr(stocks, "run_profile", lambda: calls.append(now))
+    with pytest.raises(SystemExit) as exc:
+        stocks.main()
+    assert exc.value.code == 0
+    assert state["value"].empty
+    for hour in (5, 9, 13, 17):
+        now = now.replace(hour=hour, minute=1)
+        stocks.main()
+        for minute in (21, 41, 59):
+            now = now.replace(minute=minute)
+            stocks.main()
+        assert len(calls) == (hour - 5) // 4 + 1
+    assert [value.hour for value in calls] == [5, 9, 13, 17]
+    assert state["value"].iloc[0]["check_window_hours"] == 3.4
