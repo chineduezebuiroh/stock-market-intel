@@ -45,7 +45,7 @@ def test_futures_session_day_boundaries(value, expected):
     assert is_futures_4h_target_hour(value) is expected
 
 
-@pytest.mark.parametrize("hour", [9, 13, 17])
+@pytest.mark.parametrize("hour", [5, 9, 13, 17])
 @pytest.mark.parametrize("day", [6, 7, 8, 9, 10])
 def test_stocks_weekday_target_hours(day, hour):
     assert is_stocks_4h_target_hour(ny(2026, 7, day, hour))
@@ -92,3 +92,21 @@ def test_dst_conversion_uses_new_york_wall_clock(utc_value, local_hour):
 def test_naive_datetime_is_rejected():
     with pytest.raises(ValueError, match="timezone-aware"):
         is_retry_opportunity(datetime(2026, 1, 6, 9, 1))
+
+
+@pytest.mark.parametrize("day", ["2026-01-05", "2026-03-06", "2026-03-09", "2026-07-06", "2026-10-30", "2026-11-02"])
+def test_stocks_complete_daily_policy_across_dst(day):
+    local = datetime.fromisoformat(day).replace(tzinfo=NY)
+    for hour in range(24):
+        for minute in range(60):
+            value = local.replace(hour=hour, minute=minute)
+            expected = hour in {5, 9, 13, 17} and minute not in {0, 20, 40}
+            assert is_stocks_4h_opportunity(value) is expected
+            assert is_stocks_4h_opportunity(value.astimezone(timezone.utc)) is expected
+    assert is_stocks_4h_target_hour(local.replace(hour=5, minute=0))
+    assert not is_stocks_4h_opportunity(local.replace(hour=4, minute=59))
+
+
+@pytest.mark.parametrize("day", [11, 12])
+def test_stocks_premarket_weekends_rejected(day):
+    assert not is_stocks_4h_opportunity(ny(2026, 7, day, 5))

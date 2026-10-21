@@ -84,3 +84,18 @@ def test_obsolete_workflows_are_absent():
     workflows = ROOT / ".github/workflows"
     for name in OBSOLETE:
         assert not (workflows / name).exists()
+
+
+def test_scheduler_reaches_stocks_premarket_in_est_and_edt():
+    from datetime import datetime, timezone
+    from core.intraday_cadence import is_stocks_4h_opportunity
+
+    # Unchanged UTC cron runs every hour Sunday-Friday, including both UTC
+    # equivalents of Monday-Friday 05 ET. Each retry can reach eligibility.
+    schedule = triggers(load(WORKFLOW))["schedule"]
+    assert schedule == [{"cron": "1,21,41 * * * 0-5"}]
+    for month, day, utc_hour in [(1, 5, 10), (7, 6, 9)]:
+        for minute in (1, 21, 41):
+            value = datetime(2026, month, day, utc_hour, minute, tzinfo=timezone.utc)
+            assert (value.weekday() + 1) % 7 in range(6)
+            assert is_stocks_4h_opportunity(value)

@@ -10,7 +10,7 @@ NY_TZ = ZoneInfo("America/New_York")
 RETRY_MINUTES = frozenset({1, 21, 41})
 MAX_SCHEDULE_DELAY_MINUTES = 18
 FUTURES_4H_TARGET_HOURS = frozenset({1, 5, 9, 13, 17, 21})
-STOCKS_4H_TARGET_HOURS = frozenset({9, 13, 17})
+STOCKS_4H_TARGET_HOURS = frozenset({5, 9, 13, 17})
 
 
 def as_new_york(now: datetime) -> datetime:
@@ -49,7 +49,7 @@ def is_futures_4h_target_hour(now: datetime) -> bool:
 
 
 def is_stocks_4h_target_hour(now: datetime) -> bool:
-    """Apply the weekday 09/13/17 ET Stocks 4h target-hour policy."""
+    """Apply the weekday 05/09/13/17 ET Stocks 4h target-hour policy."""
     local = as_new_york(now)
     return local.weekday() <= 4 and local.hour in STOCKS_4H_TARGET_HOURS
 
