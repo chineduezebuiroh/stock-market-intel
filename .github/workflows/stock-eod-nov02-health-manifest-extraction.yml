@@ -1,0 +1,53 @@
+# TEMPORARY investigation infrastructure; remove after the November weekly-collapse investigation.
+# Review and separate authorization are required before dispatch.
+name: Extract November Stock EOD Incident and Control Health Manifests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract-immutable-manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download existing failed and control health manifests (read-only)
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_PAGER: ""
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T001713Z-044f683b"
+          echo 'S3 bucket: stock-intel-data-prod'
+          echo 'S3 key: data/_health/stocks_eod_family/prod-20261103T001713Z-044f683b/manifest.parquet'
+          aws s3api get-object \
+            --bucket stock-intel-data-prod \
+            --key data/_health/stocks_eod_family/prod-20261103T001713Z-044f683b/manifest.parquet \
+            "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T001713Z-044f683b/manifest.parquet"
+          test -f "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T001713Z-044f683b/manifest.parquet"
+          stat --format='Local file size: %s bytes' "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T001713Z-044f683b/manifest.parquet"
+          sha256sum "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T001713Z-044f683b/manifest.parquet"
+
+          mkdir -p "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T031823Z-b2cccde3"
+          echo 'S3 bucket: stock-intel-data-prod'
+          echo 'S3 key: data/_health/stocks_eod_family/prod-20261103T031823Z-b2cccde3/manifest.parquet'
+          aws s3api get-object \
+            --bucket stock-intel-data-prod \
+            --key data/_health/stocks_eod_family/prod-20261103T031823Z-b2cccde3/manifest.parquet \
+            "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T031823Z-b2cccde3/manifest.parquet"
+          test -f "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T031823Z-b2cccde3/manifest.parquet"
+          stat --format='Local file size: %s bytes' "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T031823Z-b2cccde3/manifest.parquet"
+          sha256sum "$RUNNER_TEMP/stock-eod-nov02-health-manifest/prod-20261103T031823Z-b2cccde3/manifest.parquet"
+
+      - name: Upload both unchanged health manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-eod-nov02-health-manifest-${{ github.run_id }}
+          path: ${{ runner.temp }}/stock-eod-nov02-health-manifest/
+          if-no-files-found: error
+          retention-days: 30
