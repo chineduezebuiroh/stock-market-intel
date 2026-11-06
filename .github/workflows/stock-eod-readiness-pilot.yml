@@ -29,7 +29,7 @@ concurrency:
 jobs:
   sample-native-observations:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 55
     env:
       AWS_EC2_METADATA_DISABLED: 'true'
       PYTHONUNBUFFERED: '1'
