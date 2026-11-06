@@ -78,6 +78,9 @@ def panel_from_manifest(path, expected_hash):
     if set(frame.family_run_id.dropna()) != {FAILED}: raise ValueError('Wrong incident family')
     weekly = frame.loc[(frame.record_type == 'interval') & (frame.interval == '1wk')].copy()
     if len(weekly) != 2335 or weekly.symbol.duplicated().any(): raise ValueError('Incomplete weekly cohort')
+    for value in weekly.fetch_started_at:
+        stamp = pd.Timestamp(value)
+        if pd.isna(stamp) or stamp.tzinfo is None: raise ValueError('Missing or naive cohort timestamp')
     times = pd.to_datetime(weekly.fetch_started_at, utc=True, errors='coerce')
     if times.isna().any(): raise ValueError('Missing cohort timestamps')
     post = times >= pd.Timestamp('2026-11-03T01:00:00Z')
@@ -155,7 +158,7 @@ def collect(panel, p, history, clock, output, transport_count, versions, inciden
     if not p['window_start'] <= now <= p['latest_start']: raise ValueError('Outside authorized five-minute start window')
     if not 1 <= len(panel) <= MAX_SYMBOLS or len({x['symbol'] for x in panel}) != len(panel): raise ValueError('Invalid symbol budget')
     output.mkdir(parents=True, exist_ok=False)
-    report = {'schema_version': 1, 'incident_sha256': incident_hash, 'panel': panel,
+    report = {'schema_version': 1, 'incident_family_run_id': FAILED, 'incident_sha256': incident_hash, 'panel': panel,
               'plan': {k: v.isoformat() if isinstance(v, pd.Timestamp) else v for k,v in p.items()},
               'versions': versions, 'adjustment_mode': 'raw_unadjusted', 'prepost': False,
               'attempted_history_calls': 0, 'history_budget': MAX_HISTORY, 'http_budget': MAX_HTTP, 'observations': []}
@@ -244,8 +247,9 @@ def compare(reports):
         if not all(a['status'] == 'CURRENT_SESSION_OBSERVED' for a in assessments):
             result.append({'symbol':k[0],'interval':k[1],'status':'UNVERIFIED_OR_INVALID'});continue
         same = len({a['terminal_label'] for a in assessments}) == 1
-        deltas = {field: [assessments[i]['values'][field]-assessments[0]['values'][field] for i in [1,2]] for field in ['Close','Volume']}
+        deltas = {field: [assessments[i]['values'][field]-assessments[0]['values'][field] for i in [1,2]] for field in QUOTES}
         result.append({'symbol':k[0],'interval':k[1],'same_terminal_label':same,'deltas_vs_primary':deltas,
+                       'native_payload_changed_vs_primary':[o['native_payload_sha256'] != obs[0]['native_payload_sha256'] for o in obs[1:]],
                        'status':'STABLE_OBSERVED_NOT_FINALITY_PROOF' if same and all(v == 0 for ds in deltas.values() for v in ds) else 'REVISED_OR_PERIOD_AMBIGUOUS'})
     return {'decision':'REVIEW_REQUIRED_NO_AUTOMATIC_PRODUCTION_GO','comparisons':result}
 
