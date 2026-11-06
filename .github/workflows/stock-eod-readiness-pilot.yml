@@ -1,0 +1,80 @@
+# Diagnostic only. Each dispatch requires separate authorization; no schedule.
+name: Stock EOD Targeted Readiness Pilot
+on:
+  workflow_dispatch:
+    inputs:
+      target_session:
+        description: Reviewed XNYS session date (YYYY-MM-DD)
+        type: string
+        required: true
+      stage:
+        description: Authorized single observation window (America/New_York)
+        type: choice
+        options: [primary, later, reference]
+        required: true
+      extraction_run_id:
+        description: Existing November health-manifest extraction run ID
+        type: string
+        required: true
+      failed_manifest_sha256:
+        description: Independently verified SHA-256 of the failed-family Parquet
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: stock-eod-readiness-pilot
+  cancel-in-progress: false
+jobs:
+  sample-native-observations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install diagnostic dependencies only
+        run: python -m pip install yfinance==1.7.0 curl_cffi==0.16.3 'exchange_calendars>=4.5,<5' pandas pyarrow
+      - name: Download existing immutable incident evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.extraction_run_id }}
+          name: stock-eod-nov02-health-manifest-${{ inputs.extraction_run_id }}
+          path: ${{ runner.temp }}/readiness-incident-evidence
+      - name: Capture one authorized phase (never publishes)
+        env:
+          PILOT_SESSION: ${{ inputs.target_session }}
+          PILOT_STAGE: ${{ inputs.stage }}
+          PILOT_SHA256: ${{ inputs.failed_manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          python diagnostics/stock_eod_readiness_pilot.py capture \
+            --manifest "$RUNNER_TEMP/readiness-incident-evidence/prod-20261103T001713Z-044f683b/manifest.parquet" \
+            --manifest-sha256 "$PILOT_SHA256" \
+            --session "$PILOT_SESSION" \
+            --stage "$PILOT_STAGE" \
+            --output-dir "$RUNNER_TEMP/stock-eod-readiness-pilot"
+      - name: Hash retained native evidence even when readiness is unverified
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          if test -f "$RUNNER_TEMP/stock-eod-readiness-pilot/observations.json"; then
+            cd "$RUNNER_TEMP/stock-eod-readiness-pilot"
+            sha256sum observations.json | tee observations.sha256
+          fi
+      - name: Preserve diagnostic evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-eod-readiness-pilot-${{ github.run_id }}
+          path: ${{ runner.temp }}/stock-eod-readiness-pilot/
+          if-no-files-found: error
+          retention-days: 30
