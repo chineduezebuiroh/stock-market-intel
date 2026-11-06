@@ -327,3 +327,84 @@ def test_public_metadata_getter_cannot_add_requests():
             transport.request('GET','https://example.invalid')
     assert d.observed_metadata(Ticker(),transport)=={}
     assert transport.calls==0 and not transport.metadata_only
+
+
+def unverified_reports(tmp_path, change=False):
+    reports=[]
+    for stage in ['primary','later','reference']:
+        p=d.plan('2026-11-02',stage,Calendar());f=frame()
+        if change and stage=='reference':f['Volume']=1001.
+        m={'exchangeTimezoneName':d.NY}
+        reports.append(d.collect([{'symbol':'SPY'}],p,lambda *a:(f,m),lambda:p['window_start'],tmp_path/stage,lambda:3,{},'a'*64))
+    return reports
+
+
+def test_unverified_weekly_and_monthly_stability_is_useful_but_not_readiness(tmp_path):
+    reports=unverified_reports(tmp_path)
+    assert all(r['decision']=='NO_GO_OR_UNVERIFIED' for r in reports)
+    comparisons=d.compare(reports)['comparisons']
+    for interval in ['1wk','1mo']:
+        row=next(r for r in comparisons if r['interval']==interval)
+        assert row['status']=='UNVERIFIED_PERIOD_STABLE'
+        assert row['comparison_scope']=='UNVERIFIED_PERIOD_STABILITY_NOT_SAME_SESSION_REVISIONS'
+        assert row['same_terminal_label'] and row['core_comparison_eligible']
+        assert row['deltas_vs_primary']['Close']==[0.,0.]
+        assert row['deltas_vs_primary']['Volume']==[0.,0.]
+        assert row['native_payload_changed_vs_primary']==[False,False]
+        assert row['production_readiness']=='NO_GO_SESSION_ATTRIBUTION_UNVERIFIED'
+        assert row['session_attribution_statuses']==['UNVERIFIED_SESSION']*3
+        assert row['numerical_validity']==['VALID_OHLCV']*3
+
+
+def test_unverified_numerical_differences_not_same_session_revisions(tmp_path):
+    row=next(r for r in d.compare(unverified_reports(tmp_path,change=True))['comparisons'] if r['interval']=='1wk')
+    assert row['deltas_vs_primary']['Volume']==[0.,1.]
+    assert row['status']=='UNVERIFIED_PERIOD_NUMERICAL_DIFFERENCES'
+    assert row['native_payload_changed_vs_primary']==[False,True]
+    assert row['production_readiness']=='NO_GO_SESSION_ATTRIBUTION_UNVERIFIED'
+
+
+def test_field_validity_independent_of_wrong_period_and_timezone():
+    p=d.plan('2026-11-02','primary',Calendar())
+    a=d.assess(frame('2026-11-03'),meta(),'1wk',p)
+    assert a['status']=='WRONG_PERIOD_OR_NEXT_SESSION' and a['numerical_validity']=='VALID_OHLCV'
+    f=frame();f.index=f.index.tz_localize(None)
+    a=d.assess(f,{},'1d',p)
+    assert a['status']=='AMBIGUOUS_TIMEZONE' and a['required_fields_complete']
+    a=d.assess(f.iloc[:0],{},'1d',p)
+    assert a['numerical_validity']=='EMPTY' and a['field_completeness']['Close']=='EMPTY'
+    a=d.assess(f.drop(columns=['Close']),{},'1d',p)
+    assert a['field_completeness']['Close']=='ABSENT' and a['numerical_validity']=='INVALID_OHLCV'
+
+
+def test_unverified_comparison_rejects_profile_and_metadata_tampering(tmp_path):
+    reports=unverified_reports(tmp_path)
+    changed=deepcopy(reports);changed[1]['acquisition_profile']['keepna']=False
+    with pytest.raises(ValueError,match='identity/panel/version'):d.compare(changed)
+    changed=deepcopy(reports);changed[1]['observations'][1]['metadata']={}
+    with pytest.raises(ValueError,match='metadata'):d.compare(changed)
+
+
+def test_unverified_comparison_rejects_wrong_period_labels(tmp_path):
+    reports=unverified_reports(tmp_path)
+    o=reports[2]['observations'][1]
+    o['native_frame']['rows'][0]['label']=d.atom(pd.Timestamp('2026-11-09',tz=d.NY))
+    o['native_payload_sha256']=d.digest(o['native_frame'])
+    o['assessment']=d.reassess(o,reports[2]['plan'])
+    row=d.compare(reports)['comparisons'][1]
+    assert row['status']=='NOT_COMPARABLE_PERIOD_OR_LABEL'
+    assert row['deltas_vs_primary']['Close']==[None,None]
+    assert not row['core_comparison_eligible']
+
+
+def test_missing_reference_value_keeps_finite_earlier_delta(tmp_path):
+    reports=unverified_reports(tmp_path)
+    o=reports[2]['observations'][1]
+    o['native_frame']['rows'][0]['values'][3]=d.atom(float('nan'))
+    o['native_payload_sha256']=d.digest(o['native_frame'])
+    o['assessment']=d.reassess(o,reports[2]['plan'])
+    row=d.compare(reports)['comparisons'][1]
+    assert row['deltas_vs_primary']['Close']==[0.,None]
+    assert row['deltas_vs_primary']['Volume']==[0.,0.]
+    assert row['status']=='NUMERICALLY_INVALID_OBSERVATIONS'
+    assert not row['core_comparison_eligible']
