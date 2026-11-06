@@ -233,11 +233,51 @@ validated live. Missed windows, transport-blocked metadata and unverified refere
 aggregates are inconclusive experiments, never production-readiness failures.
 
 
-Corrected artifacts use schema version 2 and explicitly record production_parity=false
+Corrected artifacts use schema version 3 and explicitly record production_parity=false
 and their acquisition-profile differences; the comparator rejects old schema versions
-and mismatched acquisition profiles. Local validation: 44 focused offline tests,
+and mismatched acquisition profiles. Local validation: 50 focused offline tests,
 compilation, YAML/manual-only/read-permission checks, shell syntax and whitespace
 checks passed under Python 3.12. The workflow remains Python 3.11; that interpreter
 was not exercised locally. Suggested dispatch lead is roughly 25 minutes before
 the phase, subject to setup/queue variance; actual acquisition still has the fixed
 five-minute start window and fifteen-minute deadline.
+
+
+## Observation stability versus session confidence
+
+Schema 3 separates `field_completeness` (ABSENT, EMPTY, FINITE or
+MISSING_OR_NONFINITE per field), `required_fields_complete` and
+`numerical_validity` from strict session-attribution `status`. These numerical
+facts are reported for D/W/M even on an early attribution rejection (wrong period,
+missing timezone or missing W/M lastTrade). They do not upgrade that status.
+The collector's strict readiness decision and all production safeguards remain
+unchanged. No period identity is inferred from finite fields.
+
+Offline comparison includes numerically valid, label-compatible W/M observations
+without lastTrade. It reports the three terminal labels and their agreement,
+pairwise terminal-field deltas against primary (including Close/Volume), and
+full-frame hash changes. These are explicitly scoped
+UNVERIFIED_PERIOD_STABILITY_NOT_SAME_SESSION_REVISIONS, with
+UNVERIFIED_PERIOD_STABLE or UNVERIFIED_PERIOD_NUMERICAL_DIFFERENCES results.
+Even a completely stable result remains NO_GO_SESSION_ATTRIBUTION_UNVERIFIED
+for production readiness. This makes the pilot useful without weakening attribution.
+
+All comparison rows include field-validity and attribution states separately.
+Wrong-period/next-session or timezone-ambiguous observations do not qualify as
+comparable period observations; label disagreement withholds numerical deltas.
+Hashes/label agreement are still reported. For a label-compatible observation with
+invalid numerical fields, finite field-pair deltas may be reported, but the row
+is NUMERICALLY_INVALID_OBSERVATIONS and is ineligible for core readiness comparison.
+An unavailable reference value does not suppress an otherwise finite primary-to-
+later delta. Adj Close remains optional and separately eligible.
+
+Frame and allowlisted metadata hashes are verified and assessments are recomputed
+from preserved evidence before comparison. Identity, acquisition-profile, schema,
+version, budget, request-window and observation-set checks still fail closed.
+Hashes detect inconsistent evidence, not an attacker who rewrites both evidence
+and hashes: verify the original GitHub artifact/file digests independently.
+
+Validation: 50 offline tests now include stable and changing unverified W/M data,
+independent field classification with wrong/missing session identity, and rejected
+profile/metadata/period alterations. No acquisition, workflow dispatch, production
+readiness claim or production change is authorized by stability findings.
