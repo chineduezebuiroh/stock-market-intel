@@ -136,8 +136,9 @@ python diagnostics/stock_eod_readiness_pilot.py compare \
 Comparison requires one complete report per phase, identical target session,
 incident hash/panel/versions and unique matching symbol/interval sets. It verifies
 native hashes, recomputes assessments from preserved native evidence, and rejects
-out-of-plan timestamps. It compares terminal label identity plus absolute Close
-and Volume revisions versus primary at both comparison points. Period/label
+out-of-plan timestamps. It compares terminal label identity plus absolute OHLCV/Adj Close
+revisions versus primary at both comparison points, highlighting Close and Volume and whether the full
+native payload hash changed. Period/label
 ambiguity cannot be called a same-bar revision. Stable observations remain
 STABLE_OBSERVED_NOT_FINALITY_PROOF, never an automatic production GO.
 
