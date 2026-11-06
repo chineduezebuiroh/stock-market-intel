@@ -138,7 +138,7 @@ def plan(session, stage, calendar):
             'month_state': 'COMPLETED_MONTH' if calendar.sessions_in_range(target, month_end)[-1].date() == target.date() else 'MONTH_TO_DATE'}
 
 
-def assess(frame, meta, interval, p):
+def strict_assess(frame, meta, interval, p):
     if frame.empty: return {'status': 'EMPTY', 'session_evidence': None}
     label = pd.Timestamp(frame.index[-1])
     if label.tzinfo is None or meta.get('exchangeTimezoneName') != NY:
@@ -171,16 +171,35 @@ def assess(frame, meta, interval, p):
             'finality': 'NOT_PROVEN_BY_THIS_OBSERVATION'}
 
 
+def assess(frame, meta, interval, p):
+    """Keep field validity independent from the strict session-attribution gate."""
+    row = frame.iloc[-1] if not frame.empty else None
+    fields = {q: ('ABSENT' if q not in frame.columns else
+                  'EMPTY' if row is None else
+                  'FINITE' if finite(row.get(q)) is not None else 'MISSING_OR_NONFINITE') for q in QUOTES}
+    values = {q: finite(row.get(q)) if row is not None else None for q in QUOTES}
+    required = ('Open','High','Low','Close','Volume')
+    complete = all(fields[q] == 'FINITE' for q in required)
+    valid = complete and values['Volume'] >= 0 and values['Low'] <= values['High'] and values['Low'] <= values['Close'] <= values['High']
+    result = strict_assess(frame, meta, interval, p)
+    result.update(field_completeness=fields, required_fields_complete=complete,
+                  numerical_validity='VALID_OHLCV' if valid else ('EMPTY' if frame.empty else 'INVALID_OHLCV'))
+    # These remain observed facts even when the strict attribution gate exits early.
+    result.setdefault('values', values)
+    result.setdefault('terminal_label', pd.Timestamp(frame.index[-1]).isoformat() if not frame.empty else None)
+    return result
+
+
 def collect(panel, p, history, clock, output, transport_count, versions, incident_hash):
     now = clock().tz_convert(NY)
     if not p['window_start'] <= now <= p['latest_start']:
         output.mkdir(parents=True, exist_ok=False)
-        missed={'schema_version':2,'plan':{k:v.isoformat() if isinstance(v,pd.Timestamp) else v for k,v in p.items()},'collection_complete':False,'decision':'MISSED_OBSERVATION_WINDOW','observed_at':now.isoformat(),'attempted_history_calls':0,'http_calls':0}
+        missed={'schema_version':3,'plan':{k:v.isoformat() if isinstance(v,pd.Timestamp) else v for k,v in p.items()},'collection_complete':False,'decision':'MISSED_OBSERVATION_WINDOW','observed_at':now.isoformat(),'attempted_history_calls':0,'http_calls':0}
         (output/'observations.json').write_text(json.dumps(missed,indent=2)+'\n')
         return missed
     if not 1 <= len(panel) <= MAX_SYMBOLS or len({x['symbol'] for x in panel}) != len(panel): raise ValueError('Invalid symbol budget')
     output.mkdir(parents=True, exist_ok=False)
-    report = {'schema_version': 2,
+    report = {'schema_version': 3,
               'production_parity':False,
               'acquisition_profile':{'keepna':True,'redirects':False,'transport_retries':0,'metadata':'public_getter_transport_locked','reference_end':'target_midnight_exclusive'}, 'incident_family_run_id': FAILED, 'incident_sha256': incident_hash, 'panel': panel,
               'plan': {k: v.isoformat() if isinstance(v, pd.Timestamp) else v for k,v in p.items()},
@@ -203,6 +222,7 @@ def collect(panel, p, history, clock, output, transport_count, versions, inciden
                                'native_frame': native, 'native_payload_sha256': digest(native),
                                'metadata': {k: metadata(meta[k]) for k in META if k in meta},
                                'assessment': assess(frame, meta, interval, p)}
+                observation['metadata_sha256'] = digest(observation['metadata'])
                 if len(json.dumps(observation['metadata'], allow_nan=False).encode()) > 32*1024: raise ValueError('Metadata evidence exceeds 32 KiB')
                 report['observations'].append(observation)
                 if completed > p['deadline']: raise ValueError('Pilot completed after deadline')
@@ -238,7 +258,7 @@ def reassess(observation, p):
 
 
 def compare(reports):
-    if any(r.get('schema_version') != 2 for r in reports): raise ValueError('Require corrected schema version 2')
+    if any(r.get('schema_version') != 3 for r in reports): raise ValueError('Require corrected schema version 3')
     if [r['plan']['stage'] for r in reports] != ['primary','later','reference']: raise ValueError('Require ordered primary/later/reference evidence')
     key = lambda r: (r['plan']['session'], r['incident_sha256'], r['panel'], r['versions'], r.get('acquisition_profile'))
     if not all(key(r) == key(reports[0]) for r in reports): raise ValueError('Pilot identity/panel/version mismatch')
@@ -258,6 +278,7 @@ def compare(reports):
         for o in r['observations']:
             k = (o['symbol'],o['interval'])
             if k in mapping or digest(o['native_frame']) != o['native_payload_sha256']: raise ValueError('Duplicate or changed native evidence')
+            if digest(o['metadata']) != o.get('metadata_sha256'): raise ValueError('Changed metadata evidence')
             if reassess(o, r['plan']) != o['assessment']: raise ValueError('Assessment does not match preserved evidence')
             started, completed = pd.Timestamp(o['started_at']), pd.Timestamp(o['completed_at'])
             window, deadline = pd.Timestamp(r['plan']['window_start']), pd.Timestamp(r['plan']['deadline'])
@@ -271,16 +292,35 @@ def compare(reports):
     for k in maps[0]:
         obs = [m[k] for m in maps]
         assessments = [o['assessment'] for o in obs]
-        if not all(a['status'] == 'CURRENT_SESSION_OBSERVED' for a in assessments):
-            result.append({'symbol':k[0],'interval':k[1],'status':'UNVERIFIED_OR_INVALID'});continue
         same = len({a['terminal_label'] for a in assessments}) == 1
-        deltas = {field: [assessments[i]['values'][field]-assessments[0]['values'][field] if all(a['values'][field] is not None for a in assessments) else None for i in [1,2]] for field in QUOTES}
-        adj_eligible=all(a['values']['Adj Close'] is not None for a in assessments)
-        core_stable=same and all(v==0 for field,ds in deltas.items() if field!='Adj Close' for v in ds)
-        result.append({'symbol':k[0],'interval':k[1],'same_terminal_label':same,'deltas_vs_primary':deltas,
+        labels = [a['terminal_label'] for a in assessments]
+        period_candidate = all(a['status'] in {'CURRENT_SESSION_OBSERVED','UNVERIFIED_SESSION','INVALID_OHLCV'} for a in assessments)
+        attributed = all(a['status'] == 'CURRENT_SESSION_OBSERVED' for a in assessments)
+        numerical = all(a['numerical_validity'] == 'VALID_OHLCV' for a in assessments)
+        comparable = period_candidate and same and all(label is not None for label in labels)
+        deltas = {field: [a['values'][field]-assessments[0]['values'][field]
+                         if comparable and a['values'][field] is not None and assessments[0]['values'][field] is not None else None
+                         for a in assessments[1:]] for field in QUOTES}
+        adj_eligible = comparable and all(a['values']['Adj Close'] is not None for a in assessments)
+        core_stable = comparable and numerical and all(v==0 for field,ds in deltas.items() if field!='Adj Close' for v in ds)
+        if not comparable:
+            status='NOT_COMPARABLE_PERIOD_OR_LABEL'
+        elif not numerical:
+            status='NUMERICALLY_INVALID_OBSERVATIONS'
+        elif not attributed:
+            status='UNVERIFIED_PERIOD_STABLE' if core_stable and all(v==0 for field,ds in deltas.items() if field!='Adj Close' or adj_eligible for v in ds) else 'UNVERIFIED_PERIOD_NUMERICAL_DIFFERENCES'
+        else:
+            status='STABLE_OBSERVED_NOT_FINALITY_PROOF' if all(v==0 for ds in deltas.values() for v in ds) else ('CORE_STABLE_ADJ_CLOSE_UNAVAILABLE' if core_stable and not adj_eligible else 'REVISED_OR_PERIOD_AMBIGUOUS')
+        result.append({'symbol':k[0],'interval':k[1],'terminal_labels':labels,
+                       'same_terminal_label':same,'deltas_vs_primary':deltas,
                        'native_payload_changed_vs_primary':[o['native_payload_sha256'] != obs[0]['native_payload_sha256'] for o in obs[1:]],
-                       'core_comparison_eligible': True, 'adj_close_comparison_eligible':adj_eligible,
-                       'status':'STABLE_OBSERVED_NOT_FINALITY_PROOF' if same and all(v == 0 for ds in deltas.values() for v in ds) else ('CORE_STABLE_ADJ_CLOSE_UNAVAILABLE' if core_stable and not adj_eligible else 'REVISED_OR_PERIOD_AMBIGUOUS')})
+                       'field_completeness':[a['field_completeness'] for a in assessments],
+                       'numerical_validity':[a['numerical_validity'] for a in assessments],
+                       'session_attribution_statuses':[a['status'] for a in assessments],
+                       'comparison_scope':'SESSION_ATTRIBUTED_OBSERVATIONS_NOT_FINALITY' if attributed else 'UNVERIFIED_PERIOD_STABILITY_NOT_SAME_SESSION_REVISIONS',
+                       'core_comparison_eligible':comparable and numerical,'adj_close_comparison_eligible':adj_eligible,
+                       'production_readiness':'NO_GO_FINALITY_NOT_PROVEN' if attributed else 'NO_GO_SESSION_ATTRIBUTION_UNVERIFIED',
+                       'status':status})
     return {'decision':'REVIEW_REQUIRED_NO_AUTOMATIC_PRODUCTION_GO','comparisons':result}
 
 
