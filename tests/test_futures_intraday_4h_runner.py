@@ -95,7 +95,7 @@ def test_run_profile_has_only_the_4h_contract_in_order(runner, monkeypatch):
     assert events[-1] == (
         "notification",
         ("futures_2_4hdw_shortlist",),
-        {"only_if_changed": True},
+        {"only_if_changed": True, "tracked_4h_job": "futures_intraday_4h"},
     )
     assert not any(
         "futures_1_1h4hd_shortlist" in str(part)
