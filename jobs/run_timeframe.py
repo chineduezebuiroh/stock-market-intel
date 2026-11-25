@@ -598,7 +598,7 @@ def build_timeframe_snapshot_frame(
         missing = [c for c in base_cols if c not in last.index]
         if missing:
             raise KeyError(f"Snapshot missing columns {missing} for {namespace}/{timeframe}/{sym}")
-        row = last[base_cols].copy()
+        row = last[base_cols].astype(object).copy()
         row["symbol"] = sym
         rows.append(row)
 
