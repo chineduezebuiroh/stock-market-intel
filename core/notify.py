@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -27,6 +28,10 @@ class TelegramDeliveryError(RuntimeError):
     def __init__(self, category: str, status: int | None = None):
         self.category = category
         self.status = status
+        self.outcome = "HTTP_REJECTED" if status is not None and 400 <= status < 500 else "DELIVERY_UNCONFIRMED"
+        self.digest = None
+        self.attempt_id = None
+        self.revision = None
         super().__init__(f"Telegram delivery unconfirmed: {category} status={status}")
 
 
@@ -79,9 +84,12 @@ def send_telegram_message(text: str, *, chat_id: str | None = None,
 
 def report_delivery_warning(job: str, kind: str, category: str,
                             status: int | None, processing: str,
-                            outcome: str = "DELIVERY_UNCONFIRMED") -> None:
+                            outcome: str = "DELIVERY_UNCONFIRMED", *,
+                            digest: str | None = None, attempt_id: str | None = None,
+                            revision: str | None = None) -> None:
     record = {"job": job, "notification": kind, "category": category,
-              "http_status": status, "outcome": outcome, "data_health": processing}
+              "http_status": status, "outcome": outcome, "data_health": processing,
+              "identity_digest": digest, "attempt_id": attempt_id, "revision": revision}
     line = json.dumps(record, sort_keys=True)
     print(f"[NOTIFICATION_WARNING] {line}")
     summary = os.getenv("GITHUB_STEP_SUMMARY")
@@ -95,43 +103,99 @@ def report_delivery_warning(job: str, kind: str, category: str,
 
 def _attempt_path(job: str, kind: str, identity: str) -> Path:
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
-    return DATA / "_alerts" / "delivery_attempts_4h" / job / kind / f"{digest}.parquet"
+    return _attempt_path_for_digest(job, kind, digest)
 
 
-def _confirm_4h_attempt(job: str, kind: str, identity: str) -> None:
+def _attempt_path_for_digest(job: str, kind: str, digest: str) -> Path:
+    allowed = {("stocks_intraday_4h", "repair_telemetry"),
+               ("stocks_intraday_4h", "combo_signal"),
+               ("futures_intraday_4h", "combo_signal")}
+    if (job, kind) not in allowed or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        raise ValueError("Invalid job, notification type, or identity digest")
+    return DATA / "_alerts" / "delivery_attempts_4h" / job / kind / f"{digest}.json"
+
+
+def _attempt_read(path: Path) -> tuple[dict | None, str | None]:
+    result = storage.read_bytes_with_revision(path)
+    if result.data is None:
+        return None, None
+    record = json.loads(result.data)
+    if (not isinstance(record, dict) or record.get("schema") != 1
+            or not all(record.get(k) for k in ("job", "notification_type", "identity_digest",
+                                                "attempt_id", "created_at", "updated_at", "state"))):
+        raise ValueError("Invalid delivery attempt record")
+    if _attempt_path_for_digest(record["job"], record["notification_type"], record["identity_digest"]) != path:
+        raise ValueError("Delivery attempt identity mismatch")
+    return record, result.revision
+
+
+def _attempt_write(path: Path, record: dict, revision: str | None) -> str:
+    return storage.compare_and_swap_bytes(path, revision,
+        json.dumps(record, sort_keys=True, separators=(",", ":")).encode(),
+        content_type="application/json")
+
+
+def _transition_attempt(path: Path, record: dict, revision: str, state: str, **extra) -> str:
+    updated = dict(record, state=state, updated_at=datetime.now(timezone.utc).isoformat(), **extra)
+    new_revision = _attempt_write(path, updated, revision)
+    record.clear()
+    record.update(updated)
+    return new_revision
+
+
+def _confirm_4h_attempt(job: str, kind: str, identity: str, attempt_id: str) -> None:
+    path = _attempt_path(job, kind, identity)
     try:
-        storage.save_parquet(pd.DataFrame([{"outcome": "CONFIRMED"}]),
-                             _attempt_path(job, kind, identity))
+        record, revision = _attempt_read(path)
+        if not record or record.get("attempt_id") != attempt_id or record.get("state") != "POST_STARTED":
+            raise ValueError("Attempt changed before confirmation")
+        _transition_attempt(path, record, revision, "CONFIRMED")
     except Exception as exc:
         report_delivery_warning(job, kind, "AttemptStore" + type(exc).__name__, None,
-                                "PENDING", "DELIVERY_CONFIRMED_RECORD_UNCERTAIN")
+                                "PENDING", "DELIVERY_CONFIRMED_RECORD_UNCERTAIN",
+                                digest=hashlib.sha256(identity.encode()).hexdigest(), attempt_id=attempt_id)
 
 
 def send_4h_tracked(text: str, *, job: str, kind: str, identity: str,
-                    chat_id: str | None = None, defer_confirmation: bool = False) -> bool:
-    """Persist an intent before sending; unresolved identities require reconciliation.
-
-    A failed diagnostic store prevents the POST. Markers contain only a digest,
-    never message contents. This is not a distributed lock or an exactly-once API.
-    """
-    path = _attempt_path(job, kind, identity)
+                    chat_id: str | None = None, defer_confirmation: bool = False) -> str | None:
+    """Write an intent and POST_STARTED using CAS; never automatically retry unresolved sends."""
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    path = _attempt_path_for_digest(job, kind, digest)
     try:
-        if storage.exists(path):
-            attempt = storage.load_parquet(path)
-            if attempt is None or attempt.empty or attempt.iloc[-1]["outcome"] != "CONFIRMED":
-                report_delivery_warning(job, kind, "UnresolvedPreviousAttempt", None,
-                                        "PENDING", "DELIVERY_UNCONFIRMED")
-                return False
-        storage.save_parquet(pd.DataFrame([{"outcome": "DELIVERY_UNCONFIRMED"}]), path)
+        previous, revision = _attempt_read(path)
+        if previous and previous.get("state") != "CONFIRMED":
+            report_delivery_warning(job, kind, "UnresolvedPreviousAttempt", previous.get("http_status"),
+                                    "PENDING", previous.get("state", "DELIVERY_UNCONFIRMED"),
+                                    digest=digest, attempt_id=previous.get("attempt_id"), revision=revision)
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        record = {"schema": 1, "job": job, "notification_type": kind, "identity_digest": digest,
+                  "attempt_id": uuid.uuid4().hex, "created_at": now, "updated_at": now,
+                  "state": "INTENT_RECORDED", "category": None, "http_status": None}
+        revision = _attempt_write(path, record, revision)
+        report_delivery_warning(job, kind, "AttemptIntent", None, "PENDING", "INTENT_RECORDED",
+                                digest=digest, attempt_id=record["attempt_id"], revision=revision)
+        # A crash between this transition and requests.post remains ambiguous.
+        revision = _transition_attempt(path, record, revision, "POST_STARTED")
     except Exception as exc:
-        # This store is optional for core processing, but required before a POST.
         report_delivery_warning(job, kind, "AttemptStore" + type(exc).__name__, None,
-                                "PENDING", "NOT_ATTEMPTED")
-        return False
-    send_telegram_message(text, chat_id=chat_id)
+                                "PENDING", "NOT_ATTEMPTED", digest=digest)
+        return None
+    try:
+        send_telegram_message(text, chat_id=chat_id)
+    except TelegramDeliveryError as exc:
+        exc.digest, exc.attempt_id, exc.revision = digest, record["attempt_id"], revision
+        try:
+            exc.revision = _transition_attempt(path, record, revision, exc.outcome,
+                                               category=exc.category, http_status=exc.status)
+        except Exception as store_exc:
+            report_delivery_warning(job, kind, "AttemptStore" + type(store_exc).__name__, None,
+                                    "PENDING", "ATTEMPT_UPDATE_FAILED", digest=digest,
+                                    attempt_id=record["attempt_id"], revision=revision)
+        raise
     if not defer_confirmation:
-        _confirm_4h_attempt(job, kind, identity)
-    return True
+        _confirm_4h_attempt(job, kind, identity, record["attempt_id"])
+    return record["attempt_id"]
 
 
 def send_email_message(
@@ -411,9 +475,10 @@ def notify_combo_signals(
 
     msg = format_signal_message(combo_name=combo_name, asof=asof, rows=rows)
     if tracked_4h_job:
-        if not send_4h_tracked(msg, job=tracked_4h_job, kind="combo_signal",
+        attempt_id = send_4h_tracked(msg, job=tracked_4h_job, kind="combo_signal",
                                identity=fp, chat_id=telegram_chat_id_for_route(route),
-                               defer_confirmation=True):
+                               defer_confirmation=True)
+        if not attempt_id:
             return
     else:
         send_telegram_message(msg, chat_id=telegram_chat_id_for_route(route))
@@ -421,7 +486,7 @@ def notify_combo_signals(
     # record last fingerprint (for change suppression)
     save_alert_fingerprint(key, fp, meta={"combo": combo_name, "asof": asof})
     if tracked_4h_job:
-        _confirm_4h_attempt(tracked_4h_job, "combo_signal", fp)
+        _confirm_4h_attempt(tracked_4h_job, "combo_signal", fp, attempt_id)
     print(f"[NOTIFY] sent alert for {combo_name} (signals={len(rows)})")
 
 

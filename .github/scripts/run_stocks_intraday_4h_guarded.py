@@ -102,7 +102,8 @@ def run_profile() -> None:
         notify_repair_telemetry()
     except TelegramDeliveryError as exc:
         delivery_errors.append(("repair_telemetry", exc))
-        report_delivery_warning(JOB_NAME, "repair_telemetry", exc.category, exc.status, "PENDING")
+        report_delivery_warning(JOB_NAME, "repair_telemetry", exc.category, exc.status, "PENDING", exc.outcome,
+                                digest=exc.digest, attempt_id=exc.attempt_id, revision=exc.revision)
 
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
@@ -120,7 +121,8 @@ def run_profile() -> None:
     except TelegramDeliveryError as exc:
         delivery_errors.append(("combo_signal", exc))
     for kind, exc in delivery_errors:
-        report_delivery_warning(JOB_NAME, kind, exc.category, exc.status, "SUCCEEDED")
+        report_delivery_warning(JOB_NAME, kind, exc.category, exc.status, "SUCCEEDED", exc.outcome,
+                                digest=exc.digest, attempt_id=exc.attempt_id, revision=exc.revision)
 
 
 def main() -> None:

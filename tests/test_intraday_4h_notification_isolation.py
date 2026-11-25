@@ -57,9 +57,9 @@ def test_unconfirmed_attempt_is_not_retried(local_storage, monkeypatch, capsys):
 
 
 def test_attempt_store_failure_prevents_send(local_storage, monkeypatch, capsys):
-    monkeypatch.setattr(notify.storage, 'exists', lambda p: (_ for _ in ()).throw(OSError('secret')))
+    monkeypatch.setattr(notify.storage, 'read_bytes_with_revision', lambda p: (_ for _ in ()).throw(OSError('secret')))
     monkeypatch.setattr(notify, 'send_telegram_message', lambda *a, **kw: pytest.fail('sent'))
-    assert not notify.send_4h_tracked('x', job='stocks', kind='repair', identity='x')
+    assert not notify.send_4h_tracked('x', job='stocks_intraday_4h', kind='repair_telemetry', identity='x')
     assert 'NOT_ATTEMPTED' in capsys.readouterr().out
 
 
@@ -161,3 +161,75 @@ def test_core_failures_propagate(stage, monkeypatch):
     monkeypatch.setattr('core.guard.mark_registry_execution', mark)
     with pytest.raises((RuntimeError, ValueError), match=stage):
         run_registry_guarded(job_name=mod.JOB_NAME, fn=mod.run_profile, bypass_registry=True)
+
+
+@pytest.mark.parametrize('status,outcome', [(400, 'HTTP_REJECTED'), (403, 'HTTP_REJECTED'), (429, 'HTTP_REJECTED'), (500, 'DELIVERY_UNCONFIRMED'), (502, 'DELIVERY_UNCONFIRMED')])
+def test_http_attempt_classification(local_storage, monkeypatch, status, outcome):
+    monkeypatch.setattr(notify.requests, 'post', lambda *a, **kw: SimpleNamespace(ok=False, status_code=status))
+    with pytest.raises(notify.TelegramDeliveryError) as result:
+        notify.send_4h_tracked('secret', job='stocks_intraday_4h', kind='repair_telemetry', identity='identity')
+    exc = result.value
+    path = notify._attempt_path_for_digest('stocks_intraday_4h', 'repair_telemetry', exc.digest)
+    record, revision = notify._attempt_read(path)
+    assert exc.outcome == outcome == record['state']
+    assert record['http_status'] == status and record['attempt_id'] == exc.attempt_id
+    assert record['created_at'] and record['updated_at'] and revision == exc.revision
+    assert 'secret' not in path.read_text()
+
+
+def test_crash_after_intent_is_discoverable_and_suppressed(local_storage, monkeypatch, capsys):
+    original = notify._transition_attempt
+    def crash(path, record, revision, state, **kwargs):
+        if state == 'POST_STARTED':
+            raise SystemExit('simulated crash')
+        return original(path, record, revision, state, **kwargs)
+    monkeypatch.setattr(notify, '_transition_attempt', crash)
+    monkeypatch.setattr(notify, 'send_telegram_message', lambda *a, **kw: pytest.fail('sent'))
+    args = dict(job='stocks_intraday_4h', kind='repair_telemetry', identity='identity')
+    with pytest.raises(SystemExit):
+        notify.send_4h_tracked('x', **args)
+    path = notify._attempt_path(args['job'], args['kind'], args['identity'])
+    record, revision = notify._attempt_read(path)
+    assert record['state'] == 'INTENT_RECORDED'
+    output = capsys.readouterr().out
+    assert record['identity_digest'] in output and record['attempt_id'] in output and revision in output
+    assert not notify.send_4h_tracked('x', **args)
+
+
+@pytest.mark.parametrize('resolution,expected', [('delivered', 'OPERATOR_CONFIRMED_DELIVERED'), ('not-delivered', 'OPERATOR_ACKNOWLEDGED_NOT_DELIVERED')])
+def test_reconcile_requires_exact_identity_and_revision(local_storage, monkeypatch, capsys, resolution, expected):
+    from jobs import reconcile_intraday_4h_notification as command
+    args = dict(job='stocks_intraday_4h', kind='repair_telemetry', identity='identity')
+    monkeypatch.setattr(notify, 'send_telegram_message', lambda *a, **kw: (_ for _ in ()).throw(notify.TelegramDeliveryError('ReadTimeout')))
+    with pytest.raises(notify.TelegramDeliveryError):
+        notify.send_4h_tracked('x', **args)
+    path = notify._attempt_path(args['job'], args['kind'], args['identity'])
+    record, revision = notify._attempt_read(path)
+    prefix = ['reconcile', '--job', args['job'], '--kind', args['kind'], '--digest', record['identity_digest']]
+    monkeypatch.setattr('sys.argv', prefix)
+    command.main()
+    assert revision in capsys.readouterr().out
+    monkeypatch.setattr('sys.argv', prefix + ['--apply', '--resolution', resolution, '--attempt-id', 'wrong', '--revision', revision])
+    with pytest.raises(SystemExit):
+        command.main()
+    monkeypatch.setattr('sys.argv', prefix + ['--apply', '--resolution', resolution, '--attempt-id', record['attempt_id'], '--revision', revision])
+    command.main()
+    updated, new_revision = notify._attempt_read(path)
+    assert updated['state'] == expected and new_revision != revision
+    with pytest.raises(SystemExit):
+        command.main()
+    assert not notify.send_4h_tracked('x', **args)
+
+
+def test_concurrent_change_rejects_reconciliation(local_storage):
+    from core import storage
+    path = notify._attempt_path('stocks_intraday_4h', 'repair_telemetry', 'identity')
+    record = {'schema': 1, 'state': 'INTENT_RECORDED', 'job': 'stocks_intraday_4h',
+              'notification_type': 'repair_telemetry', 'identity_digest': path.stem,
+              'attempt_id': 'a', 'created_at': 'now', 'updated_at': 'now'}
+    revision = notify._attempt_write(path, record, None)
+    stale = record.copy()
+    notify._transition_attempt(path, record, revision, 'POST_STARTED')
+    with pytest.raises(storage.StoragePreconditionFailed):
+        notify._transition_attempt(path, stale, revision, 'OPERATOR_ACKNOWLEDGED_NOT_DELIVERED')
+    assert notify._attempt_read(path)[0]['state'] == 'POST_STARTED'

@@ -67,7 +67,8 @@ def run_profile() -> None:
         notify_combo_signals("futures_2_4hdw_shortlist", only_if_changed=True,
                              tracked_4h_job=JOB_NAME)
     except TelegramDeliveryError as exc:
-        report_delivery_warning(JOB_NAME, "combo_signal", exc.category, exc.status, "SUCCEEDED")
+        report_delivery_warning(JOB_NAME, "combo_signal", exc.category, exc.status, "SUCCEEDED", exc.outcome,
+                                digest=exc.digest, attempt_id=exc.attempt_id, revision=exc.revision)
 
 
 def main() -> None:
