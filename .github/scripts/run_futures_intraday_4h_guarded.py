@@ -16,7 +16,7 @@ from core.intraday_cadence import is_futures_4h_opportunity
 from core.health import run_combo_health, print_results
 
 # from core.signal_alerts import notify_on_signals
-from core.notify import notify_combo_signals
+from core.notify import TelegramDeliveryError, notify_combo_signals, report_delivery_warning
 
 # =======================================================
 # ---- Config: eligible 4h target hours (NY time) ----
@@ -63,7 +63,11 @@ def run_profile() -> None:
     )
     print_results(results)
 
-    notify_combo_signals("futures_2_4hdw_shortlist", only_if_changed=True)
+    try:
+        notify_combo_signals("futures_2_4hdw_shortlist", only_if_changed=True,
+                             tracked_4h_job=JOB_NAME)
+    except TelegramDeliveryError as exc:
+        report_delivery_warning(JOB_NAME, "combo_signal", exc.category, exc.status, "SUCCEEDED")
 
 
 def main() -> None:

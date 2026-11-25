@@ -19,7 +19,8 @@ from core.intraday_cadence import is_stocks_4h_opportunity
 from core.health import run_combo_health, print_results
 
 # from core.signal_alerts import notify_on_signals
-from core.notify import notify_combo_signals, send_telegram_message
+from core.notify import (TelegramDeliveryError, notify_combo_signals,
+                         report_delivery_warning, send_4h_tracked)
 
 # =======================================================
 # ---- Config: 4h targets (NY time) + tolerance ----
@@ -93,9 +94,15 @@ def run_profile() -> None:
                 f"({float(r['repair_pct']):.1%})"
             )
 
-        send_telegram_message("\n".join(lines))
+        message = "\n".join(lines)
+        send_4h_tracked(message, job=JOB_NAME, kind="repair_telemetry", identity=message)
 
-    notify_repair_telemetry()
+    delivery_errors = []
+    try:
+        notify_repair_telemetry()
+    except TelegramDeliveryError as exc:
+        delivery_errors.append(("repair_telemetry", exc))
+        report_delivery_warning(JOB_NAME, "repair_telemetry", exc.category, exc.status, "PENDING")
 
     # =======================================================
     #  HEALTH CHECK SECTION — FAIL LOUDLY IF COMBOS ARE BAD
@@ -107,7 +114,13 @@ def run_profile() -> None:
     )
     print_results(results)
 
-    notify_combo_signals("stocks_d_4hdw_shortlist", only_if_changed=True)
+    try:
+        notify_combo_signals("stocks_d_4hdw_shortlist", only_if_changed=True,
+                             tracked_4h_job=JOB_NAME)
+    except TelegramDeliveryError as exc:
+        delivery_errors.append(("combo_signal", exc))
+    for kind, exc in delivery_errors:
+        report_delivery_warning(JOB_NAME, kind, exc.category, exc.status, "SUCCEEDED")
 
 
 def main() -> None:

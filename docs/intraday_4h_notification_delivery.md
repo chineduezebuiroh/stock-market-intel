@@ -1,0 +1,9 @@
+# Intraday 4h notification delivery
+
+The stocks and futures 4h profiles record an attempt before a Telegram POST under `data/_alerts/delivery_attempts_4h/<job>/<kind>/<sha256>.parquet`. The digest identifies the signal set for combo alerts, or the message for repair telemetry; the marker contains no message, token, or chat ID. A POST is not made when the attempt record cannot be read or written. The job emits a warning, and core processing continues.
+
+A marker begins as `DELIVERY_UNCONFIRMED`. A Telegram timeout or unsuccessful HTTP response leaves it unresolved: delivery may have occurred. Future runs suppress the same unresolved identity and emit a warning, while a different identity may be sent. For combo alerts, the marker is confirmed only after the Telegram response and the existing confirmed-delivery fingerprint are successfully saved. An interrupted process or a fingerprint write failure can therefore leave an unresolved marker even after delivery. This is conservative and does not claim exactly-once delivery. The fingerprint is never advanced for an unconfirmed response.
+
+Operators should inspect the Telegram destination and the warning before reconciling an unresolved marker. If the alert was delivered, reconcile the confirmed fingerprint as appropriate; if it was not, decide whether a new send is warranted. Clearing a marker without reconciling delivery can cause a duplicate. Repair telemetry has no confirmed fingerprint; its marker is confirmed after a successful response. Job logs and the Actions summary carry sanitized warnings. Failure to write the summary is logged and does not affect the data result.
+
+These markers are not atomic locks. Concurrent executions can both observe an absent marker and send the same alert. Crash windows and storage errors can also require manual reconciliation. Existing attempts from before this mechanism are not known to it.

@@ -198,7 +198,7 @@ def test_stocks_profile_contract(stocks, monkeypatch):
     assert events[-1] == (
         "notification",
         ("stocks_d_4hdw_shortlist",),
-        {"only_if_changed": True},
+        {"only_if_changed": True, "tracked_4h_job": "stocks_intraday_4h"},
     )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 # core/notify.py
 
 import json
+import hashlib
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +19,15 @@ import smtplib
 from email.message import EmailMessage
 
 SIGNALS_OF_INTEREST = {"long", "short", "watch", "anti"}
+
+
+class TelegramDeliveryError(RuntimeError):
+    """A Telegram POST did not produce a confirmed successful response."""
+
+    def __init__(self, category: str, status: int | None = None):
+        self.category = category
+        self.status = status
+        super().__init__(f"Telegram delivery unconfirmed: {category} status={status}")
 
 
 @dataclass(frozen=True)
@@ -59,9 +69,69 @@ def send_telegram_message(text: str, *, chat_id: str | None = None,
     }
     if parse_mode is not None:
         payload["parse_mode"] = parse_mode
-    r = requests.post(url, data=payload, timeout=20)
+    try:
+        r = requests.post(url, data=payload, timeout=20)
+    except requests.exceptions.RequestException as exc:
+        raise TelegramDeliveryError(type(exc).__name__) from None
     if not r.ok:
-        raise RuntimeError(f"Telegram send failed: {r.status_code} {r.text}")
+        raise TelegramDeliveryError("HTTPError", r.status_code)
+
+
+def report_delivery_warning(job: str, kind: str, category: str,
+                            status: int | None, processing: str,
+                            outcome: str = "DELIVERY_UNCONFIRMED") -> None:
+    record = {"job": job, "notification": kind, "category": category,
+              "http_status": status, "outcome": outcome, "data_health": processing}
+    line = json.dumps(record, sort_keys=True)
+    print(f"[NOTIFICATION_WARNING] {line}")
+    summary = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as stream:
+                stream.write(f"\nNotification warning: `{line}`\n")
+        except OSError as exc:
+            print(f"[NOTIFICATION_DIAGNOSTIC_WARNING] summary_write_failed={type(exc).__name__}")
+
+
+def _attempt_path(job: str, kind: str, identity: str) -> Path:
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    return DATA / "_alerts" / "delivery_attempts_4h" / job / kind / f"{digest}.parquet"
+
+
+def _confirm_4h_attempt(job: str, kind: str, identity: str) -> None:
+    try:
+        storage.save_parquet(pd.DataFrame([{"outcome": "CONFIRMED"}]),
+                             _attempt_path(job, kind, identity))
+    except Exception as exc:
+        report_delivery_warning(job, kind, "AttemptStore" + type(exc).__name__, None,
+                                "PENDING", "DELIVERY_CONFIRMED_RECORD_UNCERTAIN")
+
+
+def send_4h_tracked(text: str, *, job: str, kind: str, identity: str,
+                    chat_id: str | None = None, defer_confirmation: bool = False) -> bool:
+    """Persist an intent before sending; unresolved identities require reconciliation.
+
+    A failed diagnostic store prevents the POST. Markers contain only a digest,
+    never message contents. This is not a distributed lock or an exactly-once API.
+    """
+    path = _attempt_path(job, kind, identity)
+    try:
+        if storage.exists(path):
+            attempt = storage.load_parquet(path)
+            if attempt is None or attempt.empty or attempt.iloc[-1]["outcome"] != "CONFIRMED":
+                report_delivery_warning(job, kind, "UnresolvedPreviousAttempt", None,
+                                        "PENDING", "DELIVERY_UNCONFIRMED")
+                return False
+        storage.save_parquet(pd.DataFrame([{"outcome": "DELIVERY_UNCONFIRMED"}]), path)
+    except Exception as exc:
+        # This store is optional for core processing, but required before a POST.
+        report_delivery_warning(job, kind, "AttemptStore" + type(exc).__name__, None,
+                                "PENDING", "NOT_ATTEMPTED")
+        return False
+    send_telegram_message(text, chat_id=chat_id)
+    if not defer_confirmation:
+        _confirm_4h_attempt(job, kind, identity)
+    return True
 
 
 def send_email_message(
@@ -302,6 +372,7 @@ def notify_combo_signals(
     only_if_changed: bool,
     alert_key: Optional[str] = None,
     route: str = "default",
+    tracked_4h_job: str | None = None,
 ) -> None:
     """
     Reads data/combo_<combo_name>.parquet and sends a Telegram message
@@ -311,11 +382,15 @@ def notify_combo_signals(
     """
     combo_path = DATA / f"combo_{combo_name}.parquet"
     if not storage.exists(combo_path):
+        if tracked_4h_job:
+            raise FileNotFoundError(f"Missing combo parquet: {combo_name}")
         print(f"[NOTIFY][SKIP] missing combo parquet: {combo_path}")
         return
 
     df = storage.load_parquet(combo_path)
     if df is None or df.empty:
+        if tracked_4h_job:
+            raise ValueError(f"Empty combo: {combo_name}")
         print(f"[NOTIFY][SKIP] empty combo: {combo_name}")
         return
 
@@ -335,10 +410,18 @@ def notify_combo_signals(
             return
 
     msg = format_signal_message(combo_name=combo_name, asof=asof, rows=rows)
-    send_telegram_message(msg, chat_id=telegram_chat_id_for_route(route))
+    if tracked_4h_job:
+        if not send_4h_tracked(msg, job=tracked_4h_job, kind="combo_signal",
+                               identity=fp, chat_id=telegram_chat_id_for_route(route),
+                               defer_confirmation=True):
+            return
+    else:
+        send_telegram_message(msg, chat_id=telegram_chat_id_for_route(route))
 
     # record last fingerprint (for change suppression)
     save_alert_fingerprint(key, fp, meta={"combo": combo_name, "asof": asof})
+    if tracked_4h_job:
+        _confirm_4h_attempt(tracked_4h_job, "combo_signal", fp)
     print(f"[NOTIFY] sent alert for {combo_name} (signals={len(rows)})")
 
 
